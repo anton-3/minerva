@@ -1,7 +1,7 @@
-// LiveAvatar SDK wrapper — LITE mode
+// LiveAvatar SDK wrapper — FULL mode (TTS only, voice chat disabled)
 // Wraps @heygen/liveavatar-web-sdk. No SDK types leak outside.
-// LITE mode: avatar rendering + TTS only. No ASR, no voice chat.
-// STT is handled separately by browser Web Speech API (useSpeechRecognition).
+// FULL mode for TTS via repeat(text). Voice chat DISABLED so the mic
+// stays free for browser Web Speech API (useSpeechRecognition).
 // LLM is Claude. This module is just the display layer.
 
 import {
@@ -44,8 +44,8 @@ export function createAvatarClient(): AvatarClient {
       }
       const { token } = await tokenRes.json();
 
-      // LITE mode: no voiceChat needed
-      session = new LiveAvatarSession(token);
+      // FULL mode but voice chat OFF — mic stays free for Web Speech API (our STT)
+      session = new LiveAvatarSession(token, { voiceChat: false });
 
       // Session lifecycle events
       session.on(SessionEvent.SESSION_STATE_CHANGED, (state: SessionState) => {
@@ -80,7 +80,7 @@ export function createAvatarClient(): AvatarClient {
         speakingCallbacks.forEach((cb) => cb(false));
       });
 
-      // Connect (LITE — no voice chat to start)
+      // Connect (FULL mode, voice chat disabled)
       await session.start();
     },
 
