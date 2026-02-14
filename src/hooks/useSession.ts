@@ -3,6 +3,10 @@
 // Coordinates: Zoom Video SDK (call layer) + LiveAvatar FULL (avatar TTS + ASR) +
 // Canvas + Claude brain.
 // HeyGen handles both TTS and STT. Zoom is optional (self-view video only).
+//
+// Speech audit fixes (Session 7):
+// - Wire avatar.interrupt to brain options
+// - Bug 9: Use brain.sendGreeting() instead of fake "hi" message
 
 "use client";
 
@@ -26,6 +30,7 @@ export function useSession() {
   const canvas = useCanvas();
   const brain = useTutorBrain({
     speak: avatar.speak,
+    interrupt: avatar.interrupt, // Bug 2: brain can interrupt avatar on new message
     executeSequence: canvas.executeSequence,
     getSnapshot: canvas.getSnapshot,
   });
@@ -72,8 +77,8 @@ export function useSession() {
 
       setStatus("active");
 
-      // Send initial greeting through Claude
-      brain.handleStudentMessage("hi");
+      // Bug 9: Use sendGreeting instead of fake "hi" — no fake student message in transcript
+      brain.sendGreeting();
     } catch (err) {
       console.error("[useSession] Failed to start session:", err);
       setStatus("error");

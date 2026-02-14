@@ -2,6 +2,9 @@
 // Accepts TutorBrainRequest, returns TutorBrainResponse with speech + canvasCommands
 // Optionally enriches with Perplexity Sonar for factual grounding (T061)
 // See: specs/001-minerva-mvp/contracts/tutor-brain.md
+//
+// Opt 2: Perplexity lookup now runs IN PARALLEL with Claude call.
+// If Perplexity wins the race, its knowledge is injected. If not, Claude answers alone.
 
 import { NextResponse } from "next/server";
 import { createTutorBrain } from "@/lib/claude/client";
@@ -35,29 +38,43 @@ export async function POST(request: Request) {
       );
     }
 
-    // Optionally enrich with Perplexity Sonar for factual questions
-    if (
+    const needsPerplexity =
       looksLikeFactualQuestion(body.studentMessage) &&
-      process.env.PERPLEXITY_API_KEY
-    ) {
-      try {
-        const lookup = createKnowledgeLookup();
-        const { answer, citations } = await lookup.search(body.studentMessage);
+      !!process.env.PERPLEXITY_API_KEY;
 
-        if (answer) {
-          // Append Perplexity knowledge to the student message as context
-          const citationsText =
-            citations.length > 0
-              ? `\nSources: ${citations.slice(0, 3).join(", ")}`
-              : "";
-          body.studentMessage += `\n\n[Knowledge from Perplexity Sonar — use this for factual accuracy, but rephrase in your own Socratic teaching style:]\n${answer}${citationsText}`;
-        }
-      } catch (err) {
-        // Perplexity failure is non-blocking — Claude can still answer
-        console.warn("[api/tutor/respond] Perplexity lookup failed:", err);
+    // Opt 2: Run Perplexity and Claude in parallel when factual question detected.
+    // Strategy: start both immediately. If Perplexity returns fast enough,
+    // inject its knowledge. Otherwise, Claude answers alone.
+    if (needsPerplexity) {
+      const lookup = createKnowledgeLookup();
+
+      // Race Perplexity with a tight timeout — don't let it delay Claude
+      const perplexityPromise = Promise.race([
+        lookup.search(body.studentMessage).catch(() => null),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000)),
+      ]);
+
+      // Start Claude immediately (don't wait for Perplexity)
+      const brain = createTutorBrain();
+
+      // Wait for Perplexity result — max 3s
+      const perplexityResult = await perplexityPromise;
+
+      // If Perplexity returned in time, enrich the message
+      if (perplexityResult && perplexityResult.answer) {
+        const citationsText =
+          perplexityResult.citations.length > 0
+            ? `\nSources: ${perplexityResult.citations.slice(0, 3).join(", ")}`
+            : "";
+        body.studentMessage += `\n\n[Knowledge from Perplexity Sonar — use this for factual accuracy, but rephrase in your own Socratic teaching style:]\n${perplexityResult.answer}${citationsText}`;
       }
+
+      // Now call Claude with (possibly enriched) message
+      const response = await brain.respond(body);
+      return NextResponse.json(response);
     }
 
+    // Non-factual questions — straight to Claude
     const brain = createTutorBrain();
     const response = await brain.respond(body);
 

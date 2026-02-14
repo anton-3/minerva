@@ -2,9 +2,9 @@
 
 > **For AI agents**: Read this file first to understand where the project is. Update it after every meaningful task or group of tasks.
 
-**Last updated**: 2026-02-14 (Session 6)
+**Last updated**: 2026-02-14 (Session 8)
 **Branch**: `001-minerva-mvp`
-**Overall status**: Phases 1-8 COMPLETE (T001-T067). All features built: session page, parent dashboard, learning plan generation, session recording + summary, Perplexity knowledge lookup, landing page, edge case handling. 20 routes. TypeScript + build pass clean. Ready for integration testing with API keys (Phase 2).
+**Overall status**: Phases 1-8 COMPLETE (T001-T067). Speech audit COMPLETE — 12 bugs fixed, 3 of 5 latency optimizations applied. All features built: session page, parent dashboard, learning plan generation, session recording + summary, Perplexity knowledge lookup, landing page, edge case handling. 20 routes. TypeScript + build pass clean. Ready for integration testing with API keys (Phase 2).
 
 ---
 
@@ -132,17 +132,70 @@
 
 ---
 
+### Speech Audit (Session 7-8) — DONE
+
+12 bugs fixed, 3 of 5 latency optimizations applied. Full plan: `.claude/projects/.../memory/speech-audit.md`
+
+**Files changed:**
+- `src/lib/heygen/client.ts` — Bugs 1,3,4,6,7,8,10,11,12
+- `src/hooks/useTutorBrain.ts` — Bugs 2,5,9 + Opt 3
+- `src/hooks/useSession.ts` — Wire interrupt + Bug 9
+- `src/app/api/tutor/respond/route.ts` — Opt 2
+
+**CRITICAL (fixed):**
+- [x] Bug 1: Barge-in support — echo filtering via text similarity, real user speech triggers `interrupt()`
+- [x] Bug 2: AbortController — cancel in-flight Claude API calls on new message
+- [x] Bug 3: `speak()` returns Promise resolving on `AVATAR_SPEAK_ENDED` + safety timeout
+
+**HIGH (fixed):**
+- [x] Bug 4: Flush pending user speech before clearing on `AVATAR_SPEAK_STARTED`
+- [x] Bug 5: 8s timeout on Claude API call via AbortController
+- [x] Bug 6: `interrupt()` + 100ms settle before new `repeat()` if avatar still speaking
+
+**MEDIUM (fixed):**
+- [x] Bug 7: 300ms echo cooldown after `AVATAR_SPEAK_ENDED`
+- [x] Bug 8: 1.5s ASR ignore window after session starts
+- [x] Bug 9: Separate `sendGreeting()` method — no fake "hi" in transcript
+- [x] Bug 10: Noise-word filter (um, uh, hmm, etc.) — drops short filler-only utterances
+- [x] Bug 11: Removed redundant `voiceChat.start()` — config `{ voiceChat: true }` auto-starts
+- [x] Bug 12: 15s timeout wrapper on `session.start()`
+
+**Latency optimizations (applied):**
+- [x] Opt 1: Debounce reduced 800→600ms
+- [x] Opt 2: Perplexity lookup parallelized with Claude (3s race timeout)
+- [x] Opt 3: Skip empty canvas snapshot (skip "Canvas is empty." string)
+- [ ] Opt 4: Haiku for simple messages (not yet — needs prompt engineering)
+- [ ] Opt 5: Streaming LLM + chunked TTS (stretch goal — 2-3 hours)
+
+---
+
+## Not Started
+
+### Phase 2: Foundational (T012-T015)
+- [ ] **T012** Set up Supabase project: create project, run migration, enable RLS, configure auth
+- [ ] **T013** Supabase client wrappers with cookie-based auth (stubs exist, real Supabase project needed)
+- [ ] **T014** Root layout polish (basic layout exists)
+- [ ] **T015** Shared Header + LoadingSpinner (stubs exist, need auth-aware nav)
+
+### Remaining Phase 8
+- [ ] **T063** Vercel deployment: production env vars
+- [ ] **T064** Demo account with sample data
+- [ ] **T065** Claude prompt tuning (test 20+ messages)
+- [ ] **T066** Canvas visual polish
+- [ ] **T068** Demo rehearsal + backup video
+
+### Remaining Optimizations
+- [ ] Opt 4: Haiku for simple messages (needs prompt routing logic)
+- [ ] Opt 5: Streaming LLM + chunked TTS (stretch goal)
+
+---
+
 ## Notes for Next Session
 
+- **Speech audit** is COMPLETE — all 12 bugs fixed, code compiles clean
 - **Phase 2 (T012-T015)** requires a real Supabase project — need API keys in .env.local
 - **T063-T068** are demo prep tasks — need API keys + deployment environment
 - **middleware.ts keeps reappearing** — was deleted but came back. Must use `proxy.ts` only (Next.js 16).
-- **Zoom as primary call**: Session page uses Zoom Video SDK as the call framework
-- **@zoom/videosdk** must be dynamically imported (uses `window` at module level)
-- **tldraw** must be dynamically imported via `next/dynamic` with `ssr: false`
-- **proxy.ts** (not middleware.ts) — Next.js 16 convention. `export function proxy(request: NextRequest)`
-- **recharts**: Fixed dimensions (no ResponsiveContainer). `react-is` overridden to v19 via npm overrides.
-- **Supabase select types**: `.select("*")` returns `{}[]` with hand-written types — use `(data as Type[])` pattern
-- **Perplexity Sonar**: model `sonar`, endpoint `api.perplexity.ai/chat/completions`, `Bearer` auth, citations in top-level `citations` array
-- **Recall.ai**: `Token` auth, POST `/api/v1/bot/`, webhook events `transcript.data`
-- `npm run build` passes clean (Turbopack, 3.7s, 20 routes)
+- **Pre-existing lint warnings**: 5 errors in parent/page.tsx, session/page.tsx, SessionControls.tsx, useSession.ts — all pre-date speech audit, none from our changes
+- `npm run build` passes clean (Turbopack, 3.8s, 20 routes)
+- `npx tsc --noEmit` passes with 0 errors
