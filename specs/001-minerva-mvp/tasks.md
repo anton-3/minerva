@@ -64,17 +64,17 @@ This prevents wasted time building with deprecated patterns. Document any findin
 
 ### Black Box Modules (B + C work in parallel)
 
-- [ ] T016 [P] [US1] [C] Implement `/api/heygen/token/route.ts` — server-side HeyGen access token generation
-- [ ] T017 [P] [US1] [B] Implement HeyGen avatar client `src/lib/heygen/client.ts` — AvatarClient interface: startSession, endSession, speak, interrupt, onUserMessage, onStatusChange
-- [ ] T018 [P] [US1] [B] Implement HeyGen types `src/lib/heygen/types.ts` — AvatarStatus type, internal SDK type mappings
-- [ ] T019 [P] [US1] [B] Implement canvas types `src/lib/canvas/types.ts` — CanvasCommand discriminated union
-- [ ] T020 [P] [US1] [B] Implement canvas command executor `src/lib/canvas/commands.ts` — CanvasExecutor: execute, executeSequence, clear, getSnapshot + 4 math templates (drawEquation, drawNumberLine, drawCoordinatePlane, drawFraction)
-- [ ] T021 [P] [US1] [C] Implement Claude client `src/lib/claude/client.ts` — TutorBrain.respond() with structured JSON output parsing
-- [ ] T022 [P] [US1] [C] Write Socratic tutor system prompt `src/lib/claude/prompts.ts` — Socratic method, age-appropriate language, canvas command JSON format, safety guardrails
+- [x] T016 [P] [US1] [C] Implement `/api/heygen/token/route.ts` — server-side HeyGen access token generation
+- [x] T017 [P] [US1] [B] Implement HeyGen avatar client `src/lib/heygen/client.ts` — AvatarClient interface: startSession, endSession, speak, interrupt, onUserMessage, onStatusChange
+- [x] T018 [P] [US1] [B] Implement HeyGen types `src/lib/heygen/types.ts` — AvatarStatus type, internal SDK type mappings
+- [x] T019 [P] [US1] [B] Implement canvas types `src/lib/canvas/types.ts` — CanvasCommand discriminated union
+- [x] T020 [P] [US1] [B] Implement canvas command executor `src/lib/canvas/commands.ts` — CanvasExecutor: execute, executeSequence, clear, getSnapshot + 6 math templates (drawEquation, drawNumberLine, drawCoordinatePlane, drawFraction, drawAngle, highlight)
+- [x] T021 [P] [US1] [C] Implement Claude client `src/lib/claude/client.ts` — TutorBrain.respond() with zodOutputFormat structured output (GA)
+- [x] T022 [P] [US1] [C] Write Socratic tutor system prompt `src/lib/claude/prompts.ts` — subject-agnostic Socratic method, canvas commands, safety guardrails
 
 ### API Routes (C)
 
-- [ ] T023 [US1] [C] Implement `/api/tutor/respond/route.ts` — accepts TutorBrainRequest, calls Claude, returns TutorBrainResponse with speech + canvasCommands (depends on T021, T022)
+- [x] T023 [US1] [C] Implement `/api/tutor/respond/route.ts` — accepts TutorBrainRequest, calls Claude, returns TutorBrainResponse with speech + canvasCommands (depends on T021, T022)
 
 ### Hooks (A + B)
 

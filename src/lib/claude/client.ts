@@ -1,25 +1,249 @@
 // Claude tutor brain — Anthropic SDK wrapper
 // Wraps @anthropic-ai/sdk. No Anthropic types leak outside.
 // See: specs/001-minerva-mvp/contracts/tutor-brain.md
+//
+// Uses structured outputs (GA since SDK v0.72.0):
+// - output_config.format with zodOutputFormat for typed JSON
+// - Response in content[0].text, parsed with JSON.parse
+// - Regex fallback for malformed responses
 
+import Anthropic from "@anthropic-ai/sdk";
+import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import { z } from "zod";
 import type {
   TutorBrainRequest,
   TutorBrainResponse,
   SessionSummary,
   LearningPlan,
 } from "@/types/session";
+import {
+  TUTOR_SYSTEM_PROMPT,
+  SUMMARY_SYSTEM_PROMPT,
+  LEARNING_PLAN_SYSTEM_PROMPT,
+} from "./prompts";
 
 export interface TutorBrain {
   respond(request: TutorBrainRequest): Promise<TutorBrainResponse>;
-  generateSummary(transcript: { speaker: string; text: string }[]): Promise<SessionSummary>;
+  generateSummary(
+    transcript: { speaker: string; text: string }[]
+  ): Promise<SessionSummary>;
   generateLearningPlan(goals: string[], subject: string): Promise<LearningPlan>;
 }
 
+// Zod schemas for structured output
+const CanvasCommandSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("clear") }),
+  z.object({
+    action: z.literal("drawEquation"),
+    equation: z.string(),
+    x: z.number(),
+    y: z.number(),
+  }),
+  z.object({
+    action: z.literal("drawNumberLine"),
+    min: z.number(),
+    max: z.number(),
+    y: z.number(),
+  }),
+  z.object({
+    action: z.literal("drawCoordinatePlane"),
+    originX: z.number(),
+    originY: z.number(),
+  }),
+  z.object({
+    action: z.literal("drawAngle"),
+    vertexX: z.number(),
+    vertexY: z.number(),
+    angle: z.number(),
+    label: z.string().optional(),
+  }),
+  z.object({
+    action: z.literal("drawFraction"),
+    numerator: z.string(),
+    denominator: z.string(),
+    x: z.number(),
+    y: z.number(),
+  }),
+  z.object({
+    action: z.literal("highlight"),
+    id: z.string(),
+    color: z.string(),
+  }),
+  z.object({
+    action: z.literal("createShape"),
+    shape: z.record(z.string(), z.unknown()),
+  }),
+]);
+
+const TutorResponseSchema = z.object({
+  speech: z.string(),
+  canvasCommands: z.array(CanvasCommandSchema).optional(),
+  progressUpdate: z
+    .object({ topic: z.string(), score: z.number() })
+    .optional(),
+  internalNotes: z.string().optional(),
+});
+
+const SessionSummarySchema = z.object({
+  summary: z.string(),
+  topicsCovered: z.array(z.string()),
+  strengths: z.array(z.string()),
+  areasForImprovement: z.array(z.string()),
+  engagementScore: z.number(),
+  comprehensionScore: z.number(),
+});
+
+const LearningPlanSchema = z.object({
+  subject: z.string(),
+  topics: z.array(
+    z.object({
+      name: z.string(),
+      description: z.string(),
+      prerequisites: z.array(z.string()),
+    })
+  ),
+  currentTopic: z.string(),
+});
+
+// Extract speech from malformed responses via regex
+function extractSpeechFallback(text: string): TutorBrainResponse {
+  // Try to extract speech field from partially valid JSON
+  const speechMatch = text.match(/"speech"\s*:\s*"([^"]*(?:\\.[^"]*)*)"/);
+  if (speechMatch) {
+    return { speech: speechMatch[1].replace(/\\"/g, '"') };
+  }
+  // Last resort: use entire text as speech
+  return { speech: text.slice(0, 500) };
+}
+
+const MODEL = "claude-sonnet-4-5-20250929";
+const MAX_HISTORY = 20;
+
 export function createTutorBrain(): TutorBrain {
-  // TODO: Implement in Phase 3 (T021)
-  // - Initialize Anthropic client with ANTHROPIC_API_KEY
-  // - Implement respond() with TUTOR_SYSTEM_PROMPT
-  // - Parse structured JSON output, regex fallback for malformed responses
-  // - Trim conversation history to last 20 messages
-  throw new Error("TutorBrain not yet implemented");
+  const client = new Anthropic();
+
+  return {
+    async respond(request: TutorBrainRequest): Promise<TutorBrainResponse> {
+      // Trim conversation history to last MAX_HISTORY messages
+      const recentHistory = request.conversationHistory.slice(-MAX_HISTORY);
+
+      // Build context for Claude
+      const contextParts: string[] = [];
+      if (request.studentProfile) {
+        const p = request.studentProfile;
+        contextParts.push(
+          `Student: ${p.name}, age ${p.age}, grade ${p.grade}`
+        );
+      }
+      if (request.learningPlan) {
+        const lp = request.learningPlan;
+        contextParts.push(
+          `Learning Plan: ${lp.subject} — Current topic: "${lp.currentTopic}". Goals: ${lp.goals.join(", ")}`
+        );
+      }
+      if (request.canvasState) {
+        contextParts.push(`Whiteboard:\n${request.canvasState}`);
+      }
+
+      const contextBlock =
+        contextParts.length > 0
+          ? `\n\n--- Context ---\n${contextParts.join("\n")}\n--- End Context ---`
+          : "";
+
+      const messages: Anthropic.MessageParam[] = [
+        ...recentHistory.map((m) => ({
+          role: m.role as "user" | "assistant",
+          content: m.content,
+        })),
+        {
+          role: "user" as const,
+          content: `${request.studentMessage}${contextBlock}`,
+        },
+      ];
+
+      try {
+        const response = await client.messages.create({
+          model: MODEL,
+          max_tokens: 1024,
+          system: TUTOR_SYSTEM_PROMPT,
+          messages,
+          output_config: {
+            format: zodOutputFormat(TutorResponseSchema),
+          },
+        });
+
+        const text =
+          response.content[0].type === "text" ? response.content[0].text : "";
+        const parsed = TutorResponseSchema.safeParse(JSON.parse(text));
+
+        if (parsed.success) {
+          return parsed.data as TutorBrainResponse;
+        }
+
+        console.warn("[tutor] Zod validation failed, using raw parse");
+        return JSON.parse(text) as TutorBrainResponse;
+      } catch (err) {
+        console.error("[tutor] Error calling Claude:", err);
+        // Regex fallback for malformed responses
+        if (err instanceof SyntaxError) {
+          return extractSpeechFallback(String(err));
+        }
+        return {
+          speech:
+            "I'm having a little trouble right now. Can you repeat what you said?",
+        };
+      }
+    },
+
+    async generateSummary(
+      transcript: { speaker: string; text: string }[]
+    ): Promise<SessionSummary> {
+      const transcriptText = transcript
+        .map((t) => `${t.speaker}: ${t.text}`)
+        .join("\n");
+
+      const response = await client.messages.create({
+        model: MODEL,
+        max_tokens: 1024,
+        system: SUMMARY_SYSTEM_PROMPT,
+        messages: [
+          {
+            role: "user",
+            content: `Generate a summary for this tutoring session transcript:\n\n${transcriptText}`,
+          },
+        ],
+        output_config: {
+          format: zodOutputFormat(SessionSummarySchema),
+        },
+      });
+
+      const text =
+        response.content[0].type === "text" ? response.content[0].text : "{}";
+      return JSON.parse(text) as SessionSummary;
+    },
+
+    async generateLearningPlan(
+      goals: string[],
+      subject: string
+    ): Promise<LearningPlan> {
+      const response = await client.messages.create({
+        model: MODEL,
+        max_tokens: 1024,
+        system: LEARNING_PLAN_SYSTEM_PROMPT,
+        messages: [
+          {
+            role: "user",
+            content: `Subject: ${subject}\nGoals:\n${goals.map((g) => `- ${g}`).join("\n")}\n\nGenerate a structured learning plan.`,
+          },
+        ],
+        output_config: {
+          format: zodOutputFormat(LearningPlanSchema),
+        },
+      });
+
+      const text =
+        response.content[0].type === "text" ? response.content[0].text : "{}";
+      return JSON.parse(text) as LearningPlan;
+    },
+  };
 }
