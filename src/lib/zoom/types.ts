@@ -1,6 +1,7 @@
 // Zoom module types — no @zoom/videosdk types leak outside
 // Owner: Person B (Media Specialist)
 
+
 export type ZoomSessionStatus =
   | "idle"
   | "connecting"
@@ -19,8 +20,8 @@ export interface ZoomClient {
   /** Leave the current session */
   leaveSession(): Promise<void>;
 
-  /** Start local video capture and render self-view to a canvas */
-  startVideo(canvasElement: HTMLCanvasElement): Promise<void>;
+  /** Start local video capture and attach self-view to a container */
+  startVideo(container: HTMLElement): Promise<void>;
 
   /** Stop local video */
   stopVideo(): Promise<void>;

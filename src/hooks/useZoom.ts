@@ -42,9 +42,9 @@ export function useZoom() {
     }
   }, []);
 
-  const startVideo = useCallback(async (canvas: HTMLCanvasElement) => {
+  const startVideo = useCallback(async (container: HTMLElement) => {
     if (clientRef.current) {
-      await clientRef.current.startVideo(canvas);
+      await clientRef.current.startVideo(container);
     }
   }, []);
 

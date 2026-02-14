@@ -33,10 +33,10 @@ export default function SessionPage() {
     zoomIsMuted,
   } = useSession();
 
-  const selfViewRef = useRef<HTMLCanvasElement>(null);
+  const selfViewRef = useRef<HTMLDivElement>(null);
   const [videoStarted, setVideoStarted] = useState(false);
 
-  // Start Zoom video when connected and canvas is ready
+  // Start Zoom video when connected and container is ready
   const startSelfView = useCallback(async () => {
     if (selfViewRef.current && zoomStatus === "connected" && !videoStarted) {
       try {
@@ -95,11 +95,9 @@ export default function SessionPage() {
           {/* Student self-view — small Zoom webcam overlay (bottom-left) */}
           {zoomConnected && (
             <div className="absolute bottom-3 left-3 flex flex-col items-start gap-1">
-              <canvas
+              <video-player-container
                 ref={selfViewRef}
-                width={160}
-                height={90}
-                className="rounded-lg border-2 border-white/30 shadow-lg bg-black"
+                className="block w-[160px] h-[90px] rounded-lg border-2 border-white/30 shadow-lg bg-black overflow-hidden [&_video-player]:w-full [&_video-player]:h-full"
               />
               <button
                 onClick={async () => {

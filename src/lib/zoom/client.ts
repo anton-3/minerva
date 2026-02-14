@@ -52,23 +52,18 @@ export async function createZoomClient(): Promise<ZoomClient> {
       }
     },
 
-    async startVideo(canvasElement: HTMLCanvasElement) {
+    async startVideo(container: HTMLElement) {
       try {
         const stream = client.getMediaStream();
         await stream.startVideo();
 
-        // Render self-view to the provided canvas
+        // Attach self-view video element to the container (SDK v2.3+)
         const userId = client.getCurrentUserInfo()?.userId;
         if (userId !== undefined) {
-          await stream.renderVideo(
-            canvasElement,
-            userId,
-            canvasElement.width,
-            canvasElement.height,
-            0,
-            0,
-            2 // VideoQuality.Video_360P
-          );
+          const videoElement = await stream.attachVideo(userId, 2 /* Video_360P */);
+          // Clear previous children and append the new video element
+          container.innerHTML = "";
+          container.appendChild(videoElement as unknown as HTMLElement);
         }
       } catch (err) {
         console.error("[ZoomClient] Failed to start video:", err);
