@@ -72,15 +72,36 @@ export function useSession() {
         avatar.endSession(),
       ]);
 
-      // Mark session as completed in Supabase (non-blocking)
+      // Post-session: save transcript + generate summary (non-blocking)
       if (store.sessionId) {
+        const sessionId = store.sessionId;
+        const transcript = store.transcript;
+
+        // 1. Mark session as completed
         fetch("/api/session", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: store.sessionId, status: "completed" }),
-        }).catch((err) =>
-          console.error("[useSession] Session update error:", err)
-        );
+          body: JSON.stringify({ id: sessionId, status: "completed" }),
+        })
+          .then(async () => {
+            // 2. Generate summary with inline transcript (saves transcript + generates summary)
+            if (transcript.length > 0) {
+              await fetch("/api/session/summary", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  session_id: sessionId,
+                  transcript: transcript.map((t) => ({
+                    speaker: t.speaker,
+                    text: t.text,
+                  })),
+                }),
+              });
+            }
+          })
+          .catch((err) =>
+            console.error("[useSession] Post-session error:", err)
+          );
       }
 
       store.setStatus("ended");
