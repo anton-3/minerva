@@ -5,7 +5,7 @@
 "use client";
 
 import { useState } from "react";
-import type { GoalEntry } from "@/types/database";
+import type { GoalEntry } from "@/db/types";
 
 interface GoalFormProps {
   childId: string;

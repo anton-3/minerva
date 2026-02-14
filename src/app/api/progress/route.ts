@@ -4,10 +4,10 @@
 // See: specs/001-minerva-mvp/tasks.md (T038)
 
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { db, progress } from "@/db";
+import { eq, asc } from "drizzle-orm";
 
 export async function GET(request: Request) {
-  const supabase = await createClient();
   const { searchParams } = new URL(request.url);
   const childId = searchParams.get("child_id");
 
@@ -15,21 +15,21 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "child_id query param required" }, { status: 400 });
   }
 
-  const { data, error } = await supabase
-    .from("progress")
-    .select("*")
-    .eq("child_id", childId)
-    .order("subject", { ascending: true });
+  try {
+    const data = await db
+      .select()
+      .from(progress)
+      .where(eq(progress.childId, childId))
+      .orderBy(asc(progress.subject));
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error("[api/progress] Error fetching progress:", error);
+    return NextResponse.json({ error: "Failed to fetch progress" }, { status: 500 });
   }
-
-  return NextResponse.json(data);
 }
 
 export async function POST(request: Request) {
-  const supabase = await createClient();
   const body = await request.json();
   const { child_id, subject, topic, score } = body as {
     child_id: string;
@@ -45,19 +45,20 @@ export async function POST(request: Request) {
     );
   }
 
-  // Upsert: update if exists, insert if not
-  const { data, error } = await supabase
-    .from("progress")
-    .upsert(
-      { child_id, subject, topic, score },
-      { onConflict: "child_id,subject,topic" }
-    )
-    .select()
-    .single();
+  try {
+    // Upsert: update if exists, insert if not
+    const [result] = await db
+      .insert(progress)
+      .values({ childId: child_id, subject, topic, score })
+      .onConflictDoUpdate({
+        target: [progress.childId, progress.subject, progress.topic],
+        set: { score },
+      })
+      .returning();
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(result);
+  } catch (error) {
+    console.error("[api/progress] Error upserting progress:", error);
+    return NextResponse.json({ error: "Failed to upsert progress" }, { status: 500 });
   }
-
-  return NextResponse.json(data);
 }

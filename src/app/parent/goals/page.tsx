@@ -5,12 +5,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { createClient } from "@/lib/supabase/client";
 import { GoalForm } from "@/components/parent/GoalForm";
-import type { Database, GoalEntry } from "@/types/database";
-
-type Child = Database["public"]["Tables"]["children"]["Row"];
-type LearningPlan = Database["public"]["Tables"]["learning_plans"]["Row"];
+import type { Child, LearningPlan, GoalEntry } from "@/db/types";
 
 export default function GoalsPage() {
   const [children, setChildren] = useState<Child[]>([]);
@@ -19,38 +15,32 @@ export default function GoalsPage() {
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const supabase = createClient();
-
   useEffect(() => {
     const fetchData = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      const res = await fetch("/api/children");
+      if (!res.ok) {
+        setLoading(false);
+        return;
+      }
 
-      const { data: childrenData } = await supabase
-        .from("children")
-        .select("*")
-        .eq("parent_id", user.id);
+      const childrenData = await res.json();
+      setChildren(childrenData);
 
-      const typedChildren = (childrenData as Child[]) ?? [];
-      setChildren(typedChildren);
+      if (childrenData.length > 0) {
+        setSelectedChild(childrenData[0].id);
 
-      if (typedChildren.length > 0) {
-        setSelectedChild(typedChildren[0].id);
-
-        const childIds = typedChildren.map((c) => c.id);
-        const { data: plansData } = await supabase
-          .from("learning_plans")
-          .select("*")
-          .in("child_id", childIds);
-
-        setPlans((plansData as LearningPlan[]) ?? []);
+        const childIds = childrenData.map((c: Child) => c.id).join(",");
+        const plansRes = await fetch(`/api/learning-plans?child_ids=${childIds}`);
+        if (plansRes.ok) {
+          const plansData = await plansRes.json();
+          setPlans(plansData);
+        }
       }
 
       setLoading(false);
     };
 
     fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const [generating, setGenerating] = useState(false);
@@ -80,12 +70,11 @@ export default function GoalsPage() {
       }
 
       setShowForm(false);
-      // Refresh plans from Supabase
-      const { data: updated } = await supabase
-        .from("learning_plans")
-        .select("*")
-        .eq("child_id", selectedChild);
-      setPlans((updated ?? []) as LearningPlan[]);
+      // Refresh plans
+      const plansRes = await fetch(`/api/tutor/plan?child_id=${selectedChild}`);
+      if (plansRes.ok) {
+        setPlans(await plansRes.json());
+      }
     } catch (err) {
       console.error("[goals] Error generating plan:", err);
     } finally {
@@ -93,7 +82,7 @@ export default function GoalsPage() {
     }
   };
 
-  const selectedPlans = plans.filter((p) => p.child_id === selectedChild);
+  const selectedPlans = plans.filter((p) => p.childId === selectedChild);
   const selectedChildName = children.find((c) => c.id === selectedChild)?.name;
 
   if (loading) {
@@ -168,9 +157,9 @@ export default function GoalsPage() {
                 >
                   <div className="flex items-center justify-between">
                     <h3 className="font-semibold">{plan.subject}</h3>
-                    {plan.current_topic && (
+                    {plan.currentTopic && (
                       <span className="text-xs bg-muted rounded-full px-2 py-0.5">
-                        Current: {plan.current_topic}
+                        Current: {plan.currentTopic}
                       </span>
                     )}
                   </div>
@@ -200,7 +189,7 @@ export default function GoalsPage() {
                           <span
                             key={i}
                             className={`text-xs px-2 py-0.5 rounded-full ${
-                              topic.name === plan.current_topic
+                              topic.name === plan.currentTopic
                                 ? "bg-primary text-primary-foreground"
                                 : "bg-muted text-muted-foreground"
                             }`}

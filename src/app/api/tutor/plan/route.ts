@@ -1,18 +1,15 @@
 // Learning plan generation API route
-// POST: generate a learning plan via Claude and store in Supabase
+// POST: generate a learning plan via Claude and store in DB
 // GET: fetch learning plan(s) for a child
 // Owner: Person C (Backend Brain)
 // See: specs/001-minerva-mvp/tasks.md (T049)
 
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { db, learningPlans } from "@/db";
+import { eq, asc, and } from "drizzle-orm";
 import { createTutorBrain } from "@/lib/claude/client";
-import type { Database } from "@/types/database";
-
-type LearningPlan = Database["public"]["Tables"]["learning_plans"]["Row"];
 
 export async function POST(request: Request) {
-  const supabase = await createClient();
   const body = await request.json();
   const { child_id, subject, goals } = body as {
     child_id: string;
@@ -32,7 +29,7 @@ export async function POST(request: Request) {
     const brain = createTutorBrain();
     const plan = await brain.generateLearningPlan(goals, subject);
 
-    // Store in Supabase — convert goals to GoalEntry format
+    // Convert goals to GoalEntry format
     const goalEntries = goals.map((g) => ({
       description: g,
       status: "active" as const,
@@ -45,23 +42,18 @@ export async function POST(request: Request) {
       prerequisites: t.prerequisites,
     }));
 
-    const { data, error } = await supabase
-      .from("learning_plans")
-      .insert({
-        child_id,
+    const [data] = await db
+      .insert(learningPlans)
+      .values({
+        childId: child_id,
         subject: plan.subject,
         goals: goalEntries,
-        current_topic: plan.currentTopic,
+        currentTopic: plan.currentTopic,
         curriculum,
       })
-      .select()
-      .single();
+      .returning();
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    return NextResponse.json(data as LearningPlan);
+    return NextResponse.json(data);
   } catch (err) {
     console.error("[api/tutor/plan] Error generating plan:", err);
     return NextResponse.json(
@@ -72,7 +64,6 @@ export async function POST(request: Request) {
 }
 
 export async function GET(request: Request) {
-  const supabase = await createClient();
   const { searchParams } = new URL(request.url);
   const childId = searchParams.get("child_id");
   const subject = searchParams.get("subject");
@@ -84,20 +75,20 @@ export async function GET(request: Request) {
     );
   }
 
-  let query = supabase
-    .from("learning_plans")
-    .select("*")
-    .eq("child_id", childId);
+  try {
+    const whereClause = subject
+      ? and(eq(learningPlans.childId, childId), eq(learningPlans.subject, subject))
+      : eq(learningPlans.childId, childId);
 
-  if (subject) {
-    query = query.eq("subject", subject);
+    const data = await db
+      .select()
+      .from(learningPlans)
+      .where(whereClause)
+      .orderBy(asc(learningPlans.subject));
+
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error("[api/tutor/plan] Error fetching plans:", error);
+    return NextResponse.json({ error: "Failed to fetch plans" }, { status: 500 });
   }
-
-  const { data, error } = await query.order("subject", { ascending: true });
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-
-  return NextResponse.json((data ?? []) as LearningPlan[]);
 }

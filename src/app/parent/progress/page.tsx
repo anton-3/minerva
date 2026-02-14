@@ -5,57 +5,43 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { createClient } from "@/lib/supabase/client";
 import { ProgressChart } from "@/components/parent/ProgressChart";
-import type { Database } from "@/types/database";
-
-type Child = Database["public"]["Tables"]["children"]["Row"];
-type ProgressRecord = Database["public"]["Tables"]["progress"]["Row"];
+import type { Child, Progress } from "@/db/types";
 
 export default function ProgressPage() {
   const [children, setChildren] = useState<Child[]>([]);
   const [selectedChild, setSelectedChild] = useState<string>("");
-  const [progress, setProgress] = useState<ProgressRecord[]>([]);
+  const [progress, setProgress] = useState<Progress[]>([]);
   const [loading, setLoading] = useState(true);
-
-  const supabase = createClient();
 
   useEffect(() => {
     const fetchData = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data: childrenData } = await supabase
-        .from("children")
-        .select("*")
-        .eq("parent_id", user.id);
-
-      const typedChildren = (childrenData as Child[]) ?? [];
-      setChildren(typedChildren);
-      if (typedChildren.length > 0) {
-        setSelectedChild(typedChildren[0].id);
+      const res = await fetch("/api/children");
+      if (res.ok) {
+        const data = await res.json();
+        setChildren(data);
+        if (data.length > 0) {
+          setSelectedChild(data[0].id);
+        }
       }
       setLoading(false);
     };
 
     fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     if (!selectedChild) return;
 
     const fetchProgress = async () => {
-      const { data } = await supabase
-        .from("progress")
-        .select("*")
-        .eq("child_id", selectedChild);
-
-      setProgress((data ?? []) as ProgressRecord[]);
+      const res = await fetch(`/api/progress?child_id=${selectedChild}`);
+      if (res.ok) {
+        const data = await res.json();
+        setProgress(data);
+      }
     };
 
     fetchProgress();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedChild]);
 
   // Group progress by subject

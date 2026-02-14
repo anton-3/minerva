@@ -13,12 +13,10 @@ import {
   Tooltip,
   CartesianGrid,
 } from "recharts";
-import type { Database } from "@/types/database";
-
-type ProgressRecord = Database["public"]["Tables"]["progress"]["Row"];
+import type { Progress } from "@/db/types";
 
 interface ProgressChartProps {
-  data: ProgressRecord[];
+  data: Progress[];
   subject?: string;
 }
 

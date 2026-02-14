@@ -1,10 +1,8 @@
-// Parent layout — sidebar nav with auth guard
+// Parent layout — sidebar nav (demo mode - no auth)
 // Owner: Person D (Dashboard + Design)
 // See: specs/001-minerva-mvp/tasks.md (T036)
 
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
 
 const navItems = [
   { href: "/parent", label: "Dashboard" },
@@ -14,21 +12,11 @@ const navItems = [
   { href: "/parent/sessions", label: "Sessions" },
 ];
 
-export default async function ParentLayout({
+export default function ParentLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  // Auth guard — redirect to login if not authenticated
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login");
-  }
-
   return (
     <div className="flex min-h-screen">
       {/* Sidebar */}
@@ -47,15 +35,8 @@ export default async function ParentLayout({
             </Link>
           ))}
         </nav>
-        <div className="mt-auto">
-          <form action="/api/auth/signout" method="POST">
-            <button
-              type="submit"
-              className="w-full rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground text-left"
-            >
-              Sign Out
-            </button>
-          </form>
+        <div className="mt-auto px-3 py-2 text-xs text-muted-foreground">
+          Demo Mode
         </div>
       </aside>
 

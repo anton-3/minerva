@@ -4,7 +4,7 @@
 // See: specs/001-minerva-mvp/tasks.md (T055)
 
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { db, transcriptEntries } from "@/db";
 
 interface RecallTranscriptEvent {
   event: string;
@@ -47,12 +47,11 @@ export async function POST(request: Request) {
   }
 
   try {
-    const supabase = await createClient();
-    await supabase.from("transcript_entries").insert({
-      session_id: sessionId,
+    await db.insert(transcriptEntries).values({
+      sessionId,
       speaker,
       text: text.trim(),
-      timestamp,
+      timestamp: new Date(timestamp),
     });
   } catch (err) {
     console.error("[api/recall/webhook] Error saving transcript:", err);

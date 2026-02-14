@@ -5,11 +5,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { createClient } from "@/lib/supabase/client";
 import { ChildCard } from "@/components/parent/ChildCard";
-import type { Database } from "@/types/database";
-
-type Child = Database["public"]["Tables"]["children"]["Row"];
+import type { Child } from "@/db/types";
 
 export default function ChildrenPage() {
   const [children, setChildren] = useState<Child[]>([]);
@@ -20,45 +17,41 @@ export default function ChildrenPage() {
   const [pin, setPin] = useState("");
   const [loading, setLoading] = useState(true);
 
-  const supabase = createClient();
-
   const fetchChildren = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const { data } = await supabase
-      .from("children")
-      .select("*")
-      .eq("parent_id", user.id);
-
-    setChildren((data as Child[]) ?? []);
+    const res = await fetch("/api/children");
+    if (res.ok) {
+      const data = await res.json();
+      setChildren(data);
+    }
     setLoading(false);
   };
 
   useEffect(() => {
     fetchChildren();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleAdd = async (e: { preventDefault: () => void }) => {
     e.preventDefault();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
 
-    await supabase.from("children").insert({
-      parent_id: user.id,
-      name,
-      age: parseInt(age),
-      grade: parseInt(grade),
-      pin,
+    const res = await fetch("/api/children", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name,
+        age: parseInt(age),
+        grade: parseInt(grade),
+        pin,
+      }),
     });
 
-    setName("");
-    setAge("");
-    setGrade("");
-    setPin("");
-    setShowForm(false);
-    fetchChildren();
+    if (res.ok) {
+      setName("");
+      setAge("");
+      setGrade("");
+      setPin("");
+      setShowForm(false);
+      fetchChildren();
+    }
   };
 
   if (loading) {

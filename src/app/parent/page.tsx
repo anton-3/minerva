@@ -3,43 +3,32 @@
 // See: specs/001-minerva-mvp/tasks.md (T039)
 
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
-import type { Database } from "@/types/database";
+import { db, children, sessions } from "@/db";
+import { inArray, desc } from "drizzle-orm";
+import type { Session, SessionSummary } from "@/db/types";
 
-type Child = Database["public"]["Tables"]["children"]["Row"];
-type SessionRow = Database["public"]["Tables"]["sessions"]["Row"];
-type SummaryRow = Database["public"]["Tables"]["session_summaries"]["Row"];
-
-interface SessionWithSummary extends SessionRow {
-  session_summaries: SummaryRow | null;
+interface SessionWithSummary extends Session {
+  summary: SessionSummary | null;
 }
 
 export default async function ParentDashboard() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  // Fetch children for this parent
-  const { data: rawChildren } = await supabase
-    .from("children")
-    .select("*")
-    .eq("parent_id", user?.id ?? "");
-
-  const children = (rawChildren ?? []) as Child[];
+  // Fetch all children (simplified demo - no parent filtering)
+  const childrenList = await db.select().from(children);
 
   // Fetch recent sessions across all children
-  const childIds = children.map((c) => c.id);
-  const { data: rawSessions } = childIds.length > 0
-    ? await supabase
-        .from("sessions")
-        .select("*, session_summaries(*)")
-        .in("child_id", childIds)
-        .order("started_at", { ascending: false })
-        .limit(5)
-    : { data: [] };
+  const childIds = childrenList.map((c) => c.id);
+  let recentSessions: SessionWithSummary[] = [];
 
-  const recentSessions = (rawSessions ?? []) as SessionWithSummary[];
+  if (childIds.length > 0) {
+    recentSessions = await db.query.sessions.findMany({
+      where: inArray(sessions.childId, childIds),
+      with: {
+        summary: true,
+      },
+      orderBy: [desc(sessions.startedAt)],
+      limit: 5,
+    });
+  }
 
   return (
     <div className="space-y-8">
@@ -54,7 +43,7 @@ export default async function ParentDashboard() {
       <div className="grid grid-cols-3 gap-4">
         <div className="rounded-lg border border-border bg-card p-4">
           <p className="text-sm text-muted-foreground">Children</p>
-          <p className="text-2xl font-bold">{children.length}</p>
+          <p className="text-2xl font-bold">{childrenList.length}</p>
         </div>
         <div className="rounded-lg border border-border bg-card p-4">
           <p className="text-sm text-muted-foreground">Total Sessions</p>
@@ -64,8 +53,8 @@ export default async function ParentDashboard() {
           <p className="text-sm text-muted-foreground">This Week</p>
           <p className="text-2xl font-bold">
             {recentSessions.filter((s) => {
-              if (!s.started_at) return false;
-              const diff = Date.now() - new Date(s.started_at).getTime();
+              if (!s.startedAt) return false;
+              const diff = Date.now() - new Date(s.startedAt).getTime();
               return diff < 7 * 24 * 60 * 60 * 1000;
             }).length}
           </p>
@@ -83,7 +72,7 @@ export default async function ParentDashboard() {
             Manage
           </Link>
         </div>
-        {children.length === 0 ? (
+        {childrenList.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border p-8 text-center">
             <p className="text-muted-foreground text-sm mb-3">
               No children added yet.
@@ -97,7 +86,7 @@ export default async function ParentDashboard() {
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3">
-            {children.map((child) => (
+            {childrenList.map((child) => (
               <div
                 key={child.id}
                 className="rounded-lg border border-border bg-card p-4"
@@ -136,8 +125,8 @@ export default async function ParentDashboard() {
               >
                 <div>
                   <span className="text-sm">
-                    {session.started_at
-                      ? new Date(session.started_at).toLocaleDateString()
+                    {session.startedAt
+                      ? new Date(session.startedAt).toLocaleDateString()
                       : "Unknown date"}
                   </span>
                 </div>

@@ -4,9 +4,7 @@
 
 "use client";
 
-import type { Database } from "@/types/database";
-
-type Child = Database["public"]["Tables"]["children"]["Row"];
+import type { Child } from "@/db/types";
 
 interface ChildCardProps {
   child: Child;

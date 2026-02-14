@@ -5,16 +5,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { createClient } from "@/lib/supabase/client";
 import { SessionSummaryCard } from "@/components/parent/SessionSummaryCard";
-import type { Database } from "@/types/database";
+import type { Child, Session, SessionSummary } from "@/db/types";
 
-type Child = Database["public"]["Tables"]["children"]["Row"];
-type SessionRow = Database["public"]["Tables"]["sessions"]["Row"];
-type SummaryRow = Database["public"]["Tables"]["session_summaries"]["Row"];
-
-interface SessionWithSummary extends SessionRow {
-  session_summaries: SummaryRow | null;
+interface SessionWithSummary extends Session {
+  summary: SessionSummary | null;
 }
 
 export default function SessionsPage() {
@@ -23,45 +18,34 @@ export default function SessionsPage() {
   const [sessions, setSessions] = useState<SessionWithSummary[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const supabase = createClient();
-
   useEffect(() => {
     const fetchData = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data: childrenData } = await supabase
-        .from("children")
-        .select("*")
-        .eq("parent_id", user.id);
-
-      const typedChildren = (childrenData as Child[]) ?? [];
-      setChildren(typedChildren);
-      if (typedChildren.length > 0) {
-        setSelectedChild(typedChildren[0].id);
+      const res = await fetch("/api/children");
+      if (res.ok) {
+        const data = await res.json();
+        setChildren(data);
+        if (data.length > 0) {
+          setSelectedChild(data[0].id);
+        }
       }
       setLoading(false);
     };
 
     fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     if (!selectedChild) return;
 
     const fetchSessions = async () => {
-      const { data } = await supabase
-        .from("sessions")
-        .select("*, session_summaries(*)")
-        .eq("child_id", selectedChild)
-        .order("started_at", { ascending: false });
-
-      setSessions((data as SessionWithSummary[]) ?? []);
+      const res = await fetch(`/api/session?child_id=${selectedChild}`);
+      if (res.ok) {
+        const data = await res.json();
+        setSessions(data);
+      }
     };
 
     fetchSessions();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedChild]);
 
   if (loading) {

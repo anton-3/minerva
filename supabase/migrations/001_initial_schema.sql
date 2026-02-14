@@ -1,17 +1,10 @@
--- Minerva AI Avatar Tutor — Initial Schema
+-- Minerva AI Avatar Tutor — Initial Schema (Simplified for Demo)
 -- See: specs/001-minerva-mvp/data-model.md
+-- NOTE: Simplified schema - removed profiles table and parent_id
 
--- profiles: extends Supabase auth
-CREATE TABLE profiles (
-  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  role TEXT NOT NULL CHECK (role IN ('parent', 'student')),
-  display_name TEXT NOT NULL
-);
-
--- children: student profiles created by parents
+-- children: student profiles (no parent relationship for demo)
 CREATE TABLE children (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  parent_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   age INTEGER NOT NULL,
   grade INTEGER NOT NULL,
@@ -70,69 +63,9 @@ CREATE TABLE transcript_entries (
   timestamp TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- ─── Row Level Security ─────────────────────────────────────────────────────
+-- ─── Demo Data ──────────────────────────────────────────────────────────────
 
-ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE children ENABLE ROW LEVEL SECURITY;
-ALTER TABLE learning_plans ENABLE ROW LEVEL SECURITY;
-ALTER TABLE sessions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE session_summaries ENABLE ROW LEVEL SECURITY;
-ALTER TABLE progress ENABLE ROW LEVEL SECURITY;
-ALTER TABLE transcript_entries ENABLE ROW LEVEL SECURITY;
-
--- Parents can read/write their own profile
-CREATE POLICY "Users can read own profile"
-  ON profiles FOR SELECT USING (auth.uid() = id);
-CREATE POLICY "Users can update own profile"
-  ON profiles FOR UPDATE USING (auth.uid() = id);
-
--- Parents can manage their own children
-CREATE POLICY "Parents can read own children"
-  ON children FOR SELECT USING (parent_id = auth.uid());
-CREATE POLICY "Parents can insert own children"
-  ON children FOR INSERT WITH CHECK (parent_id = auth.uid());
-CREATE POLICY "Parents can update own children"
-  ON children FOR UPDATE USING (parent_id = auth.uid());
-CREATE POLICY "Parents can delete own children"
-  ON children FOR DELETE USING (parent_id = auth.uid());
-
--- Learning plans: parents can manage their children's plans
-CREATE POLICY "Parents can read children learning plans"
-  ON learning_plans FOR SELECT
-  USING (child_id IN (SELECT id FROM children WHERE parent_id = auth.uid()));
-CREATE POLICY "Parents can insert children learning plans"
-  ON learning_plans FOR INSERT
-  WITH CHECK (child_id IN (SELECT id FROM children WHERE parent_id = auth.uid()));
-CREATE POLICY "Parents can update children learning plans"
-  ON learning_plans FOR UPDATE
-  USING (child_id IN (SELECT id FROM children WHERE parent_id = auth.uid()));
-
--- Sessions: parents can read their children's sessions
-CREATE POLICY "Parents can read children sessions"
-  ON sessions FOR SELECT
-  USING (child_id IN (SELECT id FROM children WHERE parent_id = auth.uid()));
-CREATE POLICY "Service can manage sessions"
-  ON sessions FOR ALL USING (true) WITH CHECK (true);
-
--- Session summaries: parents can read their children's summaries
-CREATE POLICY "Parents can read children summaries"
-  ON session_summaries FOR SELECT
-  USING (session_id IN (
-    SELECT s.id FROM sessions s
-    JOIN children c ON s.child_id = c.id
-    WHERE c.parent_id = auth.uid()
-  ));
-
--- Progress: parents can read their children's progress
-CREATE POLICY "Parents can read children progress"
-  ON progress FOR SELECT
-  USING (child_id IN (SELECT id FROM children WHERE parent_id = auth.uid()));
-
--- Transcript entries: parents can read their children's transcripts
-CREATE POLICY "Parents can read children transcripts"
-  ON transcript_entries FOR SELECT
-  USING (session_id IN (
-    SELECT s.id FROM sessions s
-    JOIN children c ON s.child_id = c.id
-    WHERE c.parent_id = auth.uid()
-  ));
+-- Insert demo child
+INSERT INTO children (id, name, age, grade, pin)
+VALUES ('00000000-0000-0000-0000-000000000001', 'Alex', 12, 7, '1234')
+ON CONFLICT (id) DO NOTHING;

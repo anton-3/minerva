@@ -4,10 +4,10 @@
 // See: specs/001-minerva-mvp/tasks.md (T037)
 
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { db, sessions, sessionSummaries } from "@/db";
+import { eq, desc } from "drizzle-orm";
 
 export async function POST(request: Request) {
-  const supabase = await createClient();
   const body = await request.json();
   const { child_id, learning_plan_id } = body as {
     child_id: string;
@@ -18,26 +18,25 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "child_id is required" }, { status: 400 });
   }
 
-  const { data, error } = await supabase
-    .from("sessions")
-    .insert({
-      child_id,
-      learning_plan_id: learning_plan_id ?? null,
-      status: "active",
-      started_at: new Date().toISOString(),
-    })
-    .select()
-    .single();
+  try {
+    const [newSession] = await db
+      .insert(sessions)
+      .values({
+        childId: child_id,
+        learningPlanId: learning_plan_id ?? null,
+        status: "active",
+        startedAt: new Date(),
+      })
+      .returning();
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(newSession);
+  } catch (error) {
+    console.error("[api/session] Error creating session:", error);
+    return NextResponse.json({ error: "Failed to create session" }, { status: 500 });
   }
-
-  return NextResponse.json(data);
 }
 
 export async function PATCH(request: Request) {
-  const supabase = await createClient();
   const body = await request.json();
   const { id, status, recording_url } = body as {
     id: string;
@@ -49,27 +48,26 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Session id is required" }, { status: 400 });
   }
 
-  const updates: { status?: string; recording_url?: string; ended_at?: string } = {};
+  const updates: { status?: string; recordingUrl?: string; endedAt?: Date } = {};
   if (status) updates.status = status;
-  if (recording_url) updates.recording_url = recording_url;
-  if (status === "completed") updates.ended_at = new Date().toISOString();
+  if (recording_url) updates.recordingUrl = recording_url;
+  if (status === "completed") updates.endedAt = new Date();
 
-  const { data, error } = await supabase
-    .from("sessions")
-    .update(updates)
-    .eq("id", id)
-    .select()
-    .single();
+  try {
+    const [updated] = await db
+      .update(sessions)
+      .set(updates)
+      .where(eq(sessions.id, id))
+      .returning();
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(updated);
+  } catch (error) {
+    console.error("[api/session] Error updating session:", error);
+    return NextResponse.json({ error: "Failed to update session" }, { status: 500 });
   }
-
-  return NextResponse.json(data);
 }
 
 export async function GET(request: Request) {
-  const supabase = await createClient();
   const { searchParams } = new URL(request.url);
   const childId = searchParams.get("child_id");
 
@@ -77,15 +75,19 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "child_id query param required" }, { status: 400 });
   }
 
-  const { data, error } = await supabase
-    .from("sessions")
-    .select("*, session_summaries(*)")
-    .eq("child_id", childId)
-    .order("started_at", { ascending: false });
+  try {
+    // Use relational query for join with session_summaries
+    const data = await db.query.sessions.findMany({
+      where: eq(sessions.childId, childId),
+      with: {
+        summary: true,
+      },
+      orderBy: [desc(sessions.startedAt)],
+    });
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error("[api/session] Error fetching sessions:", error);
+    return NextResponse.json({ error: "Failed to fetch sessions" }, { status: 500 });
   }
-
-  return NextResponse.json(data);
 }

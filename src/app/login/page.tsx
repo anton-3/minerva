@@ -1,4 +1,4 @@
-// Login page — email/password for parents, PIN entry for students
+// Login page — PIN entry for students only (demo mode - no parent auth)
 // Owner: Person D (Dashboard + Design)
 // See: specs/001-minerva-mvp/tasks.md (T035)
 
@@ -6,57 +6,15 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import Link from "next/link";
 
 type LoginMode = "parent" | "student";
 
 export default function LoginPage() {
   const router = useRouter();
   const [mode, setMode] = useState<LoginMode>("parent");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  const handleParentLogin = async (e: { preventDefault: () => void }) => {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
-
-    const supabase = createClient();
-    const { error: authError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (authError) {
-      setError(authError.message);
-      setLoading(false);
-      return;
-    }
-
-    router.push("/parent");
-  };
-
-  const handleParentSignup = async () => {
-    setError("");
-    setLoading(true);
-
-    const supabase = createClient();
-    const { error: authError } = await supabase.auth.signUp({
-      email,
-      password,
-    });
-
-    if (authError) {
-      setError(authError.message);
-      setLoading(false);
-      return;
-    }
-
-    router.push("/parent");
-  };
 
   const handleStudentLogin = async (e: { preventDefault: () => void }) => {
     e.preventDefault();
@@ -67,8 +25,7 @@ export default function LoginPage() {
       return;
     }
 
-    // For hackathon: navigate to student page with PIN in query
-    // In production, this would validate against the children table
+    // Navigate to student page with PIN in query
     router.push(`/student?pin=${pin}`);
   };
 
@@ -106,54 +63,19 @@ export default function LoginPage() {
           </button>
         </div>
 
-        {/* Parent login form */}
+        {/* Parent - direct link to dashboard (demo mode) */}
         {mode === "parent" && (
-          <form onSubmit={handleParentLogin} className="space-y-4">
-            <div className="space-y-2">
-              <label htmlFor="email" className="text-sm font-medium">
-                Email
-              </label>
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                placeholder="parent@example.com"
-              />
-            </div>
-            <div className="space-y-2">
-              <label htmlFor="password" className="text-sm font-medium">
-                Password
-              </label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={6}
-                className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                placeholder="Min 6 characters"
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full rounded-lg bg-primary py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground text-center">
+              Demo mode: No authentication required
+            </p>
+            <Link
+              href="/parent"
+              className="block w-full rounded-lg bg-primary py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 text-center"
             >
-              {loading ? "Signing in..." : "Sign In"}
-            </button>
-            <button
-              type="button"
-              onClick={handleParentSignup}
-              disabled={loading}
-              className="w-full rounded-lg border border-input py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
-            >
-              Create Account
-            </button>
-          </form>
+              Enter Parent Dashboard
+            </Link>
+          </div>
         )}
 
         {/* Student PIN entry */}

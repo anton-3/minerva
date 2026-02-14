@@ -4,13 +4,10 @@
 
 "use client";
 
-import type { Database } from "@/types/database";
+import type { Session, SessionSummary } from "@/db/types";
 
-type SessionRow = Database["public"]["Tables"]["sessions"]["Row"];
-type SummaryRow = Database["public"]["Tables"]["session_summaries"]["Row"];
-
-interface SessionWithSummary extends SessionRow {
-  session_summaries: SummaryRow | null;
+interface SessionWithSummary extends Session {
+  summary: SessionSummary | null;
 }
 
 interface SessionSummaryCardProps {
@@ -33,9 +30,9 @@ function ScoreBadge({ label, score }: { label: string; score: number | null }) {
 }
 
 export function SessionSummaryCard({ session }: SessionSummaryCardProps) {
-  const summary = session.session_summaries;
-  const startedAt = session.started_at
-    ? new Date(session.started_at).toLocaleDateString("en-US", {
+  const summary = session.summary;
+  const startedAt = session.startedAt
+    ? new Date(session.startedAt).toLocaleDateString("en-US", {
         month: "short",
         day: "numeric",
         hour: "numeric",
@@ -44,10 +41,10 @@ export function SessionSummaryCard({ session }: SessionSummaryCardProps) {
     : "Unknown";
 
   const duration =
-    session.started_at && session.ended_at
+    session.startedAt && session.endedAt
       ? Math.round(
-          (new Date(session.ended_at).getTime() -
-            new Date(session.started_at).getTime()) /
+          (new Date(session.endedAt).getTime() -
+            new Date(session.startedAt).getTime()) /
             60000
         )
       : null;
@@ -80,9 +77,9 @@ export function SessionSummaryCard({ session }: SessionSummaryCardProps) {
         <>
           <p className="text-sm">{summary.summary}</p>
 
-          {summary.topics_covered && summary.topics_covered.length > 0 && (
+          {summary.topicsCovered && summary.topicsCovered.length > 0 && (
             <div className="flex flex-wrap gap-1">
-              {summary.topics_covered.map((topic) => (
+              {summary.topicsCovered.map((topic) => (
                 <span
                   key={topic}
                   className="text-xs bg-muted rounded-full px-2 py-0.5"
@@ -94,8 +91,8 @@ export function SessionSummaryCard({ session }: SessionSummaryCardProps) {
           )}
 
           <div className="flex gap-2">
-            <ScoreBadge label="Engagement" score={summary.engagement_score} />
-            <ScoreBadge label="Comprehension" score={summary.comprehension_score} />
+            <ScoreBadge label="Engagement" score={summary.engagementScore} />
+            <ScoreBadge label="Comprehension" score={summary.comprehensionScore} />
           </div>
 
           {summary.strengths && summary.strengths.length > 0 && (
@@ -105,10 +102,10 @@ export function SessionSummaryCard({ session }: SessionSummaryCardProps) {
             </div>
           )}
 
-          {summary.areas_for_improvement && summary.areas_for_improvement.length > 0 && (
+          {summary.areasForImprovement && summary.areasForImprovement.length > 0 && (
             <div className="text-xs text-muted-foreground">
               <span className="font-medium text-foreground">To improve:</span>{" "}
-              {summary.areas_for_improvement.join(", ")}
+              {summary.areasForImprovement.join(", ")}
             </div>
           )}
         </>

@@ -4,17 +4,11 @@
 // See: specs/001-minerva-mvp/tasks.md (T058)
 
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { db, sessionSummaries, transcriptEntries } from "@/db";
+import { eq, asc } from "drizzle-orm";
 import { createTutorBrain } from "@/lib/claude/client";
-import type { Database } from "@/types/database";
-
-type SessionSummaryRow =
-  Database["public"]["Tables"]["session_summaries"]["Row"];
-type TranscriptRow =
-  Database["public"]["Tables"]["transcript_entries"]["Row"];
 
 export async function POST(request: Request) {
-  const supabase = await createClient();
   const body = await request.json();
   const { session_id, transcript: inlineTranscript } = body as {
     session_id: string;
@@ -35,30 +29,21 @@ export async function POST(request: Request) {
       // Use inline transcript (from in-memory capture) and save to DB
       transcriptForSummary = inlineTranscript;
 
-      // Save transcript entries to Supabase for persistence
+      // Save transcript entries for persistence
       const entries = inlineTranscript.map((t) => ({
-        session_id,
+        sessionId: session_id,
         speaker: t.speaker,
         text: t.text,
-        timestamp: new Date().toISOString(),
+        timestamp: new Date(),
       }));
-      await supabase.from("transcript_entries").insert(entries);
+      await db.insert(transcriptEntries).values(entries);
     } else {
-      // Fetch transcript entries from Supabase (from Recall.ai webhooks)
-      const { data: transcriptData, error: transcriptError } = await supabase
-        .from("transcript_entries")
-        .select("*")
-        .eq("session_id", session_id)
-        .order("timestamp", { ascending: true });
-
-      if (transcriptError) {
-        return NextResponse.json(
-          { error: transcriptError.message },
-          { status: 500 }
-        );
-      }
-
-      const transcript = (transcriptData ?? []) as TranscriptRow[];
+      // Fetch transcript entries from DB (from Recall.ai webhooks)
+      const transcript = await db
+        .select()
+        .from(transcriptEntries)
+        .where(eq(transcriptEntries.sessionId, session_id))
+        .orderBy(asc(transcriptEntries.timestamp));
 
       if (transcript.length === 0) {
         return NextResponse.json(
@@ -77,26 +62,21 @@ export async function POST(request: Request) {
     const brain = createTutorBrain();
     const summary = await brain.generateSummary(transcriptForSummary);
 
-    // Store summary in Supabase
-    const { data, error } = await supabase
-      .from("session_summaries")
-      .insert({
-        session_id,
+    // Store summary in DB
+    const [data] = await db
+      .insert(sessionSummaries)
+      .values({
+        sessionId: session_id,
         summary: summary.summary,
-        topics_covered: summary.topicsCovered,
+        topicsCovered: summary.topicsCovered,
         strengths: summary.strengths,
-        areas_for_improvement: summary.areasForImprovement,
-        engagement_score: summary.engagementScore,
-        comprehension_score: summary.comprehensionScore,
+        areasForImprovement: summary.areasForImprovement,
+        engagementScore: summary.engagementScore,
+        comprehensionScore: summary.comprehensionScore,
       })
-      .select()
-      .single();
+      .returning();
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    return NextResponse.json(data as SessionSummaryRow);
+    return NextResponse.json(data);
   } catch (err) {
     console.error("[api/session/summary] Error generating summary:", err);
     return NextResponse.json(
