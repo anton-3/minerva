@@ -18,7 +18,7 @@ load_dotenv()
 # ---------------------------------------------------------------------------
 
 OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
-OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-5")
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4.1-nano")
 OPENAI_BASE_URL = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
 FLASK_HOST = os.environ.get("FLASK_HOST", "0.0.0.0")
 FLASK_PORT = int(os.environ.get("FLASK_PORT", "5000"))
@@ -33,7 +33,7 @@ SYSTEM_PROMPT = """\
 # Manim Script Instructions
 
 ## Introduction
-Create a lengthy, well laid out, extensive Manim script that elegantly \
+Create an elegant Manim script that \
 demonstrates a mathematical concept or problem. Keep in mind the dimensions \
 of the window.
 IMPORTANT - it is Create() not ShowCreation()

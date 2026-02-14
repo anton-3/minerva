@@ -12,7 +12,7 @@ client = OpenAI(
     api_key=os.environ["OPENAI_API_KEY"],
     base_url=os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1"),
 )
-model = os.environ.get("OPENAI_MODEL", "gpt-5-mini")
+model = os.environ.get("OPENAI_MODEL", "gpt-4.1-nano")
 
 prompt = "What is 2 + 2? Reply with just the number."
 
@@ -37,5 +37,7 @@ print()
 print(f"Reply:          {reply}")
 print(f"Prompt tokens:  {usage.prompt_tokens}")
 print(f"Output tokens:  {usage.completion_tokens}")
+if hasattr(usage, "completion_tokens_details") and usage.completion_tokens_details:
+    print(f"Details:        {usage.completion_tokens_details}")
 print(f"Total tokens:   {usage.total_tokens}")
 print(f"Latency:        {t1 - t0:.2f}s")
