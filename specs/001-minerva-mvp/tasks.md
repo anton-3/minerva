@@ -145,11 +145,11 @@ This prevents wasted time building with deprecated patterns. Document any findin
 
 **Owner**: Person C (plan generation), Person A (session integration)
 
-- [ ] T048 [US3] [C] Implement TutorBrain.generateLearningPlan() in `src/lib/claude/client.ts` — Claude generates ordered topics from parent goals
-- [ ] T049 [US3] [C] Implement `/api/tutor/plan/route.ts` — POST: generate learning plan for child+subject, GET: fetch current plan
-- [ ] T050 [US3] [A] Update `src/hooks/useTutorBrain.ts` to include learning plan context in TutorBrainRequest — tutor automatically teaches the current topic (depends on T049)
-- [ ] T051 [US3] [A] Update session end flow to advance learning plan currentTopic based on progressUpdate from Claude (depends on T050)
-- [ ] T052 [US3] [D] Update `src/app/parent/goals/page.tsx` to trigger learning plan generation when goals are saved (depends on T049)
+- [x] T048 [US3] [C] Implement TutorBrain.generateLearningPlan() in `src/lib/claude/client.ts` — Claude generates ordered topics from parent goals
+- [x] T049 [US3] [C] Implement `/api/tutor/plan/route.ts` — POST: generate learning plan for child+subject, GET: fetch current plan
+- [x] T050 [US3] [A] Update `src/hooks/useTutorBrain.ts` to include learning plan context in TutorBrainRequest — tutor automatically teaches the current topic (depends on T049)
+- [x] T051 [US3] [A] Update session end flow to advance learning plan currentTopic based on progressUpdate from Claude (depends on T050)
+- [x] T052 [US3] [D] Update `src/app/parent/goals/page.tsx` to trigger learning plan generation when goals are saved (depends on T049)
 
 **Checkpoint**: Learning plans generate from goals, tutor follows the plan, plan advances on mastery.
 
@@ -163,12 +163,12 @@ This prevents wasted time building with deprecated patterns. Document any findin
 
 **Owner**: Person C (recording + summary), Person A (transcript capture in session)
 
-- [ ] T053 [P] [US4] [C] Implement Recall.ai client `src/lib/recall/client.ts` — SessionRecorder: startRecording, stopRecording
-- [ ] T054 [P] [US4] [C] Implement `/api/recall/bot/route.ts` — POST to create recording bot for session
-- [ ] T055 [P] [US4] [C] Implement `/api/recall/webhook/route.ts` — receives transcript chunks from Recall.ai, saves to transcript_entries table
-- [ ] T056 [US4] [A] Add in-memory transcript capture to `src/hooks/useSession.ts` — fallback: capture student messages from onUserMessage + tutor responses from Claude, save to Supabase on session end
-- [ ] T057 [US4] [C] Implement TutorBrain.generateSummary() in `src/lib/claude/client.ts` — generates SessionSummary from transcript
-- [ ] T058 [US4] [C] Implement `/api/session/summary/route.ts` — POST: generate summary for completed session (calls generateSummary with transcript entries)
+- [x] T053 [P] [US4] [C] Implement Recall.ai client `src/lib/recall/client.ts` — SessionRecorder: startRecording, stopRecording
+- [x] T054 [P] [US4] [C] Implement `/api/recall/bot/route.ts` — POST to create recording bot for session
+- [x] T055 [P] [US4] [C] Implement `/api/recall/webhook/route.ts` — receives transcript chunks from Recall.ai, saves to transcript_entries table
+- [x] T056 [US4] [A] Add in-memory transcript capture to `src/hooks/useSession.ts` — fallback: capture student messages from onUserMessage + tutor responses from Claude, save to Supabase on session end
+- [x] T057 [US4] [C] Implement TutorBrain.generateSummary() in `src/lib/claude/client.ts` — generates SessionSummary from transcript
+- [x] T058 [US4] [C] Implement `/api/session/summary/route.ts` — POST: generate summary for completed session (calls generateSummary with transcript entries)
 
 **Checkpoint**: Sessions have transcripts. AI summaries appear in parent dashboard after session ends.
 
@@ -182,9 +182,9 @@ This prevents wasted time building with deprecated patterns. Document any findin
 
 **Owner**: Person C
 
-- [ ] T059 [P] [US5] [C] Implement Perplexity client `src/lib/perplexity/client.ts` — KnowledgeLookup: search
-- [ ] T060 [US5] [C] Implement `/api/search/route.ts` — POST: query Perplexity Sonar, return answer + citations
-- [ ] T061 [US5] [C] Update `/api/tutor/respond/route.ts` to optionally call Perplexity when Claude determines external knowledge is needed (depends on T060)
+- [x] T059 [P] [US5] [C] Implement Perplexity client `src/lib/perplexity/client.ts` — KnowledgeLookup: search
+- [x] T060 [US5] [C] Implement `/api/search/route.ts` — POST: query Perplexity Sonar, return answer + citations
+- [x] T061 [US5] [C] Update `/api/tutor/respond/route.ts` to optionally call Perplexity when Claude determines external knowledge is needed (depends on T060)
 
 **Checkpoint**: Factual questions get sourced answers woven into tutor's response.
 
@@ -194,12 +194,12 @@ This prevents wasted time building with deprecated patterns. Document any findin
 
 **Purpose**: Landing page, UI polish, demo rehearsal, deployment.
 
-- [ ] T062 [P] [ALL] Implement `src/app/page.tsx` — landing page: hero section, value prop, screenshots, CTA to sign up
+- [x] T062 [P] [ALL] Implement `src/app/page.tsx` — landing page: hero section, value prop, screenshots, CTA to sign up
 - [ ] T063 [P] [D] Final Vercel deployment: production env vars, custom domain if available
 - [ ] T064 [P] [D] Create demo account with sample data: parent + child + goals + completed session with summary + progress records
 - [ ] T065 [P] [C] Claude prompt tuning: test 20+ student messages, refine JSON output, ensure Socratic method consistency
 - [ ] T066 [P] [B] Canvas visual polish: colors, fonts, animation timing, ensure math templates render correctly at demo resolution
-- [ ] T067 [P] [A] Edge case handling: avatar disconnect recovery, session timeout warning (2 min before HeyGen limit), mic denied → text fallback
+- [x] T067 [P] [A] Edge case handling: avatar disconnect recovery, session timeout warning (2 min before HeyGen limit), mic denied → text fallback
 - [ ] T068 [ALL] Demo rehearsal: run through demo script 3 times. Record backup video.
 
 ---

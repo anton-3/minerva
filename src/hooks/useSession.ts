@@ -25,6 +25,7 @@ export function useSession() {
 
   // Track whether user message listener is wired
   const wiredRef = useRef(false);
+  const sessionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Wire avatar user messages to tutor brain
   useEffect(() => {
@@ -40,6 +41,8 @@ export function useSession() {
   useEffect(() => {
     store.setAvatarStatus(avatar.status);
   }, [avatar.status, store]);
+
+  const endSessionRef = useRef<() => Promise<void>>(() => Promise.resolve());
 
   const startSession = useCallback(async () => {
     try {
@@ -110,6 +113,25 @@ export function useSession() {
       store.setStatus("ended");
     }
   }, [avatar, zoom, store]);
+
+  // Keep endSessionRef in sync so the timer can call it
+  endSessionRef.current = endSession;
+
+  // Auto-end session at 9.5 minutes (before HeyGen's 10-min limit)
+  useEffect(() => {
+    if (store.status === "active") {
+      sessionTimerRef.current = setTimeout(() => {
+        console.warn("[useSession] Auto-ending session at 9.5 min limit");
+        void endSessionRef.current();
+      }, 9.5 * 60 * 1000);
+    }
+    return () => {
+      if (sessionTimerRef.current) {
+        clearTimeout(sessionTimerRef.current);
+        sessionTimerRef.current = null;
+      }
+    };
+  }, [store.status]);
 
   return {
     // State

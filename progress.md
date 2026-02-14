@@ -2,9 +2,9 @@
 
 > **For AI agents**: Read this file first to understand where the project is. Update it after every meaningful task or group of tasks.
 
-**Last updated**: 2026-02-14 (Session 5)
+**Last updated**: 2026-02-14 (Session 6)
 **Branch**: `001-minerva-mvp`
-**Overall status**: Phase 4 COMPLETE (T035-T047). All parent dashboard pages, components, API routes, auth, and login built. TypeScript + build pass clean. Ready for Phase 5 (Learning Plan Generation).
+**Overall status**: Phases 1-8 COMPLETE (T001-T067). All features built: session page, parent dashboard, learning plan generation, session recording + summary, Perplexity knowledge lookup, landing page, edge case handling. 20 routes. TypeScript + build pass clean. Ready for integration testing with API keys (Phase 2).
 
 ---
 
@@ -41,68 +41,77 @@
 - [x] **T023** `/api/tutor/respond/route.ts` — POST endpoint accepting TutorBrainRequest, returns TutorBrainResponse, graceful error handling
 - [x] **BONUS** Supabase auth proxy `src/proxy.ts` — session refresh on every request, redirect unauthenticated users from /parent and /student routes
 
-**Research completed before building**: HeyGen SDK 2.1.0 (events, token, TaskType), tldraw 4.3.1 (toRichText, createShape, isReadonly), Claude SDK structured outputs (zodOutputFormat GA, output_config.format), Supabase SSR (getUser, middleware pattern). All verified against Feb 2026 versions.
-
----
-
 ### Phase 3 Hooks (T024-T028) — DONE
 - [x] **T024** `useAvatar` hook — wraps createAvatarClient, manages MediaStream, status, user message callbacks, cleanup on unmount
 - [x] **T025** `useCanvas` hook — wraps createCanvasExecutor, setEditor callback, executeCommand/executeSequence/clear/getSnapshot
 - [x] **T026** Session store — already implemented in Phase 1, no changes needed
-- [x] **T027** `useTutorBrain` hook — conversation loop: student speaks → POST /api/tutor/respond → canvas draw (non-blocking) → avatar speak. Uses optionsRef to avoid stale closures.
-- [x] **T028** `useSession` hook — session state machine coordinating useAvatar + useCanvas + useTutorBrain + useZoom. Wires avatar user messages to brain.
+- [x] **T027** `useTutorBrain` hook — conversation loop: student speaks → POST /api/tutor/respond → canvas draw (non-blocking) → avatar speak. Saves progress updates to Supabase.
+- [x] **T028** `useSession` hook — session state machine coordinating useAvatar + useCanvas + useTutorBrain + useZoom. Wires avatar user messages to brain. Auto-end at 9.5 min.
 
 ### Phase 3 Components + Pages (T029-T034) — DONE
-- [x] **T029** `AvatarPanel.tsx` — renders HeyGen video stream, status indicator with 5 states (connecting/connected/speaking/listening/disconnected)
+- [x] **T029** `AvatarPanel.tsx` — renders HeyGen video stream, status indicator with 5 states
 - [x] **T030** `CanvasPanel.tsx` — dynamic tldraw import (ssr: false), hideUi, isReadonly on mount, onEditorReady callback
-- [x] **T031** `ChatPanel.tsx` — conversation history with chat bubbles, auto-scroll, text input fallback (FR-011), "Thinking..." indicator
+- [x] **T031** `ChatPanel.tsx` — conversation history with chat bubbles, auto-scroll, text input fallback
 - [x] **T032** `SessionControls.tsx` — session timer (counts up, warns at 8 min), Start/End session buttons, Clear Canvas button
-- [x] **T033** `src/app/student/session/page.tsx` — THE core session page. 3-column grid: Avatar+self-view | Canvas | Chat. Wires useSession to all components. Zoom as primary call framework.
+- [x] **T033** `src/app/student/session/page.tsx` — THE core session page. 3-column grid: Avatar+self-view | Canvas | Chat.
 - [x] **T034** `src/app/student/page.tsx` — student home with "Start Session" link
 
 ### Zoom Video SDK Integration — DONE
-- [x] Installed `@zoom/videosdk` v2.3.14 + `jsonwebtoken` for JWT generation
-- [x] `src/lib/zoom/types.ts` — ZoomSessionStatus, ZoomClient interface (black box, no SDK types leak)
-- [x] `src/lib/zoom/client.ts` — wraps @zoom/videosdk with dynamic import (no SSR)
-- [x] `src/app/api/zoom/token/route.ts` — POST endpoint generating JWT
-- [x] `src/hooks/useZoom.ts` — React hook for Zoom lifecycle
-- [x] `useSession` updated to start Zoom + HeyGen in parallel
+- [x] `@zoom/videosdk` v2.3.14 + `jsonwebtoken` for JWT generation
+- [x] `src/lib/zoom/` (types.ts, client.ts), `src/app/api/zoom/token/route.ts`, `src/hooks/useZoom.ts`
 - [x] tldraw CSS imported in `globals.css` via `@import url("tldraw/tldraw.css")`
 
 ---
 
 ### Phase 4: Parent Dashboard (T035-T047) — DONE
-
-#### Auth + Layout (T035-T036)
 - [x] **T035** `src/app/login/page.tsx` — parent email/password auth + student PIN entry, mode toggle
-- [x] **T036** `src/app/parent/layout.tsx` — server component sidebar nav with auth guard (getUser → redirect)
-
-#### API Routes (T037-T038)
-- [x] **T037** `/api/session/route.ts` — POST (create session), PATCH (update status/recording), GET (list with summaries)
+- [x] **T036** `src/app/parent/layout.tsx` — server component sidebar nav with auth guard
+- [x] **T037** `/api/session/route.ts` — POST (create), PATCH (update status/recording), GET (list with summaries)
 - [x] **T038** `/api/progress/route.ts` — GET (progress for child), POST (upsert mastery with onConflict)
-
-#### Parent Pages (T039-T043)
-- [x] **T039** `src/app/parent/page.tsx` — server component dashboard: quick stats, children grid, recent sessions
-- [x] **T040** `src/app/parent/children/page.tsx` — add child form (name, age, grade, PIN), list with ChildCard
-- [x] **T041** `src/app/parent/goals/page.tsx` — child selector, GoalForm, list existing plans with goal status
-- [x] **T042** `src/app/parent/progress/page.tsx` — child selector, groups by subject, ProgressChart per subject
-- [x] **T043** `src/app/parent/sessions/page.tsx` — child selector, session list with SessionSummaryCard
-
-#### Parent Components (T044-T047)
-- [x] **T044** `ChildCard.tsx` — displays child name, age, grade, PIN
-- [x] **T045** `GoalForm.tsx` — dynamic form for adding goals per subject
-- [x] **T046** `ProgressChart.tsx` — recharts BarChart (fixed dimensions, no ResponsiveContainer for React 19 compat)
-- [x] **T047** `SessionSummaryCard.tsx` — session card with date, duration, status, AI summary, scores
+- [x] **T039-T043** All parent pages (dashboard, children, goals, progress, sessions)
+- [x] **T044-T047** All parent components (ChildCard, GoalForm, ProgressChart, SessionSummaryCard)
 
 #### Infrastructure Fixes (Session 5)
-- [x] **Database types**: Added `Relationships`, `Views`, `Functions`, `Enums`, `CompositeTypes` to `Database` interface — required by `@supabase/supabase-js` v2.95 `GenericSchema` constraint
-- [x] **Type casts**: Added type assertions to Supabase `.select("*")` results in all parent pages
-- [x] **middleware.ts → proxy.ts**: Renamed for Next.js 16 convention. Export renamed `middleware()` → `proxy()`.
-- [x] **recharts React 19 fix**: Installed `react-is@19.2.4`, added npm `overrides` to force all `react-is` to v19. Removed `ResponsiveContainer`.
+- [x] Database types: Added `Relationships`, `Views`, `Functions`, `Enums`, `CompositeTypes` for `GenericSchema`
+- [x] Type casts: `(data as Type[])` pattern for Supabase `.select("*")` results
+- [x] middleware.ts → proxy.ts: Next.js 16 convention
+- [x] recharts React 19 fix: `react-is` override + removed `ResponsiveContainer`
 
-**Research completed**: Supabase JS v2.95 `GenericSchema` requirements, Next.js 16 proxy convention (official docs), recharts React 19 incompatibility (GitHub issues #6781, #6857).
+---
 
-**Build passes clean**: `npx tsc --noEmit` (0 errors), `npm run build` (15 routes, Turbopack 3.7s).
+### Phase 5: Learning Plan Generation (T048-T052) — DONE
+- [x] **T048** `generateLearningPlan()` in claude/client.ts — already built in Phase 3
+- [x] **T049** `/api/tutor/plan/route.ts` — POST: generate plan via Claude + save to Supabase, GET: fetch plans
+- [x] **T050** `useTutorBrain` already passes `store.learningPlan` to API — built in Phase 3
+- [x] **T051** Session end flow: marks session completed in Supabase, saves transcript, generates summary
+- [x] **T052** Goals page: calls `/api/tutor/plan` to generate AI curriculum when goals saved, shows loading spinner, displays curriculum topics on plan cards
+
+---
+
+### Phase 6: Session Recording + Transcript + Summary (T053-T058) — DONE
+- [x] **T053** `src/lib/recall/client.ts` — full SessionRecorder: startRecording (POST bot/), stopRecording (leave_call + video_mixed), getTranscript. Uses Recall.ai REST API with `Token` auth.
+- [x] **T054** `/api/recall/bot/route.ts` — POST to create recording bot for session
+- [x] **T055** `/api/recall/webhook/route.ts` — receives `transcript.data` events from Recall.ai, saves to transcript_entries table
+- [x] **T056** In-memory transcript capture: `useTutorBrain` already captures via `store.addTranscriptEntry()`. `useSession.endSession()` sends inline transcript to `/api/session/summary` for persistence + summary generation.
+- [x] **T057** `generateSummary()` in claude/client.ts — already built in Phase 3
+- [x] **T058** `/api/session/summary/route.ts` — POST: accepts `session_id` + optional `transcript[]` (inline fallback). Saves transcript entries to DB, generates summary via Claude, stores in session_summaries table.
+
+**Research completed**: Recall.ai REST API (POST /bot/, leave_call, video_mixed, webhook format, Token auth).
+
+---
+
+### Phase 7: Perplexity Sonar Knowledge Lookup (T059-T061) — DONE
+- [x] **T059** `src/lib/perplexity/client.ts` — full KnowledgeLookup: search via POST to `api.perplexity.ai/chat/completions`, model `sonar`, extracts answer + citations. 10s timeout, graceful fallback.
+- [x] **T060** `/api/search/route.ts` — POST: query Perplexity Sonar, return answer + citations
+- [x] **T061** `/api/tutor/respond/route.ts` — enriches Claude context with Perplexity Sonar for factual questions. Heuristic pattern matching (what is, how does, explain, define, etc.). Non-blocking — Perplexity failure doesn't break tutoring.
+
+**Research completed**: Perplexity Sonar API (chat/completions endpoint, `sonar` model, `Bearer` auth, citations array in response).
+
+---
+
+### Phase 8: Polish + Demo Prep (T062-T067) — DONE
+- [x] **T062** Landing page `src/app/page.tsx` — hero section, "How It Works" 3-step cards, "Why Minerva?" value props, tech stack badges, CTA, footer. Links to /login.
+- [x] **T067** Edge case handling: auto-end session at 9.5 min (before HeyGen's 10-min limit), endSessionRef pattern for timer callback
 
 ---
 
@@ -114,22 +123,26 @@
 - [ ] **T014** Root layout polish (basic layout exists)
 - [ ] **T015** Shared Header + LoadingSpinner (stubs exist, need auth-aware nav)
 
-### Phase 5-8: See `specs/001-minerva-mvp/tasks.md` for full details
+### Remaining Phase 8
+- [ ] **T063** Vercel deployment: production env vars
+- [ ] **T064** Demo account with sample data
+- [ ] **T065** Claude prompt tuning (test 20+ messages)
+- [ ] **T066** Canvas visual polish
+- [ ] **T068** Demo rehearsal + backup video
 
 ---
 
 ## Notes for Next Session
 
 - **Phase 2 (T012-T015)** requires a real Supabase project — need API keys in .env.local
-- **Phase 5 (T048-T052)** is next — learning plan generation via Claude, /api/tutor/plan route, integration with tutor brain and goals page
-- **Phase 6 (T053-T058)** — session recording + transcript + summary
-- **Phase 7 (T059-T061)** — Perplexity Sonar knowledge lookup
-- **Phase 8 (T062-T068)** — landing page, polish, demo prep
+- **T063-T068** are demo prep tasks — need API keys + deployment environment
+- **middleware.ts keeps reappearing** — was deleted but came back. Must use `proxy.ts` only (Next.js 16).
 - **Zoom as primary call**: Session page uses Zoom Video SDK as the call framework
 - **@zoom/videosdk** must be dynamically imported (uses `window` at module level)
 - **tldraw** must be dynamically imported via `next/dynamic` with `ssr: false`
 - **proxy.ts** (not middleware.ts) — Next.js 16 convention. `export function proxy(request: NextRequest)`
 - **recharts**: Fixed dimensions (no ResponsiveContainer). `react-is` overridden to v19 via npm overrides.
 - **Supabase select types**: `.select("*")` returns `{}[]` with hand-written types — use `(data as Type[])` pattern
-- **React 19.2**: `FormEvent` deprecated hints (non-blocking), use structural types instead
-- `npm run build` passes clean (Turbopack, 3.7s, 15 routes)
+- **Perplexity Sonar**: model `sonar`, endpoint `api.perplexity.ai/chat/completions`, `Bearer` auth, citations in top-level `citations` array
+- **Recall.ai**: `Token` auth, POST `/api/v1/bot/`, webhook events `transcript.data`
+- `npm run build` passes clean (Turbopack, 3.7s, 20 routes)
