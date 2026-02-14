@@ -6,7 +6,7 @@
 // tldraw v4 uses richText (toRichText) instead of plain text prop.
 // isReadonly blocks createShapes — toggle off for AI drawing, back on after.
 
-import { createShapeId, toRichText } from "tldraw";
+import { createShapeId, toRichText, getIndices } from "tldraw";
 import type { Editor, IndexKey } from "tldraw";
 import type { CanvasCommand } from "@/types/session";
 import type { CanvasExecutor } from "./types";
@@ -65,7 +65,8 @@ export function createCanvasExecutor(editorRef: unknown): CanvasExecutor {
             const range = command.max - command.min;
             const width = Math.max(range * 60, 400);
 
-            // Main line
+            // Main line — use getIndices for proper IndexKey values
+            const [li1, li2] = getIndices(2);
             editor.createShape({
               id: lineId,
               type: "line",
@@ -78,8 +79,8 @@ export function createCanvasExecutor(editorRef: unknown): CanvasExecutor {
                 spline: "line" as const,
                 scale: 1,
                 points: {
-                  a1: { id: "a1", index: "a1" as IndexKey, x: 0, y: 0 },
-                  a2: { id: "a2", index: "a2" as IndexKey, x: width, y: 0 },
+                  [li1]: { id: li1, index: li1 as IndexKey, x: 0, y: 0 },
+                  [li2]: { id: li2, index: li2 as IndexKey, x: width, y: 0 },
                 },
               },
             });
@@ -88,6 +89,7 @@ export function createCanvasExecutor(editorRef: unknown): CanvasExecutor {
             for (let i = command.min; i <= command.max; i++) {
               const xPos = 50 + ((i - command.min) / range) * width;
               const tickId = createShapeId();
+              const [ti1, ti2] = getIndices(2);
               editor.createShape({
                 id: tickId,
                 type: "line",
@@ -100,8 +102,8 @@ export function createCanvasExecutor(editorRef: unknown): CanvasExecutor {
                   spline: "line" as const,
                   scale: 1,
                   points: {
-                    a1: { id: "a1", index: "a1" as IndexKey, x: 0, y: 0 },
-                    a2: { id: "a2", index: "a2" as IndexKey, x: 0, y: 20 },
+                    [ti1]: { id: ti1, index: ti1 as IndexKey, x: 0, y: 0 },
+                    [ti2]: { id: ti2, index: ti2 as IndexKey, x: 0, y: 20 },
                   },
                 },
               });
@@ -132,24 +134,29 @@ export function createCanvasExecutor(editorRef: unknown): CanvasExecutor {
           withWriteAccess(editor, () => {
             const size = 300;
 
-            // X-axis (arrow)
+            // X-axis (arrow) — tldraw v4 requires kind, labelColor, font, labelPosition, elbowMidPoint
             editor.createShape({
               id: xAxisId,
               type: "arrow",
               x: command.originX - size / 2,
               y: command.originY,
               props: {
+                kind: "arc" as const,
                 start: { x: 0, y: 0 },
                 end: { x: size, y: 0 },
                 color: "black" as const,
+                labelColor: "black" as const,
                 dash: "solid" as const,
                 size: "m" as const,
                 fill: "none" as const,
                 arrowheadStart: "none" as const,
                 arrowheadEnd: "arrow" as const,
+                font: "draw" as const,
                 richText: toRichText("x"),
+                labelPosition: 0.5,
                 bend: 0,
                 scale: 1,
+                elbowMidPoint: 0.5,
               },
             });
 
@@ -161,17 +168,22 @@ export function createCanvasExecutor(editorRef: unknown): CanvasExecutor {
               x: command.originX,
               y: command.originY + size / 2,
               props: {
+                kind: "arc" as const,
                 start: { x: 0, y: 0 },
                 end: { x: 0, y: -size },
                 color: "black" as const,
+                labelColor: "black" as const,
                 dash: "solid" as const,
                 size: "m" as const,
                 fill: "none" as const,
                 arrowheadStart: "none" as const,
                 arrowheadEnd: "arrow" as const,
+                font: "draw" as const,
                 richText: toRichText("y"),
+                labelPosition: 0.5,
                 bend: 0,
                 scale: 1,
+                elbowMidPoint: 0.5,
               },
             });
 
@@ -201,6 +213,7 @@ export function createCanvasExecutor(editorRef: unknown): CanvasExecutor {
           withWriteAccess(editor, () => {
             const len = 120;
             const rad = (command.angle * Math.PI) / 180;
+            const [ai1, ai2] = getIndices(2);
 
             // First ray (horizontal right)
             editor.createShape({
@@ -215,14 +228,15 @@ export function createCanvasExecutor(editorRef: unknown): CanvasExecutor {
                 spline: "line" as const,
                 scale: 1,
                 points: {
-                  a1: { id: "a1", index: "a1" as IndexKey, x: 0, y: 0 },
-                  a2: { id: "a2", index: "a2" as IndexKey, x: len, y: 0 },
+                  [ai1]: { id: ai1, index: ai1 as IndexKey, x: 0, y: 0 },
+                  [ai2]: { id: ai2, index: ai2 as IndexKey, x: len, y: 0 },
                 },
               },
             });
 
             // Second ray at angle
             const lineBId = createShapeId();
+            const [bi1, bi2] = getIndices(2);
             editor.createShape({
               id: lineBId,
               type: "line",
@@ -235,10 +249,10 @@ export function createCanvasExecutor(editorRef: unknown): CanvasExecutor {
                 spline: "line" as const,
                 scale: 1,
                 points: {
-                  a1: { id: "a1", index: "a1" as IndexKey, x: 0, y: 0 },
-                  a2: {
-                    id: "a2",
-                    index: "a2" as IndexKey,
+                  [bi1]: { id: bi1, index: bi1 as IndexKey, x: 0, y: 0 },
+                  [bi2]: {
+                    id: bi2,
+                    index: bi2 as IndexKey,
                     x: Math.cos(rad) * len,
                     y: -Math.sin(rad) * len,
                   },
@@ -293,6 +307,7 @@ export function createCanvasExecutor(editorRef: unknown): CanvasExecutor {
 
             // Fraction bar
             const barId = createShapeId();
+            const [fi1, fi2] = getIndices(2);
             editor.createShape({
               id: barId,
               type: "line",
@@ -305,8 +320,8 @@ export function createCanvasExecutor(editorRef: unknown): CanvasExecutor {
                 spline: "line" as const,
                 scale: 1,
                 points: {
-                  a1: { id: "a1", index: "a1" as IndexKey, x: 0, y: 0 },
-                  a2: { id: "a2", index: "a2" as IndexKey, x: 80, y: 0 },
+                  [fi1]: { id: fi1, index: fi1 as IndexKey, x: 0, y: 0 },
+                  [fi2]: { id: fi2, index: fi2 as IndexKey, x: 80, y: 0 },
                 },
               },
             });

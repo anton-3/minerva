@@ -1,7 +1,6 @@
 // useSession hook — session state machine
 // Manages session lifecycle: idle → connecting → active → ended
-// Coordinates Zoom (primary call), HeyGen avatar, canvas, and tutor brain.
-// See: specs/001-minerva-mvp/plan.md
+// Coordinates LiveAvatar avatar, canvas, and tutor brain.
 
 "use client";
 
@@ -10,13 +9,17 @@ import { useSessionStore } from "@/stores/sessionStore";
 import { useAvatar } from "./useAvatar";
 import { useCanvas } from "./useCanvas";
 import { useTutorBrain } from "./useTutorBrain";
-import { useZoom } from "./useZoom";
 
 export function useSession() {
-  const store = useSessionStore();
+  // Use individual selectors for stable references — avoids infinite re-render loops
+  const status = useSessionStore((s) => s.status);
+  const conversationHistory = useSessionStore((s) => s.conversationHistory);
+  const setStatus = useSessionStore((s) => s.setStatus);
+  const setAvatarStatus = useSessionStore((s) => s.setAvatarStatus);
+  const setSessionId = useSessionStore((s) => s.setSessionId);
+
   const avatar = useAvatar();
   const canvas = useCanvas();
-  const zoom = useZoom();
   const brain = useTutorBrain({
     speak: avatar.speak,
     executeSequence: canvas.executeSequence,
@@ -39,47 +42,39 @@ export function useSession() {
 
   // Track avatar status in store
   useEffect(() => {
-    store.setAvatarStatus(avatar.status);
-  }, [avatar.status, store]);
+    setAvatarStatus(avatar.status);
+  }, [avatar.status, setAvatarStatus]);
 
   const endSessionRef = useRef<() => Promise<void>>(() => Promise.resolve());
 
   const startSession = useCallback(async () => {
     try {
-      store.setStatus("connecting");
+      setStatus("connecting");
 
-      const sessionId = crypto.randomUUID();
-      store.setSessionId(sessionId);
+      const newSessionId = crypto.randomUUID();
+      setSessionId(newSessionId);
 
-      // Start Zoom session and HeyGen avatar in parallel
-      await Promise.all([
-        zoom.joinSession(`minerva-${sessionId}`, "Student"),
-        avatar.startSession(),
-      ]);
+      // Start LiveAvatar session (connects to LiveKit room)
+      await avatar.startSession();
 
-      // Start Zoom audio (mic + speaker) after joining
-      await zoom.startAudio();
+      setStatus("active");
 
-      store.setStatus("active");
+      // Send initial greeting through Claude (no built-in AI greeting anymore)
+      brain.handleStudentMessage("hi");
     } catch (err) {
       console.error("[useSession] Failed to start session:", err);
-      store.setStatus("error");
+      setStatus("error");
     }
-  }, [avatar, zoom, store]);
+  }, [avatar, setStatus, setSessionId]);
 
   const endSession = useCallback(async () => {
     try {
-      // End both Zoom and HeyGen in parallel
-      await Promise.all([
-        zoom.leaveSession(),
-        avatar.endSession(),
-      ]);
+      await avatar.endSession();
 
-      // Post-session: save transcript + generate summary (non-blocking)
-      if (store.sessionId) {
-        const sessionId = store.sessionId;
-        const transcript = store.transcript;
+      // Read latest state directly to avoid stale closures
+      const { sessionId, transcript } = useSessionStore.getState();
 
+      if (sessionId) {
         // 1. Mark session as completed
         fetch("/api/session", {
           method: "PATCH",
@@ -87,7 +82,7 @@ export function useSession() {
           body: JSON.stringify({ id: sessionId, status: "completed" }),
         })
           .then(async () => {
-            // 2. Generate summary with inline transcript (saves transcript + generates summary)
+            // 2. Generate summary with inline transcript
             if (transcript.length > 0) {
               await fetch("/api/session/summary", {
                 method: "POST",
@@ -107,19 +102,19 @@ export function useSession() {
           );
       }
 
-      store.setStatus("ended");
+      setStatus("ended");
     } catch (err) {
       console.error("[useSession] Error ending session:", err);
-      store.setStatus("ended");
+      setStatus("ended");
     }
-  }, [avatar, zoom, store]);
+  }, [avatar, setStatus]);
 
   // Keep endSessionRef in sync so the timer can call it
   endSessionRef.current = endSession;
 
   // Auto-end session at 9.5 minutes (before HeyGen's 10-min limit)
   useEffect(() => {
-    if (store.status === "active") {
+    if (status === "active") {
       sessionTimerRef.current = setTimeout(() => {
         console.warn("[useSession] Auto-ending session at 9.5 min limit");
         void endSessionRef.current();
@@ -131,25 +126,17 @@ export function useSession() {
         sessionTimerRef.current = null;
       }
     };
-  }, [store.status]);
+  }, [status]);
 
   return {
-    // State
-    status: store.status,
+    status,
     avatarStatus: avatar.status,
-    stream: avatar.stream,
     isProcessing: brain.isProcessing,
-    conversationHistory: store.conversationHistory,
-    // Zoom
-    zoomStatus: zoom.status,
-    isMuted: zoom.isMuted,
-    toggleMute: zoom.toggleMute,
-    startZoomVideo: zoom.startVideo,
-    // Actions
+    conversationHistory,
+    attach: avatar.attach,
     startSession,
     endSession,
     handleTextMessage: brain.handleStudentMessage,
-    // Canvas
     setEditor: canvas.setEditor,
     clearCanvas: canvas.clear,
   };

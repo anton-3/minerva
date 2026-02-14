@@ -1,6 +1,6 @@
-// useAvatar hook — manages HeyGen avatar lifecycle
+// useAvatar hook — manages LiveAvatar session lifecycle
 // Wraps AvatarClient for React component consumption.
-// See: specs/001-minerva-mvp/contracts/avatar.md
+// Uses attach() pattern: pass a <video> element and the SDK handles rendering.
 
 "use client";
 
@@ -10,7 +10,6 @@ import type { AvatarClient, AvatarStatus } from "@/lib/heygen/types";
 
 export function useAvatar() {
   const clientRef = useRef<AvatarClient | null>(null);
-  const [stream, setStream] = useState<MediaStream | null>(null);
   const [status, setStatus] = useState<AvatarStatus>("disconnected");
   const userMessageCbsRef = useRef<((text: string) => void)[]>([]);
 
@@ -23,16 +22,13 @@ export function useAvatar() {
       userMessageCbsRef.current.forEach((cb) => cb(text));
     });
 
-    const result = await client.startSession();
-    setStream(result.stream);
-    return result;
+    await client.startSession();
   }, []);
 
   const endSession = useCallback(async () => {
     if (clientRef.current) {
       await clientRef.current.endSession();
       clientRef.current = null;
-      setStream(null);
       setStatus("disconnected");
     }
   }, []);
@@ -41,8 +37,12 @@ export function useAvatar() {
     if (clientRef.current) await clientRef.current.speak(text);
   }, []);
 
-  const interrupt = useCallback(async () => {
-    if (clientRef.current) await clientRef.current.interrupt();
+  const interrupt = useCallback(() => {
+    if (clientRef.current) clientRef.current.interrupt();
+  }, []);
+
+  const attach = useCallback((element: HTMLMediaElement) => {
+    if (clientRef.current) clientRef.current.attach(element);
   }, []);
 
   const onUserMessage = useCallback((cb: (text: string) => void) => {
@@ -55,5 +55,5 @@ export function useAvatar() {
     };
   }, []);
 
-  return { stream, status, startSession, endSession, speak, interrupt, onUserMessage };
+  return { status, startSession, endSession, speak, interrupt, attach, onUserMessage };
 }
