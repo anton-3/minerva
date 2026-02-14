@@ -1,10 +1,13 @@
 // Session Page — THE core tutoring experience
-// LiveAvatar handles the avatar video call via LiveKit.
+// Zoom Video SDK provides the call layer (student webcam self-view).
+// HeyGen LiveAvatar renders the AI tutor avatar.
+// tldraw Canvas is the interactive whiteboard.
 // Layout: Avatar (left) + Canvas (center) + Chat (right sidebar)
-// Controls bar at top with timer, end session.
+// Student self-view (small Zoom webcam) overlays bottom-left of avatar panel.
 
 "use client";
 
+import { useRef, useEffect, useCallback, useState } from "react";
 import { useSession } from "@/hooks/useSession";
 import { AvatarPanel } from "@/components/session/AvatarPanel";
 import { CanvasPanel } from "@/components/session/CanvasPanel";
@@ -23,7 +26,40 @@ export default function SessionPage() {
     handleTextMessage,
     setEditor,
     clearCanvas,
+    // Zoom
+    zoomStatus,
+    zoomStartVideo,
+    zoomToggleMute,
+    zoomIsMuted,
   } = useSession();
+
+  const selfViewRef = useRef<HTMLCanvasElement>(null);
+  const [videoStarted, setVideoStarted] = useState(false);
+
+  // Start Zoom video when connected and canvas is ready
+  const startSelfView = useCallback(async () => {
+    if (selfViewRef.current && zoomStatus === "connected" && !videoStarted) {
+      try {
+        await zoomStartVideo(selfViewRef.current);
+        setVideoStarted(true);
+      } catch (err) {
+        console.warn("[SessionPage] Failed to start Zoom video:", err);
+      }
+    }
+  }, [zoomStatus, zoomStartVideo, videoStarted]);
+
+  useEffect(() => {
+    startSelfView();
+  }, [startSelfView]);
+
+  // Reset video state on disconnect
+  useEffect(() => {
+    if (zoomStatus === "disconnected" || zoomStatus === "idle") {
+      setVideoStarted(false);
+    }
+  }, [zoomStatus]);
+
+  const zoomConnected = zoomStatus === "connected";
 
   return (
     <div className="flex flex-col h-screen bg-background">
@@ -34,6 +70,11 @@ export default function SessionPage() {
           {status === "active" && (
             <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
               Session Active
+            </span>
+          )}
+          {zoomConnected && (
+            <span className="text-xs text-blue-600 bg-blue-50 dark:bg-blue-950 dark:text-blue-400 px-2 py-0.5 rounded-full">
+              Zoom Connected
             </span>
           )}
         </div>
@@ -47,9 +88,33 @@ export default function SessionPage() {
 
       {/* Main content — grid: avatar | canvas | chat */}
       <main className="flex-1 grid grid-cols-[1fr_1.5fr_320px] gap-4 p-4 overflow-hidden">
-        {/* Left column: AI Avatar */}
-        <div className="min-h-0">
+        {/* Left column: AI Avatar + Student self-view overlay */}
+        <div className="min-h-0 relative">
           <AvatarPanel status={avatarStatus} onAttach={attach} />
+
+          {/* Student self-view — small Zoom webcam overlay (bottom-left) */}
+          {zoomConnected && (
+            <div className="absolute bottom-3 left-3 flex flex-col items-start gap-1">
+              <canvas
+                ref={selfViewRef}
+                width={160}
+                height={90}
+                className="rounded-lg border-2 border-white/30 shadow-lg bg-black"
+              />
+              <button
+                onClick={async () => {
+                  await zoomToggleMute();
+                }}
+                className={`text-xs px-2 py-1 rounded-md shadow ${
+                  zoomIsMuted
+                    ? "bg-red-500 text-white"
+                    : "bg-white/80 text-black"
+                }`}
+              >
+                {zoomIsMuted ? "Unmute" : "Mute"}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Center: Canvas (whiteboard) */}

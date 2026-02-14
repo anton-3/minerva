@@ -1,12 +1,14 @@
 // useSession hook — session state machine
 // Manages session lifecycle: idle → connecting → active → ended
-// Coordinates LiveAvatar avatar, canvas, and tutor brain.
+// Coordinates: Zoom Video SDK (call layer) + LiveAvatar (avatar) + Canvas + Claude brain.
+// Zoom is optional — session works with just HeyGen if no Zoom keys configured.
 
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";
 import { useSessionStore } from "@/stores/sessionStore";
 import { useAvatar } from "./useAvatar";
+import { useZoom } from "./useZoom";
 import { useCanvas } from "./useCanvas";
 import { useTutorBrain } from "./useTutorBrain";
 
@@ -19,6 +21,7 @@ export function useSession() {
   const setSessionId = useSessionStore((s) => s.setSessionId);
 
   const avatar = useAvatar();
+  const zoom = useZoom();
   const canvas = useCanvas();
   const brain = useTutorBrain({
     speak: avatar.speak,
@@ -54,8 +57,22 @@ export function useSession() {
       const newSessionId = crypto.randomUUID();
       setSessionId(newSessionId);
 
+      // Start Zoom Video SDK session (optional — for Zoom Education Track prize)
+      // Runs in parallel with HeyGen. If Zoom fails (no keys), we continue.
+      const zoomPromise = zoom
+        .joinSession(`minerva-${newSessionId.slice(0, 8)}`, "Student")
+        .then(() => {
+          console.log("[useSession] Zoom session joined");
+        })
+        .catch((err) => {
+          console.warn("[useSession] Zoom session failed (non-blocking):", err);
+        });
+
       // Start LiveAvatar session (connects to LiveKit room)
       await avatar.startSession();
+
+      // Wait for Zoom to finish connecting (but don't block if it failed)
+      await zoomPromise;
 
       setStatus("active");
 
@@ -65,11 +82,15 @@ export function useSession() {
       console.error("[useSession] Failed to start session:", err);
       setStatus("error");
     }
-  }, [avatar, setStatus, setSessionId]);
+  }, [avatar, zoom, setStatus, setSessionId]);
 
   const endSession = useCallback(async () => {
     try {
-      await avatar.endSession();
+      // End both sessions in parallel
+      await Promise.allSettled([
+        avatar.endSession(),
+        zoom.leaveSession(),
+      ]);
 
       // Read latest state directly to avoid stale closures
       const { sessionId, transcript } = useSessionStore.getState();
@@ -107,7 +128,7 @@ export function useSession() {
       console.error("[useSession] Error ending session:", err);
       setStatus("ended");
     }
-  }, [avatar, setStatus]);
+  }, [avatar, zoom, setStatus]);
 
   // Keep endSessionRef in sync so the timer can call it
   endSessionRef.current = endSession;
@@ -139,5 +160,10 @@ export function useSession() {
     handleTextMessage: brain.handleStudentMessage,
     setEditor: canvas.setEditor,
     clearCanvas: canvas.clear,
+    // Zoom controls — exposed for UI
+    zoomStatus: zoom.status,
+    zoomStartVideo: zoom.startVideo,
+    zoomToggleMute: zoom.toggleMute,
+    zoomIsMuted: zoom.isMuted,
   };
 }
