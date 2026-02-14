@@ -70,10 +70,14 @@ export function useSession() {
 
       // Start Zoom Video SDK session (optional — for Zoom Education Track prize)
       // Runs in parallel with HeyGen. If Zoom fails (no keys), we continue.
+      // Lifecycle: join → startAudio → startVideo (video handled by page component)
       const zoomPromise = zoom
         .joinSession(`minerva-${newSessionId.slice(0, 8)}`, "Student")
         .then(() => {
           console.log("[useSession] Zoom session joined");
+          // Note: We intentionally skip zoom.startAudio() here.
+          // Zoom audio would grab the mic exclusively, blocking Web Speech API (our STT).
+          // Zoom is only used for student self-view video — audio goes through HeyGen + Web Speech API.
         })
         .catch((err) => {
           console.warn("[useSession] Zoom session failed (non-blocking):", err);

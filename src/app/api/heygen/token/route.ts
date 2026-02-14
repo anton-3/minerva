@@ -20,10 +20,10 @@ export async function POST() {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      mode: "LITE",
+      mode: "FULL",
       avatar_id: process.env.HEYGEN_AVATAR_ID,
-      // LITE mode: avatar rendering + TTS only. No ASR, no voice chat.
-      // STT handled by browser Web Speech API. LLM is Claude.
+      // FULL mode: avatar rendering + built-in TTS via session.repeat(text).
+      // We only use repeat() for TTS — LLM is Claude, STT is browser Web Speech API.
       avatar_persona: {
         voice_id: process.env.HEYGEN_VOICE_ID,
         language: "en",

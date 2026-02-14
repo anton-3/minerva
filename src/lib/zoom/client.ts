@@ -1,9 +1,9 @@
 // Zoom Video SDK wrapper — black box module
 // Wraps @zoom/videosdk. No Zoom SDK types leak outside.
-// See: specs/001-minerva-mvp/plan.md (Black Box Interfaces)
 //
-// The Zoom Video SDK renders video to a <canvas> element using
-// renderVideo() and uses WebAssembly for media processing.
+// Uses attachVideo() API (v2.3+) with <video-player-container> custom elements.
+// renderVideo() on <canvas> is deprecated.
+// See: https://developers.zoom.us/docs/video-sdk/web/video/
 
 // Dynamic import — @zoom/videosdk uses `window` at module level (no SSR)
 import type { ZoomClient, ZoomSessionStatus } from "./types";
@@ -11,10 +11,12 @@ import type { ZoomClient, ZoomSessionStatus } from "./types";
 export type { ZoomClient, ZoomSessionStatus };
 
 export async function createZoomClient(): Promise<ZoomClient> {
-  const { default: ZoomVideo } = await import("@zoom/videosdk");
+  const ZoomVideoModule = await import("@zoom/videosdk");
+  const ZoomVideo = ZoomVideoModule.default;
   const client = ZoomVideo.createClient();
   let status: ZoomSessionStatus = "idle";
   let muted = false;
+  let currentUserId: number | undefined;
 
   const statusCallbacks: ((status: ZoomSessionStatus) => void)[] = [];
 
@@ -30,9 +32,26 @@ export async function createZoomClient(): Promise<ZoomClient> {
 
         await client.init("en-US", "Global", {
           patchJsMedia: true,
+          leaveOnPageUnload: true, // Auto-cleanup on tab close — prevents orphan sessions
+        });
+
+        // Handle browser blocking audio auto-play
+        client.on("auto-play-audio-failed", () => {
+          console.warn("[ZoomClient] Auto-play audio blocked by browser — user interaction needed");
+        });
+
+        // Track connection state for reconnection awareness
+        client.on("connection-change", (payload: { state: string; reason: string }) => {
+          console.log("[ZoomClient] Connection change:", payload.state, payload.reason);
+          if (payload.state === "Closed" || payload.state === "Fail") {
+            notifyStatus("disconnected");
+          } else if (payload.state === "Reconnecting") {
+            notifyStatus("connecting");
+          }
         });
 
         await client.join(topic, token, userName);
+        currentUserId = client.getCurrentUserInfo()?.userId;
 
         notifyStatus("connected");
       } catch (err) {
@@ -44,11 +63,39 @@ export async function createZoomClient(): Promise<ZoomClient> {
 
     async leaveSession() {
       try {
+        // Detach video before leaving to release SDK resources
+        if (currentUserId !== undefined) {
+          try {
+            const stream = client.getMediaStream();
+            await stream.detachVideo(currentUserId);
+          } catch {
+            // May fail if video wasn't started — ignore
+          }
+        }
+
         await client.leave();
         notifyStatus("disconnected");
       } catch (err) {
         console.error("[ZoomClient] Error leaving session:", err);
         notifyStatus("disconnected");
+      } finally {
+        // Always destroy client to release all resources
+        // This prevents "duplicated operation" errors on re-join
+        try {
+          ZoomVideo.destroyClient();
+        } catch {
+          // Ignore — may already be destroyed
+        }
+        currentUserId = undefined;
+      }
+    },
+
+    async startAudio() {
+      try {
+        const stream = client.getMediaStream();
+        await stream.startAudio();
+      } catch (err) {
+        console.error("[ZoomClient] Failed to start audio:", err);
       }
     },
 
@@ -58,11 +105,10 @@ export async function createZoomClient(): Promise<ZoomClient> {
         await stream.startVideo();
 
         // Attach self-view video element to the container (SDK v2.3+)
-        const userId = client.getCurrentUserInfo()?.userId;
-        if (userId !== undefined) {
-          const videoElement = await stream.attachVideo(userId, 2 /* Video_360P */);
-          // Clear previous children and append the new video element
-          container.innerHTML = "";
+        // attachVideo() returns a <video-player> custom element
+        // that MUST be inside a <video-player-container>
+        if (currentUserId !== undefined) {
+          const videoElement = await stream.attachVideo(currentUserId, 2 /* Video_360P */);
           container.appendChild(videoElement as unknown as HTMLElement);
         }
       } catch (err) {
@@ -73,18 +119,12 @@ export async function createZoomClient(): Promise<ZoomClient> {
     async stopVideo() {
       try {
         const stream = client.getMediaStream();
+        if (currentUserId !== undefined) {
+          await stream.detachVideo(currentUserId);
+        }
         await stream.stopVideo();
       } catch (err) {
         console.error("[ZoomClient] Failed to stop video:", err);
-      }
-    },
-
-    async startAudio() {
-      try {
-        const stream = client.getMediaStream();
-        await stream.startAudio();
-      } catch (err) {
-        console.error("[ZoomClient] Failed to start audio:", err);
       }
     },
 
