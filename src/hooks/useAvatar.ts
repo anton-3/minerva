@@ -4,21 +4,56 @@
 
 "use client";
 
-export function useAvatar() {
-  // TODO: Implement in Phase 3 (T024)
-  // - Create AvatarClient on mount
-  // - Manage MediaStream ref for video element
-  // - Track avatar status
-  // - Expose: startSession, endSession, speak, interrupt
-  // - Clean up on unmount
+import { useRef, useState, useCallback, useEffect } from "react";
+import { createAvatarClient } from "@/lib/heygen/client";
+import type { AvatarClient, AvatarStatus } from "@/lib/heygen/types";
 
-  return {
-    stream: null as MediaStream | null,
-    status: "disconnected" as const,
-    startSession: async () => { throw new Error("Not implemented"); },
-    endSession: async () => { throw new Error("Not implemented"); },
-    speak: async (_text: string) => { throw new Error("Not implemented"); },
-    interrupt: async () => { throw new Error("Not implemented"); },
-    onUserMessage: (_cb: (text: string) => void) => {},
-  };
+export function useAvatar() {
+  const clientRef = useRef<AvatarClient | null>(null);
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const [status, setStatus] = useState<AvatarStatus>("disconnected");
+  const userMessageCbsRef = useRef<((text: string) => void)[]>([]);
+
+  const startSession = useCallback(async () => {
+    const client = createAvatarClient();
+    clientRef.current = client;
+
+    client.onStatusChange(setStatus);
+    client.onUserMessage((text) => {
+      userMessageCbsRef.current.forEach((cb) => cb(text));
+    });
+
+    const result = await client.startSession();
+    setStream(result.stream);
+    return result;
+  }, []);
+
+  const endSession = useCallback(async () => {
+    if (clientRef.current) {
+      await clientRef.current.endSession();
+      clientRef.current = null;
+      setStream(null);
+      setStatus("disconnected");
+    }
+  }, []);
+
+  const speak = useCallback(async (text: string) => {
+    if (clientRef.current) await clientRef.current.speak(text);
+  }, []);
+
+  const interrupt = useCallback(async () => {
+    if (clientRef.current) await clientRef.current.interrupt();
+  }, []);
+
+  const onUserMessage = useCallback((cb: (text: string) => void) => {
+    userMessageCbsRef.current.push(cb);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      clientRef.current?.endSession().catch(console.error);
+    };
+  }, []);
+
+  return { stream, status, startSession, endSession, speak, interrupt, onUserMessage };
 }

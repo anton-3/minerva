@@ -4,19 +4,86 @@
 
 "use client";
 
-export function useTutorBrain() {
-  // TODO: Implement in Phase 3 (T027)
-  // - Listen for student messages (from useAvatar.onUserMessage)
-  // - Call /api/tutor/respond with full context
-  // - Feed speech to avatar.speak()
-  // - Feed canvasCommands to canvas.executeSequence()
-  // - Update sessionStore with new messages and progress
-  // - Handle errors gracefully (avatar continues even if canvas fails)
+import { useState, useCallback, useRef } from "react";
+import { useSessionStore } from "@/stores/sessionStore";
+import type { TutorBrainRequest, TutorBrainResponse } from "@/types/session";
 
-  return {
-    isProcessing: false,
-    handleStudentMessage: async (_message: string) => {
-      throw new Error("Not implemented");
-    },
-  };
+interface UseTutorBrainOptions {
+  speak: (text: string) => Promise<void>;
+  executeSequence: (
+    cmds: import("@/types/session").CanvasCommand[],
+    delayMs?: number
+  ) => Promise<void>;
+  getSnapshot: () => string;
+}
+
+export function useTutorBrain(options: UseTutorBrainOptions) {
+  const [isProcessing, setIsProcessing] = useState(false);
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
+
+  const handleStudentMessage = useCallback(async (message: string) => {
+    const store = useSessionStore.getState();
+    setIsProcessing(true);
+
+    // Add student message to store
+    store.addMessage({ role: "user", content: message });
+    store.addTranscriptEntry({
+      speaker: "student",
+      text: message,
+      timestamp: new Date(),
+    });
+
+    try {
+      // Build request
+      const request: TutorBrainRequest = {
+        studentMessage: message,
+        conversationHistory: store.conversationHistory,
+        learningPlan: store.learningPlan,
+        studentProfile: store.studentProfile ?? {
+          name: "Student",
+          age: 12,
+          grade: 7,
+        },
+        canvasState: optionsRef.current.getSnapshot(),
+      };
+
+      // Call tutor API
+      const res = await fetch("/api/tutor/respond", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(request),
+      });
+
+      const response: TutorBrainResponse = await res.json();
+
+      // Add tutor response to store
+      store.addMessage({ role: "assistant", content: response.speech });
+      store.addTranscriptEntry({
+        speaker: "tutor",
+        text: response.speech,
+        timestamp: new Date(),
+      });
+
+      // Execute canvas commands (errors here never break the session)
+      if (response.canvasCommands && response.canvasCommands.length > 0) {
+        optionsRef.current
+          .executeSequence(response.canvasCommands)
+          .catch((err) => console.error("[useTutorBrain] Canvas error:", err));
+      }
+
+      // Speak the response (this is the critical path)
+      await optionsRef.current.speak(response.speech);
+    } catch (err) {
+      console.error("[useTutorBrain] Error:", err);
+      // Graceful fallback — speak error message
+      await optionsRef.current
+        .speak("I'm having a little trouble. Can you try that again?")
+        .catch(console.error);
+    } finally {
+      setIsProcessing(false);
+    }
+  }, []);
+
+  return { isProcessing, handleStudentMessage };
 }
