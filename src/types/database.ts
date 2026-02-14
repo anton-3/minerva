@@ -20,6 +20,7 @@ export interface Database {
           role: "parent" | "student";
           display_name: string;
         }>;
+        Relationships: [];
       };
       children: {
         Row: {
@@ -44,6 +45,15 @@ export interface Database {
           grade: number;
           pin: string;
         }>;
+        Relationships: [
+          {
+            foreignKeyName: "children_parent_id_fkey";
+            columns: ["parent_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       learning_plans: {
         Row: {
@@ -68,6 +78,15 @@ export interface Database {
           current_topic: string | null;
           curriculum: CurriculumEntry[] | null;
         }>;
+        Relationships: [
+          {
+            foreignKeyName: "learning_plans_child_id_fkey";
+            columns: ["child_id"];
+            isOneToOne: false;
+            referencedRelation: "children";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       sessions: {
         Row: {
@@ -93,6 +112,22 @@ export interface Database {
           ended_at: string | null;
           recording_url: string | null;
         }>;
+        Relationships: [
+          {
+            foreignKeyName: "sessions_child_id_fkey";
+            columns: ["child_id"];
+            isOneToOne: false;
+            referencedRelation: "children";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "sessions_learning_plan_id_fkey";
+            columns: ["learning_plan_id"];
+            isOneToOne: false;
+            referencedRelation: "learning_plans";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       session_summaries: {
         Row: {
@@ -123,6 +158,15 @@ export interface Database {
           engagement_score: number | null;
           comprehension_score: number | null;
         }>;
+        Relationships: [
+          {
+            foreignKeyName: "session_summaries_session_id_fkey";
+            columns: ["session_id"];
+            isOneToOne: true;
+            referencedRelation: "sessions";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       progress: {
         Row: {
@@ -142,6 +186,15 @@ export interface Database {
         Update: Partial<{
           score: number;
         }>;
+        Relationships: [
+          {
+            foreignKeyName: "progress_child_id_fkey";
+            columns: ["child_id"];
+            isOneToOne: false;
+            referencedRelation: "children";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       transcript_entries: {
         Row: {
@@ -162,8 +215,21 @@ export interface Database {
           speaker: string;
           text: string;
         }>;
+        Relationships: [
+          {
+            foreignKeyName: "transcript_entries_session_id_fkey";
+            columns: ["session_id"];
+            isOneToOne: false;
+            referencedRelation: "sessions";
+            referencedColumns: ["id"];
+          },
+        ];
       };
     };
+    Views: Record<string, never>;
+    Functions: Record<string, never>;
+    Enums: Record<string, never>;
+    CompositeTypes: Record<string, never>;
   };
 }
 

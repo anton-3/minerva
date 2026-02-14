@@ -110,28 +110,28 @@ This prevents wasted time building with deprecated patterns. Document any findin
 
 ### Auth + Profiles (D)
 
-- [ ] T035 [P] [US2] [D] Implement `src/app/login/page.tsx` — email/password auth for parents, PIN entry for students. Uses Supabase Auth.
-- [ ] T036 [P] [US2] [D] Implement parent layout `src/app/parent/layout.tsx` — sidebar nav (Dashboard, Children, Goals, Progress, Sessions), auth guard
+- [x] T035 [P] [US2] [D] Implement `src/app/login/page.tsx` — email/password auth for parents, PIN entry for students. Uses Supabase Auth.
+- [x] T036 [P] [US2] [D] Implement parent layout `src/app/parent/layout.tsx` — sidebar nav (Dashboard, Children, Goals, Progress, Sessions), auth guard
 
 ### API Routes (C + D)
 
-- [ ] T037 [P] [US2] [C] Implement `/api/session/route.ts` — Session CRUD: create session (on start), update session (on end with ended_at)
-- [ ] T038 [P] [US2] [C] Implement `/api/progress/route.ts` — GET progress for a child (all topics), POST/PATCH to update mastery score after session
+- [x] T037 [P] [US2] [C] Implement `/api/session/route.ts` — Session CRUD: create session (on start), update session (on end with ended_at)
+- [x] T038 [P] [US2] [C] Implement `/api/progress/route.ts` — GET progress for a child (all topics), POST/PATCH to update mastery score after session
 
 ### Parent Dashboard Pages (D)
 
-- [ ] T039 [P] [US2] [D] Implement `src/app/parent/page.tsx` — dashboard overview: child list, recent sessions, quick stats
-- [ ] T040 [P] [US2] [D] Implement `src/app/parent/children/page.tsx` — add/edit child profiles (name, age, grade, PIN)
-- [ ] T041 [P] [US2] [D] Implement `src/app/parent/goals/page.tsx` — set learning goals per child per subject
-- [ ] T042 [US2] [D] Implement `src/app/parent/progress/page.tsx` — progress charts (mastery by topic, trend over sessions) using recharts (depends on T038)
-- [ ] T043 [US2] [D] Implement `src/app/parent/sessions/page.tsx` — session history list with summaries (depends on T037)
+- [x] T039 [P] [US2] [D] Implement `src/app/parent/page.tsx` — dashboard overview: child list, recent sessions, quick stats
+- [x] T040 [P] [US2] [D] Implement `src/app/parent/children/page.tsx` — add/edit child profiles (name, age, grade, PIN)
+- [x] T041 [P] [US2] [D] Implement `src/app/parent/goals/page.tsx` — set learning goals per child per subject
+- [x] T042 [US2] [D] Implement `src/app/parent/progress/page.tsx` — progress charts (mastery by topic, trend over sessions) using recharts (depends on T038)
+- [x] T043 [US2] [D] Implement `src/app/parent/sessions/page.tsx` — session history list with summaries (depends on T037)
 
 ### Parent Components (D)
 
-- [ ] T044 [P] [US2] [D] Implement `src/components/parent/ChildCard.tsx` — child profile card with name, age, grade, PIN
-- [ ] T045 [P] [US2] [D] Implement `src/components/parent/GoalForm.tsx` — form to create/edit learning goals
-- [ ] T046 [P] [US2] [D] Implement `src/components/parent/ProgressChart.tsx` — recharts bar/line chart for topic mastery
-- [ ] T047 [P] [US2] [D] Implement `src/components/parent/SessionSummaryCard.tsx` — card showing session summary with scores
+- [x] T044 [P] [US2] [D] Implement `src/components/parent/ChildCard.tsx` — child profile card with name, age, grade, PIN
+- [x] T045 [P] [US2] [D] Implement `src/components/parent/GoalForm.tsx` — form to create/edit learning goals
+- [x] T046 [P] [US2] [D] Implement `src/components/parent/ProgressChart.tsx` — recharts bar/line chart for topic mastery
+- [x] T047 [P] [US2] [D] Implement `src/components/parent/SessionSummaryCard.tsx` — card showing session summary with scores
 
 **Checkpoint**: Full parent flow works. Parent creates account, adds child, sets goals, sees dashboard. SC-004 validated.
 

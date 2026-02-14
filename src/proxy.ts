@@ -1,12 +1,12 @@
-// Supabase auth session refresh middleware
+// Supabase auth session refresh proxy
 // Refreshes the auth session on every request to prevent stale tokens.
 // Uses getUser() (server-validated) instead of getSession() (cookie-only).
-// See: @supabase/ssr v0.8.0 docs
+// See: @supabase/ssr v0.8.0 docs, Next.js 16 proxy convention
 
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
