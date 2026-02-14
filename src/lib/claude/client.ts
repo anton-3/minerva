@@ -31,48 +31,64 @@ export interface TutorBrain {
 }
 
 // Zod schemas for structured output
+// Multi-tool canvas commands: Desmos, Desmos 3D, GeoGebra
+const MathToolSchema = z.enum(["desmos", "desmos3d", "geogebra"]);
+
 const CanvasCommandSchema = z.discriminatedUnion("action", [
+  // Meta commands
   z.object({ action: z.literal("clear") }),
+  z.object({ action: z.literal("setTool"), tool: MathToolSchema }),
+  
+  // Desmos 2D commands
   z.object({
-    action: z.literal("drawEquation"),
-    equation: z.string(),
-    x: z.number(),
-    y: z.number(),
+    action: z.literal("desmos.setExpression"),
+    id: z.string().optional(),
+    latex: z.string(),
+    color: z.string().optional(),
+    hidden: z.boolean().optional(),
   }),
   z.object({
-    action: z.literal("drawNumberLine"),
-    min: z.number(),
-    max: z.number(),
-    y: z.number(),
-  }),
-  z.object({
-    action: z.literal("drawCoordinatePlane"),
-    originX: z.number(),
-    originY: z.number(),
-  }),
-  z.object({
-    action: z.literal("drawAngle"),
-    vertexX: z.number(),
-    vertexY: z.number(),
-    angle: z.number(),
-    label: z.string().optional(),
-  }),
-  z.object({
-    action: z.literal("drawFraction"),
-    numerator: z.string(),
-    denominator: z.string(),
-    x: z.number(),
-    y: z.number(),
-  }),
-  z.object({
-    action: z.literal("highlight"),
+    action: z.literal("desmos.removeExpression"),
     id: z.string(),
-    color: z.string(),
   }),
   z.object({
-    action: z.literal("createShape"),
-    shape: z.record(z.string(), z.unknown()),
+    action: z.literal("desmos.setViewport"),
+    left: z.number(),
+    right: z.number(),
+    top: z.number(),
+    bottom: z.number(),
   }),
+  z.object({ action: z.literal("desmos.clear") }),
+  
+  // Desmos 3D commands
+  z.object({
+    action: z.literal("desmos3d.setExpression"),
+    id: z.string().optional(),
+    latex: z.string(),
+    color: z.string().optional(),
+  }),
+  z.object({
+    action: z.literal("desmos3d.removeExpression"),
+    id: z.string(),
+  }),
+  z.object({ action: z.literal("desmos3d.clear") }),
+  
+  // GeoGebra commands
+  z.object({
+    action: z.literal("geogebra.evalCommand"),
+    command: z.string(),
+  }),
+  z.object({
+    action: z.literal("geogebra.setCoords"),
+    name: z.string(),
+    x: z.number(),
+    y: z.number(),
+  }),
+  z.object({
+    action: z.literal("geogebra.deleteObject"),
+    name: z.string(),
+  }),
+  z.object({ action: z.literal("geogebra.clear") }),
 ]);
 
 const TutorResponseSchema = z.object({
@@ -116,7 +132,7 @@ function extractSpeechFallback(text: string): TutorBrainResponse {
   return { speech: text.slice(0, 500) };
 }
 
-const MODEL = "claude-sonnet-4-5-20250929";
+const MODEL = "claude-haiku-4-5-20251001";
 const MAX_HISTORY = 20;
 
 export function createTutorBrain(): TutorBrain {
@@ -142,7 +158,7 @@ export function createTutorBrain(): TutorBrain {
         );
       }
       if (request.canvasState) {
-        contextParts.push(`Whiteboard:\n${request.canvasState}`);
+        contextParts.push(`Math Canvas:\n${request.canvasState}`);
       }
 
       const contextBlock =
@@ -170,6 +186,9 @@ export function createTutorBrain(): TutorBrain {
           output_config: {
             format: zodOutputFormat(TutorResponseSchema),
           },
+          thinking: {
+            type: "disabled"
+          }
         });
 
         const text =

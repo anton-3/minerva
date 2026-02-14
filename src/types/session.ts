@@ -2,17 +2,34 @@
 // These are the "primitives" that flow through the entire system.
 // See: specs/001-minerva-mvp/plan.md (Black Box Module Contracts)
 
+// ─── Math Tools ─────────────────────────────────────────────────────────────
+
+export type MathTool = "desmos" | "desmos3d" | "geogebra";
+
 // ─── Canvas Commands ────────────────────────────────────────────────────────
+// Multi-tool canvas system supporting Desmos 2D, Desmos 3D, and GeoGebra
 
 export type CanvasCommand =
+  // Meta commands
   | { action: "clear" }
-  | { action: "drawEquation"; equation: string; x: number; y: number }
-  | { action: "drawNumberLine"; min: number; max: number; y: number }
-  | { action: "drawCoordinatePlane"; originX: number; originY: number }
-  | { action: "drawAngle"; vertexX: number; vertexY: number; angle: number; label?: string }
-  | { action: "drawFraction"; numerator: string; denominator: string; x: number; y: number }
-  | { action: "highlight"; id: string; color: string }
-  | { action: "createShape"; shape: Record<string, unknown> };
+  | { action: "setTool"; tool: MathTool }
+  
+  // Desmos 2D (Graphing Calculator)
+  | { action: "desmos.setExpression"; id?: string; latex: string; color?: string; hidden?: boolean }
+  | { action: "desmos.removeExpression"; id: string }
+  | { action: "desmos.setViewport"; left: number; right: number; top: number; bottom: number }
+  | { action: "desmos.clear" }
+  
+  // Desmos 3D
+  | { action: "desmos3d.setExpression"; id?: string; latex: string; color?: string }
+  | { action: "desmos3d.removeExpression"; id: string }
+  | { action: "desmos3d.clear" }
+  
+  // GeoGebra (geometry constructions)
+  | { action: "geogebra.evalCommand"; command: string }
+  | { action: "geogebra.setCoords"; name: string; x: number; y: number }
+  | { action: "geogebra.deleteObject"; name: string }
+  | { action: "geogebra.clear" }
 
 // ─── Tutor Brain ────────────────────────────────────────────────────────────
 

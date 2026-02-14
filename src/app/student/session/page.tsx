@@ -1,7 +1,7 @@
 // Session Page — THE core tutoring experience
 // Zoom Video SDK provides the call layer (student webcam self-view).
 // HeyGen LiveAvatar renders the AI tutor avatar.
-// tldraw Canvas is the interactive whiteboard.
+// Multi-tool Canvas: Desmos, Desmos 3D, GeoGebra (interactive math visualization).
 // Layout: Avatar (left) + Canvas (center) + Chat (right sidebar)
 // Student self-view (small Zoom webcam) overlays bottom-left of avatar panel.
 
@@ -24,8 +24,10 @@ export default function SessionPage() {
     startSession,
     endSession,
     handleTextMessage,
-    setEditor,
+    // Canvas tools
+    toolManager,
     clearCanvas,
+    setActiveTool,
     // Zoom
     zoomStatus,
     zoomStartVideo,
@@ -115,9 +117,9 @@ export default function SessionPage() {
           )}
         </div>
 
-        {/* Center: Canvas (whiteboard) */}
+        {/* Center: Canvas (multi-tool math visualization) */}
         <div className="min-h-0">
-          <CanvasPanel onEditorReady={setEditor} />
+          <CanvasPanel toolManager={toolManager} onToolChange={setActiveTool} />
         </div>
 
         {/* Right: Chat sidebar */}

@@ -2,9 +2,78 @@
 
 > **For AI agents**: Read this file first to understand where the project is. Update it after every meaningful task or group of tasks.
 
-**Last updated**: 2026-02-14 (Session 6)
+**Last updated**: 2026-02-14 (Session 7)
 **Branch**: `001-minerva-mvp`
-**Overall status**: Phases 1-8 COMPLETE (T001-T067). All features built: session page, parent dashboard, learning plan generation, session recording + summary, Perplexity knowledge lookup, landing page, edge case handling. 20 routes. TypeScript + build pass clean. Ready for integration testing with API keys (Phase 2).
+**Overall status**: Phases 1-8 COMPLETE (T001-T067). **NEW**: Replaced tldraw with multi-tool canvas (Desmos 2D, Desmos 3D, GeoGebra). All features built: session page, parent dashboard, learning plan generation, session recording + summary, Perplexity knowledge lookup, landing page, edge case handling. 20 routes. TypeScript passes clean.
+
+---
+
+## Session 7: Multi-Tool Canvas System (Replacing tldraw)
+
+**Major change**: Replaced tldraw whiteboard with a flexible multi-tool math visualization system.
+
+### New Tools Added
+- **Desmos 2D GraphingCalculator** — for algebra, functions, equations, calculus
+- **Desmos 3D Calculator** — for 3D graphs, surfaces, multivariable functions  
+- **GeoGebra Classic** — for geometry constructions, proofs, dynamic diagrams
+
+### Files Changed/Created
+
+**New files:**
+- `src/lib/canvas/tools/types.ts` — ToolWrapper interface
+- `src/lib/canvas/tools/desmos.ts` — Desmos 2D wrapper
+- `src/lib/canvas/tools/desmos3d.ts` — Desmos 3D wrapper
+- `src/lib/canvas/tools/geogebra.ts` — GeoGebra wrapper
+- `src/lib/canvas/tools/manager.ts` — ToolManager coordinating all tools
+- `src/lib/canvas/tools/index.ts` — exports
+- `src/components/session/DesmosPanel.tsx` — Desmos 2D React component
+- `src/components/session/Desmos3DPanel.tsx` — Desmos 3D React component
+- `src/components/session/GeoGebraPanel.tsx` — GeoGebra React component
+- `src/components/session/MathToolPanel.tsx` — tabbed tool switcher
+
+**Modified files:**
+- `src/types/session.ts` — new `MathTool` type, updated `CanvasCommand` union
+- `src/lib/canvas/types.ts` — updated comments
+- `src/lib/canvas/commands.ts` — now dispatches to ToolManager
+- `src/components/session/CanvasPanel.tsx` — wraps MathToolPanel
+- `src/hooks/useCanvas.ts` — creates ToolManager, exposes tool switching
+- `src/hooks/useSession.ts` — exposes toolManager instead of setEditor
+- `src/app/student/session/page.tsx` — uses new CanvasPanel API
+- `src/lib/claude/prompts.ts` — multi-tool command reference for AI
+- `src/lib/claude/client.ts` — Zod schemas for new commands
+- `src/app/globals.css` — removed tldraw CSS import
+- `.env` — added NEXT_PUBLIC_DESMOS_API_KEY
+
+### New CanvasCommand Types
+
+```typescript
+type CanvasCommand =
+  // Meta
+  | { action: "clear" }
+  | { action: "setTool"; tool: "desmos" | "desmos3d" | "geogebra" }
+  // Desmos 2D
+  | { action: "desmos.setExpression"; latex: string; id?: string; color?: string }
+  | { action: "desmos.removeExpression"; id: string }
+  | { action: "desmos.setViewport"; left: number; right: number; top: number; bottom: number }
+  | { action: "desmos.clear" }
+  // Desmos 3D
+  | { action: "desmos3d.setExpression"; latex: string; id?: string }
+  | { action: "desmos3d.removeExpression"; id: string }
+  | { action: "desmos3d.clear" }
+  // GeoGebra
+  | { action: "geogebra.evalCommand"; command: string }
+  | { action: "geogebra.setCoords"; name: string; x: number; y: number }
+  | { action: "geogebra.deleteObject"; name: string }
+  | { action: "geogebra.clear" }
+```
+
+### Architecture Notes
+- **Black-box design preserved**: Only 4 files know about external tools
+- **Full student interactivity**: Students can type expressions, drag points
+- **AI tool selection**: Claude chooses tool based on subject (algebra→Desmos, geometry→GeoGebra)
+- **Tab-based UI**: All tools mounted but only one visible (fast switching)
+- **Desmos API**: Loaded via script tag, uses demo key by default (get production key at desmos.com/my-api)
+- **GeoGebra**: Uses `react-geogebra` npm package
 
 ---
 
@@ -134,15 +203,17 @@
 
 ## Notes for Next Session
 
+- **Multi-tool canvas**: Desmos + Desmos 3D + GeoGebra replace tldraw
+- **Desmos API key**: Get production key at https://www.desmos.com/my-api (demo key in .env works for testing)
+- **GeoGebra**: Uses `react-geogebra` package, API accessible via `window.ggbApplet`
+- **Build issue**: WSL platform may need `npm rebuild` for lightningcss binaries
 - **Phase 2 (T012-T015)** requires a real Supabase project — need API keys in .env.local
 - **T063-T068** are demo prep tasks — need API keys + deployment environment
-- **middleware.ts keeps reappearing** — was deleted but came back. Must use `proxy.ts` only (Next.js 16).
 - **Zoom as primary call**: Session page uses Zoom Video SDK as the call framework
 - **@zoom/videosdk** must be dynamically imported (uses `window` at module level)
-- **tldraw** must be dynamically imported via `next/dynamic` with `ssr: false`
 - **proxy.ts** (not middleware.ts) — Next.js 16 convention. `export function proxy(request: NextRequest)`
 - **recharts**: Fixed dimensions (no ResponsiveContainer). `react-is` overridden to v19 via npm overrides.
 - **Supabase select types**: `.select("*")` returns `{}[]` with hand-written types — use `(data as Type[])` pattern
 - **Perplexity Sonar**: model `sonar`, endpoint `api.perplexity.ai/chat/completions`, `Bearer` auth, citations in top-level `citations` array
 - **Recall.ai**: `Token` auth, POST `/api/v1/bot/`, webhook events `transcript.data`
-- `npm run build` passes clean (Turbopack, 3.7s, 20 routes)
+- TypeScript compiles clean

@@ -27,10 +27,10 @@
     "radix-ui": "^1.4.3",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "react-geogebra": "^1.2.5",
     "react-is": "^19.2.3",
     "recharts": "^3.7.0",
     "tailwind-merge": "^3.4.0",
-    "tldraw": "^4.3.1",
     "zod": "^4.3.6",
     "zustand": "^5.0.11"
   },
@@ -39,6 +39,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/desmos": "^1.11.0",
     "@types/node": "^20",
     "@types/pg": "^8.16.0",
     "@types/react": "^19",

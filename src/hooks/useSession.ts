@@ -154,8 +154,10 @@ export function useSession() {
     startSession,
     endSession,
     handleTextMessage: brain.handleStudentMessage,
-    setEditor: canvas.setEditor,
+    // Canvas tools
+    toolManager: canvas.toolManager,
     clearCanvas: canvas.clear,
+    setActiveTool: canvas.setActiveTool,
     // Zoom controls — exposed for UI
     zoomStatus: zoom.status,
     zoomStartVideo: zoom.startVideo,
