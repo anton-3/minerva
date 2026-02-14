@@ -31,7 +31,7 @@ export async function createZoomClient(): Promise<ZoomClient> {
         notifyStatus("connecting");
 
         await client.init("en-US", "Global", {
-          patchJsMedia: true,
+          patchJsMedia: false, // Disabled — patchJsMedia interferes with LiveKit (HeyGen) mic capture
           leaveOnPageUnload: true, // Auto-cleanup on tab close — prevents orphan sessions
         });
 

@@ -1,7 +1,7 @@
-// useAvatar hook — manages LiveAvatar session lifecycle (LITE mode)
+// useAvatar hook — manages LiveAvatar session lifecycle (FULL mode)
 // Wraps AvatarClient for React component consumption.
 // Uses attach() pattern: pass a <video> element and the SDK handles rendering.
-// No ASR — STT is handled by useSpeechRecognition (browser Web Speech API).
+// HeyGen handles both TTS (repeat) and STT (voiceChat + USER_TRANSCRIPTION).
 
 "use client";
 
@@ -12,15 +12,15 @@ import type { AvatarClient, AvatarStatus } from "@/lib/heygen/types";
 export function useAvatar() {
   const clientRef = useRef<AvatarClient | null>(null);
   const [status, setStatus] = useState<AvatarStatus>("disconnected");
-  const speakingCbsRef = useRef<((isSpeaking: boolean) => void)[]>([]);
+  const userMsgCbsRef = useRef<((text: string) => void)[]>([]);
 
   const startSession = useCallback(async () => {
     const client = createAvatarClient();
     clientRef.current = client;
 
     client.onStatusChange(setStatus);
-    client.onSpeakingChange((isSpeaking) => {
-      speakingCbsRef.current.forEach((cb) => cb(isSpeaking));
+    client.onUserMessage((text) => {
+      userMsgCbsRef.current.forEach((cb) => cb(text));
     });
 
     await client.startSession();
@@ -46,8 +46,8 @@ export function useAvatar() {
     if (clientRef.current) clientRef.current.attach(element);
   }, []);
 
-  const onSpeakingChange = useCallback((cb: (isSpeaking: boolean) => void) => {
-    speakingCbsRef.current.push(cb);
+  const onUserMessage = useCallback((cb: (text: string) => void) => {
+    userMsgCbsRef.current.push(cb);
   }, []);
 
   useEffect(() => {
@@ -56,5 +56,5 @@ export function useAvatar() {
     };
   }, []);
 
-  return { status, startSession, endSession, speak, interrupt, attach, onSpeakingChange };
+  return { status, startSession, endSession, speak, interrupt, attach, onUserMessage };
 }

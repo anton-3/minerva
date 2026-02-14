@@ -10,7 +10,7 @@ export interface AvatarClient {
   speak(text: string): Promise<void>;
   interrupt(): void;
   attach(element: HTMLMediaElement): void;
-  /** Fires when avatar starts/stops speaking — used to pause browser STT */
-  onSpeakingChange(callback: (isSpeaking: boolean) => void): void;
+  /** Fires when HeyGen ASR transcribes student speech (debounced) */
+  onUserMessage(callback: (text: string) => void): void;
   onStatusChange(callback: (status: AvatarStatus) => void): void;
 }

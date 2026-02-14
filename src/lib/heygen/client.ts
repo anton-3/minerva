@@ -1,8 +1,8 @@
-// LiveAvatar SDK wrapper — FULL mode (TTS only, voice chat disabled)
+// LiveAvatar SDK wrapper — FULL mode
 // Wraps @heygen/liveavatar-web-sdk. No SDK types leak outside.
-// FULL mode for TTS via repeat(text). Voice chat DISABLED so the mic
-// stays free for browser Web Speech API (useSpeechRecognition).
-// LLM is Claude. This module is just the display layer.
+// FULL mode: avatar rendering + TTS via repeat(text) + ASR via voiceChat.
+// HeyGen handles both TTS and STT. LLM is Claude (our brain).
+// USER_TRANSCRIPTION events are debounced and routed to the tutor brain.
 
 import {
   LiveAvatarSession,
@@ -19,7 +19,13 @@ export function createAvatarClient(): AvatarClient {
   let pendingElement: HTMLMediaElement | null = null;
   let streamReady = false;
 
-  const speakingCallbacks: ((isSpeaking: boolean) => void)[] = [];
+  // Debounce ASR: accumulate fragments and fire after a pause
+  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  let pendingText = "";
+  const DEBOUNCE_MS = 800; // wait 800ms of silence before sending
+  let avatarIsSpeaking = false; // Block ASR echo while avatar talks
+
+  const userMessageCallbacks: ((text: string) => void)[] = [];
   const statusChangeCallbacks: ((status: AvatarStatus) => void)[] = [];
 
   function notifyStatus(status: AvatarStatus) {
@@ -32,11 +38,19 @@ export function createAvatarClient(): AvatarClient {
     }
   }
 
+  function flushTranscription() {
+    const text = pendingText.trim();
+    pendingText = "";
+    if (text.length >= 2) {
+      userMessageCallbacks.forEach((cb) => cb(text));
+    }
+  }
+
   return {
     async startSession() {
       notifyStatus("connecting");
 
-      // Fetch session token from our server (LITE mode)
+      // Fetch session token from our server
       const tokenRes = await fetch("/api/heygen/token", { method: "POST" });
       if (!tokenRes.ok) {
         notifyStatus("disconnected");
@@ -44,8 +58,8 @@ export function createAvatarClient(): AvatarClient {
       }
       const { token } = await tokenRes.json();
 
-      // FULL mode but voice chat OFF — mic stays free for Web Speech API (our STT)
-      session = new LiveAvatarSession(token, { voiceChat: false });
+      // FULL mode with voice chat — HeyGen handles both TTS and STT
+      session = new LiveAvatarSession(token, { voiceChat: true });
 
       // Session lifecycle events
       session.on(SessionEvent.SESSION_STATE_CHANGED, (state: SessionState) => {
@@ -69,22 +83,50 @@ export function createAvatarClient(): AvatarClient {
         notifyStatus("connected");
       });
 
-      // Avatar speaking state — exposed so browser STT can pause during speech
+      // Avatar speaking state — block ASR echo while avatar talks
       session.on(AgentEventsEnum.AVATAR_SPEAK_STARTED, () => {
+        console.log("[AvatarClient] AVATAR_SPEAK_STARTED");
+        avatarIsSpeaking = true;
+        if (debounceTimer) clearTimeout(debounceTimer);
+        pendingText = "";
         notifyStatus("speaking");
-        speakingCallbacks.forEach((cb) => cb(true));
       });
 
       session.on(AgentEventsEnum.AVATAR_SPEAK_ENDED, () => {
+        console.log("[AvatarClient] AVATAR_SPEAK_ENDED");
+        avatarIsSpeaking = false;
         notifyStatus("listening");
-        speakingCallbacks.forEach((cb) => cb(false));
       });
 
-      // Connect (FULL mode, voice chat disabled)
+      // User speech transcription — debounce to avoid fragments
+      // Block while avatar is speaking to prevent echo
+      session.on(AgentEventsEnum.USER_TRANSCRIPTION, (event) => {
+        const text = event.text;
+        console.log("[AvatarClient] USER_TRANSCRIPTION:", text, "avatarIsSpeaking:", avatarIsSpeaking);
+        if (!text || avatarIsSpeaking) return;
+
+        // Accumulate fragments and debounce
+        pendingText += (pendingText ? " " : "") + text;
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(flushTranscription, DEBOUNCE_MS);
+      });
+
+      // Connect to LiveKit room
       await session.start();
+      console.log("[AvatarClient] Session started, voiceChat state:", session.voiceChat.state);
+
+      // Start voice chat (enables mic + ASR)
+      try {
+        await session.voiceChat.start();
+        console.log("[AvatarClient] Voice chat started, state:", session.voiceChat.state);
+      } catch (err) {
+        console.warn("[AvatarClient] Voice chat start failed (mic access?):", err);
+      }
     },
 
     async endSession() {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      pendingText = "";
       if (session) {
         await session.stop();
         session = null;
@@ -108,8 +150,8 @@ export function createAvatarClient(): AvatarClient {
       tryAttach();
     },
 
-    onSpeakingChange(callback: (isSpeaking: boolean) => void) {
-      speakingCallbacks.push(callback);
+    onUserMessage(callback) {
+      userMessageCallbacks.push(callback);
     },
 
     onStatusChange(callback) {

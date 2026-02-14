@@ -1,8 +1,8 @@
 // useSession hook — session state machine
 // Manages session lifecycle: idle → connecting → active → ended
-// Coordinates: Zoom Video SDK (call layer) + LiveAvatar LITE (avatar TTS) +
-// Browser Web Speech API (STT) + Canvas + Claude brain.
-// Zoom is optional — session works with just HeyGen if no Zoom keys configured.
+// Coordinates: Zoom Video SDK (call layer) + LiveAvatar FULL (avatar TTS + ASR) +
+// Canvas + Claude brain.
+// HeyGen handles both TTS and STT. Zoom is optional (self-view video only).
 
 "use client";
 
@@ -12,7 +12,6 @@ import { useAvatar } from "./useAvatar";
 import { useZoom } from "./useZoom";
 import { useCanvas } from "./useCanvas";
 import { useTutorBrain } from "./useTutorBrain";
-import { useSpeechRecognition } from "./useSpeechRecognition";
 
 export function useSession() {
   // Use individual selectors for stable references — avoids infinite re-render loops
@@ -25,7 +24,6 @@ export function useSession() {
   const avatar = useAvatar();
   const zoom = useZoom();
   const canvas = useCanvas();
-  const stt = useSpeechRecognition();
   const brain = useTutorBrain({
     speak: avatar.speak,
     executeSequence: canvas.executeSequence,
@@ -36,23 +34,15 @@ export function useSession() {
   const wiredRef = useRef(false);
   const sessionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Wire browser STT results → tutor brain
-  // Wire avatar speaking state → pause/resume STT (echo prevention)
+  // Wire HeyGen ASR transcriptions → tutor brain
   useEffect(() => {
     if (!wiredRef.current) {
-      stt.onResult((text) => {
+      avatar.onUserMessage((text) => {
         brain.handleStudentMessage(text);
-      });
-      avatar.onSpeakingChange((isSpeaking) => {
-        if (isSpeaking) {
-          stt.pause();
-        } else {
-          stt.resume();
-        }
       });
       wiredRef.current = true;
     }
-  }, [stt, avatar, brain]);
+  }, [avatar, brain]);
 
   // Track avatar status in store
   useEffect(() => {
@@ -68,29 +58,17 @@ export function useSession() {
       const newSessionId = crypto.randomUUID();
       setSessionId(newSessionId);
 
-      // Start Zoom Video SDK session (optional — for Zoom Education Track prize)
-      // Runs in parallel with HeyGen. If Zoom fails (no keys), we continue.
-      // Lifecycle: join → startAudio → startVideo (video handled by page component)
-      const zoomPromise = zoom
-        .joinSession(`minerva-${newSessionId.slice(0, 8)}`, "Student")
-        .then(() => {
-          console.log("[useSession] Zoom session joined");
-          // Note: We intentionally skip zoom.startAudio() here.
-          // Zoom audio would grab the mic exclusively, blocking Web Speech API (our STT).
-          // Zoom is only used for student self-view video — audio goes through HeyGen + Web Speech API.
-        })
-        .catch((err) => {
-          console.warn("[useSession] Zoom session failed (non-blocking):", err);
-        });
-
-      // Start LiveAvatar session (LITE mode — TTS/avatar rendering only)
+      // Start LiveAvatar session FIRST (FULL mode — TTS + ASR via voiceChat)
+      // Must start before Zoom so HeyGen/LiveKit gets the mic without interference.
       await avatar.startSession();
 
-      // Start browser speech recognition (free, zero-latency)
-      stt.start();
-
-      // Wait for Zoom to finish connecting (but don't block if it failed)
-      await zoomPromise;
+      // Start Zoom Video SDK session AFTER HeyGen (optional — for Zoom Education Track)
+      // Zoom is video-only — no audio. HeyGen handles all audio (TTS + ASR).
+      // TODO: Re-enable Zoom after confirming HeyGen voice chat works alone
+      // zoom
+      //   .joinSession(`minerva-${newSessionId.slice(0, 8)}`, "Student")
+      //   .then(() => console.log("[useSession] Zoom session joined"))
+      //   .catch((err) => console.warn("[useSession] Zoom session failed:", err));
 
       setStatus("active");
 
@@ -100,13 +78,10 @@ export function useSession() {
       console.error("[useSession] Failed to start session:", err);
       setStatus("error");
     }
-  }, [avatar, zoom, stt, setStatus, setSessionId]);
+  }, [avatar, zoom, setStatus, setSessionId]);
 
   const endSession = useCallback(async () => {
     try {
-      // Stop browser STT
-      stt.stop();
-
       // End both sessions in parallel
       await Promise.allSettled([
         avatar.endSession(),
@@ -149,7 +124,7 @@ export function useSession() {
       console.error("[useSession] Error ending session:", err);
       setStatus("ended");
     }
-  }, [avatar, zoom, stt, setStatus]);
+  }, [avatar, zoom, setStatus]);
 
   // Keep endSessionRef in sync so the timer can call it
   endSessionRef.current = endSession;
@@ -174,7 +149,6 @@ export function useSession() {
     status,
     avatarStatus: avatar.status,
     isProcessing: brain.isProcessing,
-    isListening: stt.isListening,
     conversationHistory,
     attach: avatar.attach,
     startSession,
