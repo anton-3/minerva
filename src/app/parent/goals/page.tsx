@@ -53,25 +53,43 @@ export default function GoalsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const [generating, setGenerating] = useState(false);
+
   const handleSave = async (data: {
     child_id: string;
     subject: string;
     goals: GoalEntry[];
   }) => {
-    const { error } = await supabase.from("learning_plans").insert({
-      child_id: data.child_id,
-      subject: data.subject,
-      goals: data.goals,
-    });
+    setGenerating(true);
+    try {
+      // Call Claude to generate a structured learning plan + curriculum
+      const res = await fetch("/api/tutor/plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          child_id: data.child_id,
+          subject: data.subject,
+          goals: data.goals.map((g) => g.description),
+        }),
+      });
 
-    if (!error) {
+      if (!res.ok) {
+        const err = await res.json();
+        console.error("[goals] Plan generation failed:", err);
+        return;
+      }
+
       setShowForm(false);
-      // Refresh plans
+      // Refresh plans from Supabase
       const { data: updated } = await supabase
         .from("learning_plans")
         .select("*")
         .eq("child_id", selectedChild);
       setPlans((updated ?? []) as LearningPlan[]);
+    } catch (err) {
+      console.error("[goals] Error generating plan:", err);
+    } finally {
+      setGenerating(false);
     }
   };
 
@@ -121,7 +139,16 @@ export default function GoalsPage() {
 
           {showForm && (
             <div className="rounded-lg border border-border bg-card p-4">
-              <GoalForm childId={selectedChild} onSave={handleSave} />
+              {generating ? (
+                <div className="flex items-center gap-2 py-4 justify-center">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                  <span className="text-sm text-muted-foreground">
+                    Generating learning plan with AI...
+                  </span>
+                </div>
+              ) : (
+                <GoalForm childId={selectedChild} onSave={handleSave} />
+              )}
             </div>
           )}
 
@@ -163,6 +190,27 @@ export default function GoalsPage() {
                       </li>
                     ))}
                   </ul>
+                  {plan.curriculum && plan.curriculum.length > 0 && (
+                    <div className="mt-2 pt-2 border-t border-border">
+                      <p className="text-xs font-medium text-muted-foreground mb-1">
+                        AI-generated curriculum:
+                      </p>
+                      <div className="flex flex-wrap gap-1">
+                        {plan.curriculum.map((topic, i) => (
+                          <span
+                            key={i}
+                            className={`text-xs px-2 py-0.5 rounded-full ${
+                              topic.name === plan.current_topic
+                                ? "bg-primary text-primary-foreground"
+                                : "bg-muted text-muted-foreground"
+                            }`}
+                          >
+                            {topic.name}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

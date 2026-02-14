@@ -71,6 +71,18 @@ export function useSession() {
         zoom.leaveSession(),
         avatar.endSession(),
       ]);
+
+      // Mark session as completed in Supabase (non-blocking)
+      if (store.sessionId) {
+        fetch("/api/session", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: store.sessionId, status: "completed" }),
+        }).catch((err) =>
+          console.error("[useSession] Session update error:", err)
+        );
+      }
+
       store.setStatus("ended");
     } catch (err) {
       console.error("[useSession] Error ending session:", err);

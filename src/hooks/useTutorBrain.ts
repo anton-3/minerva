@@ -65,6 +65,25 @@ export function useTutorBrain(options: UseTutorBrainOptions) {
         timestamp: new Date(),
       });
 
+      // Save progress update to Supabase (non-blocking)
+      if (response.progressUpdate) {
+        const { learningPlan } = store;
+        if (learningPlan) {
+          fetch("/api/progress", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              child_id: store.sessionId, // session tracks the child
+              subject: learningPlan.subject,
+              topic: response.progressUpdate.topic,
+              score: response.progressUpdate.score,
+            }),
+          }).catch((err) =>
+            console.error("[useTutorBrain] Progress save error:", err)
+          );
+        }
+      }
+
       // Execute canvas commands (errors here never break the session)
       if (response.canvasCommands && response.canvasCommands.length > 0) {
         optionsRef.current
