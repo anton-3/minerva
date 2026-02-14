@@ -1,7 +1,8 @@
-// LiveAvatar SDK wrapper
+// LiveAvatar SDK wrapper — LITE mode
 // Wraps @heygen/liveavatar-web-sdk. No SDK types leak outside.
-// FULL mode WITHOUT context_id: ASR is managed by LiveAvatar, but there's
-// no built-in LLM. We use Claude as the brain and repeat() for TTS.
+// LITE mode: avatar rendering + TTS only. No ASR, no voice chat.
+// STT is handled separately by browser Web Speech API (useSpeechRecognition).
+// LLM is Claude. This module is just the display layer.
 
 import {
   LiveAvatarSession,
@@ -18,13 +19,7 @@ export function createAvatarClient(): AvatarClient {
   let pendingElement: HTMLMediaElement | null = null;
   let streamReady = false;
 
-  // Debounce ASR: accumulate fragments and fire after a pause
-  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-  let pendingText = "";
-  const DEBOUNCE_MS = 800; // wait 800ms of silence before sending
-  let avatarIsSpeaking = false; // Block ASR echo while avatar talks
-
-  const userMessageCallbacks: ((text: string) => void)[] = [];
+  const speakingCallbacks: ((isSpeaking: boolean) => void)[] = [];
   const statusChangeCallbacks: ((status: AvatarStatus) => void)[] = [];
 
   function notifyStatus(status: AvatarStatus) {
@@ -37,19 +32,11 @@ export function createAvatarClient(): AvatarClient {
     }
   }
 
-  function flushTranscription() {
-    const text = pendingText.trim();
-    pendingText = "";
-    if (text.length >= 2) {
-      userMessageCallbacks.forEach((cb) => cb(text));
-    }
-  }
-
   return {
     async startSession() {
       notifyStatus("connecting");
 
-      // Fetch session token from our server
+      // Fetch session token from our server (LITE mode)
       const tokenRes = await fetch("/api/heygen/token", { method: "POST" });
       if (!tokenRes.ok) {
         notifyStatus("disconnected");
@@ -57,9 +44,8 @@ export function createAvatarClient(): AvatarClient {
       }
       const { token } = await tokenRes.json();
 
-      session = new LiveAvatarSession(token, {
-        voiceChat: true,
-      });
+      // LITE mode: no voiceChat needed
+      session = new LiveAvatarSession(token);
 
       // Session lifecycle events
       session.on(SessionEvent.SESSION_STATE_CHANGED, (state: SessionState) => {
@@ -83,46 +69,22 @@ export function createAvatarClient(): AvatarClient {
         notifyStatus("connected");
       });
 
-      // Avatar speaking state — also used to block ASR echo
+      // Avatar speaking state — exposed so browser STT can pause during speech
       session.on(AgentEventsEnum.AVATAR_SPEAK_STARTED, () => {
-        avatarIsSpeaking = true;
-        // Clear any pending ASR text (likely echo from avatar starting to speak)
-        if (debounceTimer) clearTimeout(debounceTimer);
-        pendingText = "";
         notifyStatus("speaking");
+        speakingCallbacks.forEach((cb) => cb(true));
       });
 
       session.on(AgentEventsEnum.AVATAR_SPEAK_ENDED, () => {
-        avatarIsSpeaking = false;
         notifyStatus("listening");
+        speakingCallbacks.forEach((cb) => cb(false));
       });
 
-      // User speech transcription — debounce to avoid fragments
-      // Block while avatar is speaking to prevent echo
-      session.on(AgentEventsEnum.USER_TRANSCRIPTION, (event) => {
-        const text = event.text;
-        if (!text || avatarIsSpeaking) return;
-
-        // Accumulate fragments and debounce
-        pendingText += (pendingText ? " " : "") + text;
-        if (debounceTimer) clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(flushTranscription, DEBOUNCE_MS);
-      });
-
-      // Connect to LiveKit room
+      // Connect (LITE — no voice chat to start)
       await session.start();
-
-      // Start voice chat (enables mic + STT)
-      try {
-        await session.voiceChat.start();
-      } catch (err) {
-        console.warn("[AvatarClient] Voice chat start failed (mic access?):", err);
-      }
     },
 
     async endSession() {
-      if (debounceTimer) clearTimeout(debounceTimer);
-      pendingText = "";
       if (session) {
         await session.stop();
         session = null;
@@ -146,8 +108,8 @@ export function createAvatarClient(): AvatarClient {
       tryAttach();
     },
 
-    onUserMessage(callback) {
-      userMessageCallbacks.push(callback);
+    onSpeakingChange(callback: (isSpeaking: boolean) => void) {
+      speakingCallbacks.push(callback);
     },
 
     onStatusChange(callback) {

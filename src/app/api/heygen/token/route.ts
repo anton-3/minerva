@@ -20,10 +20,10 @@ export async function POST() {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      mode: "FULL",
+      mode: "LITE",
       avatar_id: process.env.HEYGEN_AVATAR_ID,
-      // No context_id — disables built-in AI brain.
-      // We use Claude as the brain and repeat() for TTS only.
+      // LITE mode: avatar rendering + TTS only. No ASR, no voice chat.
+      // STT handled by browser Web Speech API. LLM is Claude.
       avatar_persona: {
         voice_id: process.env.HEYGEN_VOICE_ID,
         language: "en",
