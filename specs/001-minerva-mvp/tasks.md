@@ -78,23 +78,23 @@ This prevents wasted time building with deprecated patterns. Document any findin
 
 ### Hooks (A + B)
 
-- [ ] T024 [P] [US1] [B] Implement `src/hooks/useAvatar.ts` — React hook wrapping AvatarClient lifecycle (init, cleanup, status tracking, MediaStream ref)
-- [ ] T025 [P] [US1] [B] Implement `src/hooks/useCanvas.ts` — React hook wrapping CanvasExecutor (tldraw Editor ref, command execution, snapshot)
-- [ ] T026 [P] [US1] [A] Implement `src/stores/sessionStore.ts` — Zustand store: session state (idle/connecting/active/ended), conversation history, current transcript, avatar status, student profile
-- [ ] T027 [US1] [A] Implement `src/hooks/useTutorBrain.ts` — conversation loop orchestrator: student speaks → call /api/tutor/respond → avatar.speak() + canvas.executeSequence() → update store (depends on T023, T024, T025, T026)
-- [ ] T028 [US1] [A] Implement `src/hooks/useSession.ts` — session state machine: idle → connecting → active → ended. Coordinates avatar + canvas + brain lifecycle (depends on T027)
+- [x] T024 [P] [US1] [B] Implement `src/hooks/useAvatar.ts` — React hook wrapping AvatarClient lifecycle (init, cleanup, status tracking, MediaStream ref)
+- [x] T025 [P] [US1] [B] Implement `src/hooks/useCanvas.ts` — React hook wrapping CanvasExecutor (tldraw Editor ref, command execution, snapshot)
+- [x] T026 [P] [US1] [A] Implement `src/stores/sessionStore.ts` — Zustand store: session state (idle/connecting/active/ended), conversation history, current transcript, avatar status, student profile
+- [x] T027 [US1] [A] Implement `src/hooks/useTutorBrain.ts` — conversation loop orchestrator: student speaks → call /api/tutor/respond → avatar.speak() + canvas.executeSequence() → update store (depends on T023, T024, T025, T026)
+- [x] T028 [US1] [A] Implement `src/hooks/useSession.ts` — session state machine: idle → connecting → active → ended. Coordinates avatar + canvas + brain + Zoom lifecycle (depends on T027)
 
 ### Components (A + B)
 
-- [ ] T029 [P] [US1] [B] Implement `src/components/session/AvatarPanel.tsx` — renders HeyGen video stream, shows avatar status indicator, handles connection errors
-- [ ] T030 [P] [US1] [B] Implement `src/components/session/CanvasPanel.tsx` — renders tldraw canvas, read-only for student (AI draws), passes Editor ref to useCanvas
-- [ ] T031 [P] [US1] [A] Implement `src/components/session/ChatPanel.tsx` — text chat sidebar showing conversation transcript, text input fallback (FR-011)
-- [ ] T032 [P] [US1] [A] Implement `src/components/session/SessionControls.tsx` — mic toggle, session timer, end session button
+- [x] T029 [P] [US1] [B] Implement `src/components/session/AvatarPanel.tsx` — renders HeyGen video stream, shows avatar status indicator, handles connection errors
+- [x] T030 [P] [US1] [B] Implement `src/components/session/CanvasPanel.tsx` — renders tldraw canvas, read-only for student (AI draws), passes Editor ref to useCanvas
+- [x] T031 [P] [US1] [A] Implement `src/components/session/ChatPanel.tsx` — text chat sidebar showing conversation transcript, text input fallback (FR-011)
+- [x] T032 [P] [US1] [A] Implement `src/components/session/SessionControls.tsx` — session timer (warns at 8 min), Start/End/Clear buttons
 
 ### Page (A)
 
-- [ ] T033 [US1] [A] Implement `src/app/student/session/page.tsx` — THE core page. Layout: AvatarPanel (left) + CanvasPanel (right) + ChatPanel (bottom or side). Wires useSession to all components (depends on T028-T032)
-- [ ] T034 [US1] [A] Implement `src/app/student/page.tsx` — student home: "Start Session" button, shows active learning plan if exists
+- [x] T033 [US1] [A] Implement `src/app/student/session/page.tsx` — THE core page. 3-column grid: Avatar+self-view | Canvas | Chat. Zoom as primary call framework. Wires useSession to all components.
+- [x] T034 [US1] [A] Implement `src/app/student/page.tsx` — student home: "Start Session" link
 
 **Checkpoint**: End-to-end demo works. Avatar greets student, student asks about algebra, avatar draws equation on canvas and guides through solution. SC-001, SC-002, SC-003, SC-005 validated.
 

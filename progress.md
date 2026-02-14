@@ -2,9 +2,9 @@
 
 > **For AI agents**: Read this file first to understand where the project is. Update it after every meaningful task or group of tasks.
 
-**Last updated**: 2026-02-14 (Session 3)
+**Last updated**: 2026-02-14 (Session 4)
 **Branch**: `001-minerva-mvp`
-**Overall status**: Phase 3 black box modules (T016-T023) complete. Ready for hooks (T024-T028) and components (T029-T034).
+**Overall status**: Phase 3 FULLY COMPLETE (T016-T034). All hooks, components, Zoom integration, and session pages built. Ready for Phase 4 (Parent Dashboard).
 
 ---
 
@@ -45,9 +45,33 @@
 
 ---
 
-## In Progress
+### Phase 3 Hooks (T024-T028) — DONE
+- [x] **T024** `useAvatar` hook — wraps createAvatarClient, manages MediaStream, status, user message callbacks, cleanup on unmount
+- [x] **T025** `useCanvas` hook — wraps createCanvasExecutor, setEditor callback, executeCommand/executeSequence/clear/getSnapshot
+- [x] **T026** Session store — already implemented in Phase 1, no changes needed
+- [x] **T027** `useTutorBrain` hook — conversation loop: student speaks → POST /api/tutor/respond → canvas draw (non-blocking) → avatar speak. Uses optionsRef to avoid stale closures.
+- [x] **T028** `useSession` hook — session state machine coordinating useAvatar + useCanvas + useTutorBrain + useZoom. Wires avatar user messages to brain.
 
-Phase 3 hooks (T024-T028) and components (T029-T034).
+### Phase 3 Components + Pages (T029-T034) — DONE
+- [x] **T029** `AvatarPanel.tsx` — renders HeyGen video stream, status indicator with 5 states (connecting/connected/speaking/listening/disconnected)
+- [x] **T030** `CanvasPanel.tsx` — dynamic tldraw import (ssr: false), hideUi, isReadonly on mount, onEditorReady callback
+- [x] **T031** `ChatPanel.tsx` — conversation history with chat bubbles, auto-scroll, text input fallback (FR-011), "Thinking..." indicator
+- [x] **T032** `SessionControls.tsx` — session timer (counts up, warns at 8 min), Start/End session buttons, Clear Canvas button
+- [x] **T033** `src/app/student/session/page.tsx` — THE core session page. 3-column grid: Avatar+self-view | Canvas | Chat. Wires useSession to all components. Zoom as primary call framework.
+- [x] **T034** `src/app/student/page.tsx` — student home with "Start Session" link
+
+### Zoom Video SDK Integration — DONE (new, not in original tasks)
+- [x] Installed `@zoom/videosdk` v2.3.12 + `jsonwebtoken` for JWT generation
+- [x] `src/lib/zoom/types.ts` — ZoomSessionStatus, ZoomClient interface (black box, no SDK types leak)
+- [x] `src/lib/zoom/client.ts` — wraps @zoom/videosdk with dynamic import (no SSR). Handles join/leave, video (canvas-based), audio, mute toggle.
+- [x] `src/app/api/zoom/token/route.ts` — POST endpoint generating JWT with HS256, topic, role, 2-hour expiry
+- [x] `src/hooks/useZoom.ts` — React hook for Zoom lifecycle (joinSession, leaveSession, startVideo, startAudio, toggleMute)
+- [x] `useSession` updated to start Zoom + HeyGen in parallel on session start
+- [x] tldraw CSS imported in `globals.css` via `@import url("tldraw/tldraw.css")` (official pattern from tldraw/nextjs-template)
+
+**Research completed before building**: tldraw CSS import pattern (official Next.js template uses @import in globals.css), Zoom Video SDK web API (createClient → init → join, canvas-based renderVideo, startAudio), React 19.2 type deprecations (FormEvent → structural type). All verified against Feb 2026 versions.
+
+**Build passes clean**: `npx tsc --noEmit` (0 errors), `npm run build` (all routes registered, static pages generated).
 
 ---
 
@@ -59,16 +83,6 @@ Phase 3 hooks (T024-T028) and components (T029-T034).
 - [ ] **T014** Root layout polish (basic layout exists)
 - [ ] **T015** Shared Header + LoadingSpinner (stubs exist, need auth-aware nav)
 
-### Phase 3: Hooks + Components (T024-T034)
-- [ ] **T024** `useAvatar` hook — avatar lifecycle (init, cleanup, status, MediaStream ref)
-- [ ] **T025** `useCanvas` hook — tldraw editor ref + command execution
-- [ ] **T026** Session store update (already implemented in Phase 1)
-- [ ] **T027** `useTutorBrain` hook — conversation loop orchestrator
-- [ ] **T028** `useSession` hook — session state machine
-- [ ] **T029-T032** Components: AvatarPanel, CanvasPanel, ChatPanel, SessionControls
-- [ ] **T033** Session page (`src/app/student/session/page.tsx`)
-- [ ] **T034** Student home page
-
 ### Phase 4-8: See `specs/001-minerva-mvp/tasks.md` for full details
 
 ---
@@ -76,8 +90,10 @@ Phase 3 hooks (T024-T028) and components (T029-T034).
 ## Notes for Next Session
 
 - **Phase 2 (T012-T015)** requires a real Supabase project — need API keys in .env.local
-- **Hooks are next** — useAvatar wraps createAvatarClient, useCanvas wraps createCanvasExecutor, useTutorBrain calls /api/tutor/respond
-- **tldraw must be dynamically imported** in CanvasPanel (`next/dynamic` with `ssr: false`)
-- HeyGen SDK also needs client-side only — use `"use client"` directive
-- The Zustand store (T010) is already fully implemented — hooks can build on it immediately
-- `npm run check` passes with 0 errors, 6 warnings (from placeholder hooks)
+- **Phase 4 (Parent Dashboard)** is next — auth, child profiles, goals, progress charts
+- **Zoom as primary call**: Session page uses Zoom Video SDK as the call framework, HeyGen avatar renders alongside
+- **@zoom/videosdk** must be dynamically imported (uses `window` at module level)
+- **tldraw** must be dynamically imported via `next/dynamic` with `ssr: false`
+- **Next.js 16 middleware** is deprecated — migrate to "proxy" convention when time permits
+- **React 19.2**: `React.FormEvent`, `React.FormEventHandler` etc. are deprecated hints (still work, non-blocking)
+- `npm run build` passes clean (Turbopack, 3.2s)
