@@ -27,15 +27,15 @@ This prevents wasted time building with deprecated patterns. Document any findin
 
 - [x] T001 [SETUP] [A] Project scaffolding: Next.js 16.1, Tailwind v4, shadcn/ui, all npm dependencies
 - [x] T002 [SETUP] [A] spec-kit init: constitution.md, spec.md, plan.md, contracts/, data-model.md
-- [ ] T003 [P] [SETUP] [A] Create core type files: `src/types/session.ts` (TutorBrainRequest, TutorBrainResponse, CanvasCommand, SessionState, TranscriptEntry, LearningPlan, SessionSummary) and `src/types/database.ts` (Supabase schema types)
-- [ ] T004 [P] [SETUP] [D] Create Supabase migration: `supabase/migrations/001_initial_schema.sql` with all 7 tables from data-model.md
-- [ ] T005 [P] [SETUP] [D] Create `.env.example` with all required environment variables
-- [ ] T006 [P] [SETUP] [B] Create placeholder files for all black box modules: `src/lib/heygen/client.ts`, `src/lib/heygen/types.ts`, `src/lib/canvas/commands.ts`, `src/lib/canvas/types.ts`
-- [ ] T007 [P] [SETUP] [C] Create placeholder files for all API-side modules: `src/lib/claude/client.ts`, `src/lib/claude/prompts.ts`, `src/lib/perplexity/client.ts`, `src/lib/recall/client.ts`
-- [ ] T008 [P] [SETUP] [D] Create Supabase client wrappers: `src/lib/supabase/client.ts` (browser) and `src/lib/supabase/server.ts` (server)
-- [ ] T009 [P] [SETUP] [A] Create placeholder hooks: `src/hooks/useAvatar.ts`, `src/hooks/useCanvas.ts`, `src/hooks/useTutorBrain.ts`, `src/hooks/useSession.ts`
-- [ ] T010 [P] [SETUP] [A] Create Zustand session store: `src/stores/sessionStore.ts`
-- [ ] T011 [P] [SETUP] [ALL] Create placeholder component files: `src/components/session/AvatarPanel.tsx`, `CanvasPanel.tsx`, `ChatPanel.tsx`, `SessionControls.tsx`; `src/components/shared/Header.tsx`, `LoadingSpinner.tsx`
+- [x] T003 [P] [SETUP] [A] Create core type files: `src/types/session.ts` (TutorBrainRequest, TutorBrainResponse, CanvasCommand, SessionState, TranscriptEntry, LearningPlan, SessionSummary) and `src/types/database.ts` (Supabase schema types)
+- [x] T004 [P] [SETUP] [D] Create Supabase migration: `supabase/migrations/001_initial_schema.sql` with all 7 tables from data-model.md
+- [x] T005 [P] [SETUP] [D] Create `.env.example` with all required environment variables
+- [x] T006 [P] [SETUP] [B] Create placeholder files for all black box modules: `src/lib/heygen/client.ts`, `src/lib/heygen/types.ts`, `src/lib/canvas/commands.ts`, `src/lib/canvas/types.ts`
+- [x] T007 [P] [SETUP] [C] Create placeholder files for all API-side modules: `src/lib/claude/client.ts`, `src/lib/claude/prompts.ts`, `src/lib/perplexity/client.ts`, `src/lib/recall/client.ts`
+- [x] T008 [P] [SETUP] [D] Create Supabase client wrappers: `src/lib/supabase/client.ts` (browser) and `src/lib/supabase/server.ts` (server)
+- [x] T009 [P] [SETUP] [A] Create placeholder hooks: `src/hooks/useAvatar.ts`, `src/hooks/useCanvas.ts`, `src/hooks/useTutorBrain.ts`, `src/hooks/useSession.ts`
+- [x] T010 [P] [SETUP] [A] Create Zustand session store: `src/stores/sessionStore.ts` (fully implemented)
+- [x] T011 [P] [SETUP] [ALL] Create placeholder component files: `src/components/session/AvatarPanel.tsx`, `CanvasPanel.tsx`, `ChatPanel.tsx`, `SessionControls.tsx`; `src/components/shared/Header.tsx`, `LoadingSpinner.tsx`
 
 **Checkpoint**: All files exist. All interfaces defined. Team can split and work independently.
 

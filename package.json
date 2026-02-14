@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run lint && npm run typecheck"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.74.0",
@@ -23,6 +25,7 @@
     "recharts": "^3.7.0",
     "tailwind-merge": "^3.4.0",
     "tldraw": "^4.3.1",
+    "zod": "^4.3.6",
     "zustand": "^5.0.11"
   },
   "devDependencies": {

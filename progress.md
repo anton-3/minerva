@@ -4,87 +4,69 @@
 
 **Last updated**: 2026-02-14
 **Branch**: `001-minerva-mvp`
-**Overall status**: Spec-kit complete. Implementation not yet started.
+**Overall status**: Phase 1 Setup complete. Ready for Phase 2 (Foundational) + Phase 3 (US1).
 
 ---
 
 ## Completed
 
-### Phase 1: Setup (T001-T002)
-- [x] **T001** Project scaffolding: Next.js 16.1, Tailwind v4, shadcn/ui (15 components), all npm deps installed
-- [x] **T002** spec-kit init: constitution.md, spec.md, plan.md, data-model.md, 5 contracts, tasks.md (68 tasks)
-- [x] Created CLAUDE.md, plan.md (root), progress.md (root) for session continuity
-- [x] Created .env.example with all required environment variables
-- [x] Initial git commit on `main` with scaffolding, currently on branch `001-minerva-mvp`
+### Phase 1: Setup (T001-T011) — DONE
+- [x] **T001** Project scaffolding: Next.js 16.1, Tailwind v4, shadcn/ui (15 components), all npm deps
+- [x] **T002** spec-kit: constitution.md, spec.md, plan.md, data-model.md, 5 contracts, tasks.md
+- [x] **T003** Core type files: `src/types/session.ts` (all primitives) + `src/types/database.ts` (Supabase schema types)
+- [x] **T004** Supabase migration: `supabase/migrations/001_initial_schema.sql` (7 tables + RLS policies)
+- [x] **T005** `.env.example` with all required environment variables
+- [x] **T006** Black box module stubs: `src/lib/heygen/` (client.ts, types.ts), `src/lib/canvas/` (commands.ts, types.ts)
+- [x] **T007** Black box module stubs: `src/lib/claude/` (client.ts, prompts.ts), `src/lib/perplexity/client.ts`, `src/lib/recall/client.ts`
+- [x] **T008** Supabase client wrappers: `src/lib/supabase/client.ts` (browser), `src/lib/supabase/server.ts` (server) — implemented with @supabase/ssr
+- [x] **T009** Placeholder hooks: useAvatar, useCanvas, useTutorBrain, useSession
+- [x] **T010** Zustand session store: `src/stores/sessionStore.ts` — fully implemented with all actions
+- [x] **T011** Placeholder components: AvatarPanel, CanvasPanel, ChatPanel, SessionControls, Header, LoadingSpinner
+- [x] CLAUDE.md, plan.md (root), progress.md (root) for session continuity
+- [x] Added `npm run check` script (lint + typecheck) — passes with 0 errors
+- [x] `npm run build` passes (Turbopack, < 1s)
+
+**42 source files. All interfaces defined. TypeScript compiles clean. Team can split and build independently.**
 
 ---
 
 ## In Progress
 
-Nothing currently in progress. Ready to begin Phase 1 remaining tasks (T003-T011).
+Starting Phase 2 (Foundational) + Phase 3 (US1 — Core Session).
 
 ---
 
 ## Not Started
 
-### Phase 1: Setup — Remaining (T003-T011)
-- [ ] **T003** Core type files: `src/types/session.ts` + `src/types/database.ts`
-- [ ] **T004** Supabase migration: `supabase/migrations/001_initial_schema.sql`
-- [ ] **T005** `.env.example` update (already exists, may need review)
-- [ ] **T006** Black box module placeholders (heygen, canvas)
-- [ ] **T007** Black box module placeholders (claude, perplexity, recall)
-- [ ] **T008** Supabase client wrappers
-- [ ] **T009** Placeholder hooks (useAvatar, useCanvas, useTutorBrain, useSession)
-- [ ] **T010** Zustand session store placeholder
-- [ ] **T011** Placeholder components (session + shared)
-
 ### Phase 2: Foundational (T012-T015)
-- [ ] Supabase project setup, auth, RLS
-- [ ] Root layout, shared components
+- [ ] **T012** Set up Supabase project: create project, run migration, enable RLS, configure auth
+- [ ] **T013** Implement Supabase client wrappers with cookie-based auth (stubs exist, need real config)
+- [ ] **T014** Root layout with Tailwind, fonts, metadata (basic layout exists from create-next-app)
+- [ ] **T015** Shared Header + LoadingSpinner (stubs exist, need auth-aware nav)
 
 ### Phase 3: US1 — Live Tutoring Session (T016-T034) — CRITICAL PATH
-- [ ] HeyGen avatar client + API token route
-- [ ] Canvas command executor + math templates
-- [ ] Claude tutor brain + Socratic prompt
-- [ ] `/api/tutor/respond` route
-- [ ] Hooks: useAvatar, useCanvas, useTutorBrain, useSession
-- [ ] Components: AvatarPanel, CanvasPanel, ChatPanel, SessionControls
-- [ ] Session page (THE core page)
+- [ ] **T016** `/api/heygen/token/route.ts` — server-side token generation
+- [ ] **T017** HeyGen avatar client implementation
+- [ ] **T018** HeyGen types implementation
+- [ ] **T019** Canvas types (stub exists)
+- [ ] **T020** Canvas command executor + 4 math templates
+- [ ] **T021** Claude tutor brain client implementation
+- [ ] **T022** Socratic tutor system prompt (THE most important task)
+- [ ] **T023** `/api/tutor/respond/route.ts`
+- [ ] **T024-T028** Hooks: useAvatar, useCanvas, useTutorBrain, useSession
+- [ ] **T029-T032** Components: AvatarPanel, CanvasPanel, ChatPanel, SessionControls
+- [ ] **T033** Session page (`src/app/student/session/page.tsx`)
+- [ ] **T034** Student home page
 
-### Phase 4: US2 — Parent Dashboard (T035-T047)
-- [ ] Login page (parent auth + student PIN)
-- [ ] Parent dashboard pages (overview, children, goals, progress, sessions)
-- [ ] Parent components (ChildCard, GoalForm, ProgressChart, SummaryCard)
-- [ ] Session + progress API routes
-
-### Phase 5: US3 — Learning Plans (T048-T052)
-- [ ] Learning plan generation via Claude
-- [ ] `/api/tutor/plan` route
-- [ ] Session integration with learning plan context
-
-### Phase 6: US4 — Recording + Transcript (T053-T058)
-- [ ] Recall.ai client + API routes
-- [ ] In-memory transcript fallback
-- [ ] Session summary generation
-
-### Phase 7: US5 — Knowledge Lookup (T059-T061)
-- [ ] Perplexity client
-- [ ] `/api/search` route
-- [ ] Integration with tutor respond route
-
-### Phase 8: Polish + Demo (T062-T068)
-- [ ] Landing page
-- [ ] Demo account with sample data
-- [ ] Prompt tuning, canvas polish, edge cases
-- [ ] Demo rehearsal + backup video
+### Phase 4-8: See `specs/001-minerva-mvp/tasks.md` for full details
 
 ---
 
 ## Notes for Next Session
 
-- **Start with T003-T011** (all parallelizable) — create all type files, placeholder files, and directory structure
-- Then **T012-T015** (foundational) — Supabase setup, layout, shared components
-- Then **T016-T034** (US1) — this is the critical path to the "wow moment"
-- All task details with exact file paths are in `specs/001-minerva-mvp/tasks.md`
-- All module interfaces are in `specs/001-minerva-mvp/contracts/`
-- Database schema is in `specs/001-minerva-mvp/data-model.md`
+- **Phase 2 (T012-T015)** requires a real Supabase project — need API keys in .env.local
+- **Phase 3** is the critical path — the "wow moment" for the demo
+- Per constitution VI, **research HeyGen SDK 2.1.0, tldraw 4.3.1, Zustand 5.x** before implementing
+- The Zustand store (T010) is already fully implemented — hooks can build on it immediately
+- Supabase client wrappers (T008) use @supabase/ssr cookie patterns — ready for auth
+- `npm run check` validates lint + types in one command
