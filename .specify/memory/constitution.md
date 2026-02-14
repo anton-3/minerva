@@ -41,8 +41,31 @@ Never depend directly on code you don't control. All external APIs (HeyGen, Clau
 - **No over-engineering**: Build the simplest thing that works. YAGNI applies.
 - **Fail gracefully**: If an external API call fails, the session should continue. Canvas errors never break the tutor conversation.
 
+## VI. Research Before Building
+
+**MANDATORY for all AI agents** (Claude Code, Cursor, GitHub Copilot, etc.):
+
+Before implementing any major phase, feature, or integration, you MUST research:
+1. **Official docs** for the specific library version we're using (Feb 2026 versions — see Technology Requirements)
+2. **GitHub issues/discussions** for common pitfalls and breaking changes
+3. **Community examples** — Devpost projects, tutorials, blog posts from 2025-2026
+4. **Best practices** — patterns that the community has converged on
+
+This prevents building with outdated APIs, deprecated patterns, or approaches the community has already found better alternatives for. We are building in **February 2026** — verify everything against current versions.
+
+## VII. Session Continuity
+
+After completing every meaningful task or group of tasks:
+1. **Update `progress.md`** (project root) — mark tasks complete, note what was built, update "Next Steps"
+2. **Update `plan.md`** (project root) if anything changes architecturally
+3. At the start of every session, read `CLAUDE.md`, then `progress.md`, then this constitution
+
+These files are the handoff between sessions. Any AI agent should be able to pick up exactly where the last one left off by reading them.
+
+**Full project vision and strategy**: See [humble-discovering-sunrise.md](/Users/kimsanov/.claude/plans/humble-discovering-sunrise.md) — the original planning document with architecture, timeline, prize strategy, demo script, and risk mitigations.
+
 ## Governance
 
 This constitution supersedes all other practices. All code must comply with the black box interface principle. External dependencies must always be wrapped. When in doubt, ask: "Can someone rewrite this module using only its interface?"
 
-**Version**: 1.0.0 | **Ratified**: 2026-02-14
+**Version**: 1.1.0 | **Ratified**: 2026-02-14
