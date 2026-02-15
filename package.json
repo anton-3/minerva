@@ -16,6 +16,7 @@
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.44",
     "@ai-sdk/google": "^3.0.29",
+    "@ai-sdk/openai": "^3.0.29",
     "@heygen/liveavatar-web-sdk": "^0.0.10",
     "@heygen/streaming-avatar": "^2.1.0",
     "@types/jsonwebtoken": "^9.0.10",

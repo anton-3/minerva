@@ -9,9 +9,11 @@ export type AIModelId =
   | "claude-sonnet-4-5-20250929"
   | "claude-haiku-4-5-20251001"
   | "gemini-3-pro-preview"
-  | "gemini-3-flash-preview";
+  | "gemini-3-flash-preview"
+  | "gpt-5-nano"
+  | "gpt-5.2-chat-latest";
 
-export type AIProvider = "anthropic" | "google";
+export type AIProvider = "anthropic" | "google" | "openai";
 
 export interface AIModelConfig {
   id: AIModelId;
@@ -24,6 +26,8 @@ export const AI_MODELS: AIModelConfig[] = [
   { id: "claude-haiku-4-5-20251001", provider: "anthropic", displayName: "Claude Haiku 4.5" },
   { id: "gemini-3-pro-preview", provider: "google", displayName: "Gemini 3 Pro" },
   { id: "gemini-3-flash-preview", provider: "google", displayName: "Gemini 3 Flash" },
+  { id: "gpt-5-nano", provider: "openai", displayName: "GPT-5 Nano" },
+  { id: "gpt-5.2-chat-latest", provider: "openai", displayName: "GPT-5.2 Chat" },
 ];
 
 export const DEFAULT_MODEL: AIModelId = "claude-sonnet-4-5-20250929";

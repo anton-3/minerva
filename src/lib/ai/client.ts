@@ -1,5 +1,5 @@
 // Claude tutor brain — AI SDK wrapper with Tool Calling
-// Uses Vercel AI SDK (@ai-sdk/anthropic, @ai-sdk/google) for multi-model support.
+// Uses Vercel AI SDK (@ai-sdk/anthropic, @ai-sdk/google, @ai-sdk/openai) for multi-model support.
 // See: specs/001-minerva-mvp/contracts/tutor-brain.md
 //
 // Architecture:
@@ -14,9 +14,11 @@
 // Multi-model support:
 // - Anthropic: Claude Sonnet 4.5, Claude Haiku 4.5
 // - Google: Gemini 3 Pro, Gemini 3 Flash
+// - OpenAI: GPT-5 Nano, GPT-5.2 Chat
 
 import { anthropic } from "@ai-sdk/anthropic";
 import { google } from "@ai-sdk/google";
+import { openai } from "@ai-sdk/openai";
 import { generateObject, streamText, tool, stepCountIs, type ModelMessage, type LanguageModel } from "ai";
 import { z } from "zod";
 import type {
@@ -217,6 +219,10 @@ function getModel(modelId: AIModelId = DEFAULT_MODEL): LanguageModel {
   // Google Gemini models
   if (modelId.startsWith("gemini-")) {
     return google(modelId);
+  }
+  // OpenAI models
+  if (modelId.startsWith("gpt-")) {
+    return openai(modelId);
   }
   // Fallback to default
   console.warn(`[tutor] Unknown model ID: ${modelId}, falling back to default`);

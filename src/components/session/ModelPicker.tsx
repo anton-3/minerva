@@ -41,8 +41,10 @@ export function ModelPicker({ className }: ModelPickerProps) {
             <span className="flex items-center gap-2">
               {model.provider === "anthropic" ? (
                 <span className="text-orange-500 text-xs font-medium">A</span>
-              ) : (
+              ) : model.provider === "google" ? (
                 <span className="text-blue-500 text-xs font-medium">G</span>
+              ) : (
+                <span className="text-green-500 text-xs font-medium">O</span>
               )}
               {model.displayName}
             </span>
