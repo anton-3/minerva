@@ -13,9 +13,6 @@
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.44",
     "@heygen/liveavatar-web-sdk": "^0.0.10",
-    "@heygen/streaming-avatar": "^2.1.0",
-    "@supabase/ssr": "^0.8.0",
-    "@supabase/supabase-js": "^2.95.3",
     "@types/jsonwebtoken": "^9.0.10",
     "@zoom/videosdk": "^2.3.14",
     "ai": "^6.0.86",
