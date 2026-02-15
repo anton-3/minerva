@@ -69,6 +69,13 @@ export function useZoom() {
     return false;
   }, []);
 
+  const setMuted = useCallback(async (value: boolean) => {
+    if (clientRef.current) {
+      await clientRef.current.setMuted(value);
+      setIsMuted(value);
+    }
+  }, []);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -85,5 +92,6 @@ export function useZoom() {
     stopVideo,
     startAudio,
     toggleMute,
+    setMuted,
   };
 }

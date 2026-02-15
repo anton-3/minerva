@@ -20,6 +20,8 @@ export default function SessionPage() {
     isProcessing,
     conversationHistory,
     attach,
+    avatarMute,
+    avatarUnmute,
     startSession,
     endSession,
     handleTextMessage,
@@ -42,6 +44,7 @@ export default function SessionPage() {
   const [videoStarted, setVideoStarted] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [micOpen, setMicOpen] = useState(false);
 
   // Start Zoom video when connected and container is ready
   const startSelfView = useCallback(async () => {
@@ -72,6 +75,37 @@ export default function SessionPage() {
       setUnreadCount(0);
     }
   }, [chatOpen]);
+
+  // Push-to-talk: hold Space to unmute, release to mute
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code !== "Space" || e.repeat) return;
+      // Don't intercept when typing in an input, textarea, or contentEditable
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable) return;
+
+      e.preventDefault();
+      setMicOpen(true);
+      avatarUnmute();
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code !== "Space") return;
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable) return;
+
+      e.preventDefault();
+      setMicOpen(false);
+      avatarMute();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
+  }, [avatarMute, avatarUnmute]);
 
   const handleNewMessage = useCallback(() => {
     if (!chatOpen) {
@@ -132,6 +166,21 @@ export default function SessionPage() {
         isProcessing={isProcessing}
         onNewMessage={handleNewMessage}
       />
+
+      {/* Push-to-talk indicator */}
+      {status === "active" && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-[80px] flex justify-center">
+          <div
+            className={`rounded-full px-4 py-2 text-sm font-medium transition-all duration-150 ${
+              micOpen
+                ? "bg-red-500/90 text-white scale-105"
+                : "bg-white/10 text-white/60"
+            }`}
+          >
+            {micOpen ? "Listening..." : "Hold Space to talk"}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

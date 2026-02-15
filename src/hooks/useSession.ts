@@ -160,6 +160,8 @@ export function useSession() {
     isProcessing: brain.isProcessing,
     conversationHistory,
     attach: avatar.attach,
+    avatarMute: avatar.mute,
+    avatarUnmute: avatar.unmute,
     startSession,
     endSession,
     handleTextMessage: brain.handleStudentMessage,
@@ -176,6 +178,7 @@ export function useSession() {
     zoomStatus: zoom.status,
     zoomStartVideo: zoom.startVideo,
     zoomToggleMute: zoom.toggleMute,
+    zoomSetMuted: zoom.setMuted,
     zoomIsMuted: zoom.isMuted,
   };
 }

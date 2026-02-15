@@ -300,7 +300,7 @@ export function createTutorBrain(): TutorBrain {
 
         const finalMessage = await stream.finalMessage();
         const text =
-          finalMessage.content[0].type === "text"
+          finalMesspage.content[0].type === "text"
             ? finalMessage.content[0].text
             : "";
 

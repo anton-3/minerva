@@ -32,6 +32,9 @@ export interface ZoomClient {
   /** Mute/unmute mic */
   toggleMute(): Promise<boolean>;
 
+  /** Explicitly set muted state (for push-to-talk) */
+  setMuted(muted: boolean): Promise<void>;
+
   /** Check if currently muted */
   isMuted(): boolean;
 

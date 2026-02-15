@@ -12,6 +12,7 @@ export async function POST() {
       { status: 500 }
     );
   }
+  const sandbox = process.env.HEYGEN_SANDBOX === "true";
 
   const res = await fetch("https://api.liveavatar.com/v1/sessions/token", {
     method: "POST",
@@ -21,7 +22,8 @@ export async function POST() {
     },
     body: JSON.stringify({
       mode: "FULL",
-      avatar_id: process.env.HEYGEN_AVATAR_ID,
+      avatar_id: sandbox ? "dd73ea75-1218-4ef3-92ce-606d5f7fbc0a" : process.env.HEYGEN_AVATAR_ID,
+      is_sandbox: sandbox,
       // FULL mode: avatar rendering + built-in TTS via session.repeat(text).
       // We only use repeat() for TTS — LLM is Claude, STT is browser Web Speech API.
       avatar_persona: {
