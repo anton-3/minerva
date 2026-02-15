@@ -15,23 +15,29 @@ import type {
   TutorBrainResponse,
   SessionSummary,
   LearningPlan,
-  VisualizationPlan,
 } from "@/types/session";
 import {
   TUTOR_SYSTEM_PROMPT,
   SUMMARY_SYSTEM_PROMPT,
   LEARNING_PLAN_SYSTEM_PROMPT,
-  VISUALIZATION_SYSTEM_PROMPT,
 } from "./prompts";
 
 export interface TutorBrain {
   respond(request: TutorBrainRequest): Promise<TutorBrainResponse>;
-  generateVisualization(plan: VisualizationPlan): Promise<{ sandboxHtml: string }>;
+  respondStream(
+    request: TutorBrainRequest,
+    signal?: AbortSignal
+  ): AsyncGenerator<TutorStreamEvent>;
   generateSummary(
     transcript: { speaker: string; text: string }[]
   ): Promise<SessionSummary>;
   generateLearningPlan(goals: string[], subject: string): Promise<LearningPlan>;
 }
+
+// SSE stream events emitted by respondStream()
+export type TutorStreamEvent =
+  | { type: "speech"; speech: string }
+  | { type: "result"; data: Omit<TutorBrainResponse, "speech"> };
 
 // Zod schemas for structured output
 // Multi-tool canvas commands: Desmos, Desmos 3D, GeoGebra
@@ -94,12 +100,6 @@ const CanvasCommandSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("geogebra.clear") }),
 ]);
 
-const VisualizationPlanSchema = z.object({
-  description: z.string(),
-  topic: z.string(),
-  studentAge: z.number(),
-});
-
 const TutorResponseSchema = z.object({
   speech: z.string(),
   canvasCommands: z.array(CanvasCommandSchema).optional(),
@@ -112,11 +112,7 @@ const TutorResponseSchema = z.object({
     .optional(),
   manimVideoUrl: z.string().optional(),
   contentMode: z.enum(["math", "sandbox", "manim"]).optional(),
-  visualizationPlan: VisualizationPlanSchema.optional(),
-});
-
-const VisualizationResponseSchema = z.object({
-  sandboxHtml: z.string(),
+  sandboxHtml: z.string().optional(),
 });
 
 const SessionSummarySchema = z.object({
@@ -181,79 +177,84 @@ const MODEL_FAST = "claude-haiku-4-5-20251001";
 const MODEL = "claude-sonnet-4-5-20250929";
 const MAX_HISTORY = 20;
 
+// Helper: build Claude request from TutorBrainRequest (shared by respond + respondStream)
+function buildClaudeRequest(request: TutorBrainRequest): {
+  messages: Anthropic.MessageParam[];
+  systemPrompt: string;
+  hasImage: boolean;
+} {
+  const recentHistory = request.conversationHistory.slice(-MAX_HISTORY);
+
+  const contextParts: string[] = [];
+  if (request.studentProfile) {
+    const p = request.studentProfile;
+    contextParts.push(`Student: ${p.name}, age ${p.age}, grade ${p.grade}`);
+  }
+  if (request.learningPlan) {
+    const lp = request.learningPlan;
+    contextParts.push(
+      `Learning Plan: ${lp.subject} — Current topic: "${lp.currentTopic}". Goals: ${lp.goals.join(", ")}`
+    );
+  }
+  if (request.canvasState) {
+    contextParts.push(`Math Canvas:\n${request.canvasState}`);
+  }
+  if (request.masteryScores && request.masteryScores.length > 0) {
+    const masteryText = request.masteryScores
+      .map((m) => `${m.subject}/${m.topic}: ${Math.round(m.score * 100)}%`)
+      .join(", ");
+    contextParts.push(`Mastery: ${masteryText}`);
+  }
+
+  const contextBlock =
+    contextParts.length > 0
+      ? `\n\n--- Context ---\n${contextParts.join("\n")}\n--- End Context ---`
+      : "";
+
+  const userText = `${request.studentMessage}${contextBlock}`;
+  const hasImage = !!request.imageData;
+
+  const userContent: Anthropic.ContentBlockParam[] = request.imageData
+    ? [
+        {
+          type: "image" as const,
+          source: {
+            type: "base64" as const,
+            media_type: request.imageData.mediaType,
+            data: request.imageData.base64,
+          },
+        },
+        { type: "text" as const, text: userText },
+      ]
+    : [{ type: "text" as const, text: userText }];
+
+  const messages: Anthropic.MessageParam[] = [
+    ...recentHistory.map((m) => ({
+      role: m.role as "user" | "assistant",
+      content: m.content,
+    })),
+    {
+      role: "user" as const,
+      content: userContent,
+    },
+  ];
+
+  const systemPrompt = hasImage
+    ? TUTOR_SYSTEM_PROMPT +
+      `\n\nRESPONSE FORMAT: You MUST respond with a valid JSON object. Example: {"speech": "your spoken response here", "contentMode": "sandbox", "sandboxHtml": "<html>...</html>"}\nOnly output the JSON object, nothing else.`
+    : TUTOR_SYSTEM_PROMPT;
+
+  return { messages, systemPrompt, hasImage };
+}
+
 export function createTutorBrain(): TutorBrain {
   const client = new Anthropic();
 
   return {
     async respond(request: TutorBrainRequest): Promise<TutorBrainResponse> {
-      // Trim conversation history to last MAX_HISTORY messages
-      const recentHistory = request.conversationHistory.slice(-MAX_HISTORY);
-
-      // Build context for Claude
-      const contextParts: string[] = [];
-      if (request.studentProfile) {
-        const p = request.studentProfile;
-        contextParts.push(
-          `Student: ${p.name}, age ${p.age}, grade ${p.grade}`
-        );
-      }
-      if (request.learningPlan) {
-        const lp = request.learningPlan;
-        contextParts.push(
-          `Learning Plan: ${lp.subject} — Current topic: "${lp.currentTopic}". Goals: ${lp.goals.join(", ")}`
-        );
-      }
-      if (request.canvasState) {
-        contextParts.push(`Math Canvas:\n${request.canvasState}`);
-      }
-      if (request.masteryScores && request.masteryScores.length > 0) {
-        const masteryText = request.masteryScores
-          .map((m) => `${m.subject}/${m.topic}: ${Math.round(m.score * 100)}%`)
-          .join(", ");
-        contextParts.push(`Mastery: ${masteryText}`);
-      }
-
-      const contextBlock =
-        contextParts.length > 0
-          ? `\n\n--- Context ---\n${contextParts.join("\n")}\n--- End Context ---`
-          : "";
-
-      // Build user content — text or multimodal (text + image)
-      const userText = `${request.studentMessage}${contextBlock}`;
-      const userContent: Anthropic.ContentBlockParam[] = request.imageData
-        ? [
-            {
-              type: "image" as const,
-              source: {
-                type: "base64" as const,
-                media_type: request.imageData.mediaType,
-                data: request.imageData.base64,
-              },
-            },
-            { type: "text" as const, text: userText },
-          ]
-        : [{ type: "text" as const, text: userText }];
-
-      const messages: Anthropic.MessageParam[] = [
-        ...recentHistory.map((m) => ({
-          role: m.role as "user" | "assistant",
-          content: m.content,
-        })),
-        {
-          role: "user" as const,
-          content: userContent,
-        },
-      ];
+      const { messages, systemPrompt, hasImage } = buildClaudeRequest(request);
 
       try {
-        const hasImage = !!request.imageData;
-
-        // Vision requests: skip output_config (structured outputs can be unreliable with images on Haiku)
-        // Instead, append JSON instruction to system prompt and parse manually
-        const systemPrompt = hasImage
-          ? TUTOR_SYSTEM_PROMPT + `\n\nRESPONSE FORMAT: You MUST respond with a valid JSON object. Example: {"speech": "your spoken response here", "contentMode": "sandbox", "visualizationPlan": {"description": "...", "topic": "...", "studentAge": 12}}\nOnly output the JSON object, nothing else.`
-          : TUTOR_SYSTEM_PROMPT;
-
         const createParams: Anthropic.MessageCreateParams = {
           model: MODEL_FAST,
           max_tokens: 4096,
@@ -304,45 +305,86 @@ export function createTutorBrain(): TutorBrain {
       }
     },
 
+    async *respondStream(
+      request: TutorBrainRequest,
+      signal?: AbortSignal
+    ): AsyncGenerator<TutorStreamEvent> {
+      const { messages, systemPrompt, hasImage } = buildClaudeRequest(request);
+      const SPEECH_REGEX = /"speech"\s*:\s*"((?:[^"\\]|\\.)*)"\s*[,}]/;
 
-    async generateVisualization(plan: VisualizationPlan): Promise<{ sandboxHtml: string }> {
       try {
-        const response = await client.messages.create({
-          model: MODEL_FAST,
-          max_tokens: 4096,
-          system: VISUALIZATION_SYSTEM_PROMPT,
-          messages: [
-            {
-              role: "user",
-              content: `Topic: ${plan.topic}\nStudent age: ${plan.studentAge}\nVisualization: ${plan.description}`,
-            },
-          ],
-          output_config: {
-            format: zodOutputFormat(VisualizationResponseSchema),
+        const stream = client.messages.stream(
+          {
+            model: MODEL_FAST,
+            max_tokens: 4096,
+            system: systemPrompt,
+            messages,
+            ...(hasImage
+              ? {}
+              : {
+                  output_config: {
+                    format: zodOutputFormat(TutorResponseSchema),
+                  },
+                  thinking: { type: "disabled" as const },
+                }),
           },
-          thinking: {
-            type: "disabled" as const,
-          },
-        });
+          signal ? { signal } : undefined
+        );
 
-        const text =
-          response.content[0].type === "text" ? response.content[0].text : "{}";
-        const parsed = VisualizationResponseSchema.safeParse(JSON.parse(text));
-        if (parsed.success) {
-          return parsed.data;
+        let buffer = "";
+        let speechEmitted = false;
+
+        for await (const event of stream) {
+          if (
+            event.type === "content_block_delta" &&
+            event.delta.type === "text_delta"
+          ) {
+            buffer += event.delta.text;
+
+            if (!speechEmitted) {
+              const match = buffer.match(SPEECH_REGEX);
+              if (match) {
+                speechEmitted = true;
+                // Use JSON.parse for proper unescape of JSON string values
+                let speech: string;
+                try {
+                  speech = JSON.parse(`"${match[1]}"`);
+                } catch {
+                  speech = match[1]
+                    .replace(/\\"/g, '"')
+                    .replace(/\\n/g, "\n")
+                    .replace(/\\\\/g, "\\");
+                }
+                yield { type: "speech", speech };
+              }
+            }
+          }
         }
 
-        // Fallback: try to extract sandboxHtml from raw JSON
-        const raw = JSON.parse(text);
-        if (raw && typeof raw.sandboxHtml === "string") {
-          return { sandboxHtml: raw.sandboxHtml };
+        // Stream finished — parse full response for remaining fields
+        const fullResponse = tryParseJson(buffer);
+        if (fullResponse) {
+          if (!speechEmitted) {
+            yield { type: "speech", speech: fullResponse.speech };
+          }
+          const { speech: _, ...rest } = fullResponse;
+          yield { type: "result", data: rest };
+        } else if (!speechEmitted) {
+          yield {
+            type: "speech",
+            speech:
+              buffer.slice(0, 500) ||
+              "I'm having trouble right now. Can you try again?",
+          };
         }
-
-        console.warn("[tutor] Visualization response invalid, returning empty");
-        return { sandboxHtml: "" };
       } catch (err) {
-        console.error("[tutor] Error generating visualization:", err);
-        return { sandboxHtml: "" };
+        if (signal?.aborted) return;
+        console.error("[tutor] Stream error:", err);
+        yield {
+          type: "speech",
+          speech:
+            "I'm having a little trouble right now. Can you repeat what you said?",
+        };
       }
     },
 

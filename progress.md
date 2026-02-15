@@ -2,9 +2,45 @@
 
 > **For AI agents**: Read this file first to understand where the project is. Update it after every meaningful task or group of tasks.
 
-**Last updated**: 2026-02-14 (Session 10b)
+**Last updated**: 2026-02-15 (Session 11)
 **Branch**: `001-minerva-mvp`
-**Overall status**: Phases 1-8 COMPLETE (T001-T067). **NEW**: Session 10b — Zoom-style floating PiP overlay (replaces side-by-side panels), 3 view modes (strip/speaker/gallery), resizable + draggable, sandbox viewport fit. TypeScript passes clean (0 errors).
+**Overall status**: Phases 1-8 COMPLETE (T001-T067). **NEW**: Session 11 — SSE streaming pipeline. Speech arrives ~1s (avatar starts talking immediately) while sandboxHtml generates in background (~3-5s). TypeScript passes clean (0 errors).
+
+---
+
+## Session 11: SSE Streaming Pipeline — Speech-First Response Architecture
+
+**Major change**: Rearchitected the tutor response pipeline from single JSON response to SSE streaming. Speech field is extracted early via regex and emitted immediately, so the avatar starts speaking while sandboxHtml/canvasCommands are still generating.
+
+### What Changed
+- [x] **`respondStream()` async generator** — New method on TutorBrain that uses `client.messages.stream()` + regex-based speech extraction. Yields `speech` event as soon as the speech field is complete, then `result` event with remaining fields.
+- [x] **SSE API route** — `/api/tutor/respond` now returns `text/event-stream` with `ReadableStream`. Events: `speech`, `result`, `done`, `error`. Perplexity enrichment still runs before stream starts.
+- [x] **Frontend SSE consumption** — `useTutorBrain` reads SSE events via `fetch()` + `ReadableStream` reader. Avatar speaks on `speech` event (fire-and-forget). Sandbox/canvas/progress update on `result` event.
+- [x] **`buildClaudeRequest()` helper** — Extracted shared message-building logic from `respond()` to avoid duplication with `respondStream()`.
+- [x] **`sandboxLoading` state** — New boolean in Zustand store + `SessionState` type. `SandboxPanel` shows shimmer animation when loading.
+- [x] **Timeout extended to 30s** — SSE streams can take longer for full sandbox HTML generation.
+
+### Files Changed
+| File | Action |
+|------|--------|
+| `src/lib/claude/client.ts` | **MODIFIED** — Added `TutorStreamEvent` type, `respondStream()` method, `buildClaudeRequest()` helper, refactored `respond()` |
+| `src/app/api/tutor/respond/route.ts` | **REWRITTEN** — Returns SSE `ReadableStream` instead of `NextResponse.json()` |
+| `src/hooks/useTutorBrain.ts` | **REWRITTEN** — SSE stream consumption via `consumeStream()` helper, `parseSSEBuffer()` utility |
+| `src/types/session.ts` | **MODIFIED** — Added `sandboxLoading` to `SessionState` |
+| `src/stores/sessionStore.ts` | **MODIFIED** — Added `sandboxLoading` state + `setSandboxLoading` action |
+| `src/components/session/SandboxPanel.tsx` | **MODIFIED** — Added `loading` prop with shimmer animation |
+| `src/components/session/ContentMode.tsx` | **MODIFIED** — Passes `sandboxLoading` through to `SandboxPanel` |
+| `src/hooks/useSession.ts` | **MODIFIED** — Exposes `sandboxLoading` from store |
+| `src/app/student/session/page.tsx` | **MODIFIED** — Wires `sandboxLoading` to `ContentModeView` |
+
+### Architecture Notes
+- **Speech extraction regex**: `/"speech"\s*:\s*"((?:[^"\\]|\\.)*)"\s*[,}]/` — detects complete speech value in the JSON token stream. Works because `speech` is the first field in the Zod schema.
+- **Two SSE events**: `speech` (emitted early) + `result` (everything else, emitted when stream ends). Simpler than per-field events.
+- **AbortController cascade**: Frontend abort cancels the fetch → SSE ReadableStream cancel fires → server AbortController aborts Claude stream.
+- **Backward compatible**: `respond()` still exists as a non-streaming fallback.
+
+### Build Status
+- `npx tsc --noEmit` passes with 0 errors
 
 ---
 

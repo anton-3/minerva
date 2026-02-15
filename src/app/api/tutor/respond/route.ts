@@ -1,10 +1,15 @@
 // Tutor respond API route — the core brain endpoint
-// Accepts TutorBrainRequest, returns TutorBrainResponse with speech + canvasCommands
+// Accepts TutorBrainRequest, returns SSE stream: speech first, then remaining fields.
 // Optionally enriches with Perplexity Sonar for factual grounding (T061)
 // See: specs/001-minerva-mvp/contracts/tutor-brain.md
 //
-// Opt 2: Perplexity lookup now runs IN PARALLEL with Claude call.
-// If Perplexity wins the race, its knowledge is injected. If not, Claude answers alone.
+// SSE events:
+//   data: {"type":"speech","speech":"..."}       — emitted as soon as speech field is extracted
+//   data: {"type":"result","data":{...}}         — remaining fields (canvasCommands, sandboxHtml, etc.)
+//   data: {"type":"done"}                        — stream complete
+//   data: {"type":"error","speech":"..."}        — fallback speech on error
+//
+// Perplexity enrichment runs BEFORE the stream starts (max 3s race timeout).
 
 import { NextResponse } from "next/server";
 import { createTutorBrain } from "@/lib/claude/client";
@@ -28,48 +33,45 @@ function looksLikeFactualQuestion(message: string): boolean {
 }
 
 export async function POST(request: Request) {
+  // Reject oversized payloads (5MB limit for image uploads)
+  const contentLength = request.headers.get("content-length");
+  if (contentLength && parseInt(contentLength) > 5 * 1024 * 1024) {
+    return NextResponse.json(
+      { error: "Request too large. Max 5MB." },
+      { status: 413 }
+    );
+  }
+
+  let body: TutorBrainRequest;
   try {
-    // Reject oversized payloads (5MB limit for image uploads)
-    const contentLength = request.headers.get("content-length");
-    if (contentLength && parseInt(contentLength) > 5 * 1024 * 1024) {
-      return NextResponse.json(
-        { error: "Request too large. Max 5MB." },
-        { status: 413 }
-      );
-    }
+    body = (await request.json()) as TutorBrainRequest;
+  } catch {
+    return NextResponse.json(
+      { error: "Invalid JSON body" },
+      { status: 400 }
+    );
+  }
 
-    const body = (await request.json()) as TutorBrainRequest;
+  if (!body.studentMessage) {
+    return NextResponse.json(
+      { error: "studentMessage is required" },
+      { status: 400 }
+    );
+  }
 
-    if (!body.studentMessage) {
-      return NextResponse.json(
-        { error: "studentMessage is required" },
-        { status: 400 }
-      );
-    }
+  // Perplexity enrichment — runs before the stream starts (max 3s)
+  const needsPerplexity =
+    looksLikeFactualQuestion(body.studentMessage) &&
+    !!process.env.PERPLEXITY_API_KEY;
 
-    const needsPerplexity =
-      looksLikeFactualQuestion(body.studentMessage) &&
-      !!process.env.PERPLEXITY_API_KEY;
-
-    // Opt 2: Run Perplexity and Claude in parallel when factual question detected.
-    // Strategy: start both immediately. If Perplexity returns fast enough,
-    // inject its knowledge. Otherwise, Claude answers alone.
-    if (needsPerplexity) {
+  if (needsPerplexity) {
+    try {
       const lookup = createKnowledgeLookup();
-
-      // Race Perplexity with a tight timeout — don't let it delay Claude
-      const perplexityPromise = Promise.race([
+      const perplexityResult = await Promise.race([
         lookup.search(body.studentMessage).catch(() => null),
         new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000)),
       ]);
 
-      // Start Claude immediately (don't wait for Perplexity)
-      const brain = createTutorBrain();
-
-      // Wait for Perplexity result — max 3s
-      const perplexityResult = await perplexityPromise;
-
-      // If Perplexity returned in time, enrich the message
       if (perplexityResult && perplexityResult.answer) {
         const citationsText =
           perplexityResult.citations.length > 0
@@ -77,25 +79,48 @@ export async function POST(request: Request) {
             : "";
         body.studentMessage += `\n\n[Knowledge from Perplexity Sonar — use this for factual accuracy, but rephrase in your own Socratic teaching style:]\n${perplexityResult.answer}${citationsText}`;
       }
-
-      // Now call Claude with (possibly enriched) message
-      const response = await brain.respond(body);
-      return NextResponse.json(response);
+    } catch {
+      // Perplexity failure never blocks the response
     }
-
-    // Non-factual questions — straight to Claude
-    const brain = createTutorBrain();
-    const response = await brain.respond(body);
-
-    return NextResponse.json(response);
-  } catch (err) {
-    console.error("[api/tutor/respond] Error:", err);
-    return NextResponse.json(
-      {
-        speech:
-          "I'm having some trouble right now. Can you try saying that again?",
-      },
-      { status: 500 }
-    );
   }
+
+  // Create an AbortController so we can cancel the Claude stream if the client disconnects
+  const abortController = new AbortController();
+
+  const brain = createTutorBrain();
+  const encoder = new TextEncoder();
+
+  const stream = new ReadableStream({
+    async start(controller) {
+      try {
+        for await (const event of brain.respondStream(body, abortController.signal)) {
+          const sseData = `data: ${JSON.stringify(event)}\n\n`;
+          controller.enqueue(encoder.encode(sseData));
+        }
+        controller.enqueue(encoder.encode('data: {"type":"done"}\n\n'));
+      } catch (err) {
+        console.error("[api/tutor/respond] Stream error:", err);
+        const errorEvent = `data: ${JSON.stringify({
+          type: "error",
+          speech:
+            "I'm having some trouble right now. Can you try saying that again?",
+        })}\n\n`;
+        controller.enqueue(encoder.encode(errorEvent));
+      } finally {
+        controller.close();
+      }
+    },
+    cancel() {
+      // Client disconnected — abort the Claude stream
+      abortController.abort();
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    },
+  });
 }
