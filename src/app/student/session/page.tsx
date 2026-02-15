@@ -13,6 +13,7 @@ import { BottomControlBar } from "@/components/session/BottomControlBar";
 import { ChatSheet } from "@/components/session/ChatSheet";
 import type { ContentMode } from "@/types/session";
 import { captureFrame } from "@/lib/camera/scanner";
+import { ParticlesBackground } from "@/components/session/ParticlesBackground";
 
 export default function SessionPage() {
   const {
@@ -67,34 +68,50 @@ export default function SessionPage() {
     }
   }, [chatOpen]);
 
-  // Push-to-talk: hold Space to unmute, release to mute
+  // Push-to-talk: hold Space to unmute, release to mute.
+  // Handles both direct key events AND postMessage from sandboxed iframes
+  // (iframes capture focus on click, so parent window misses key events).
   useEffect(() => {
+    const pttDown = () => {
+      setMicOpen(true);
+      avatarUnmute();
+    };
+    const pttUp = () => {
+      setMicOpen(false);
+      avatarFlush();  // send accumulated text immediately
+      avatarMute();   // then mute mic
+    };
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.code !== "Space" || e.repeat) return;
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable) return;
-
       e.preventDefault();
-      setMicOpen(true);
-      avatarUnmute();
+      pttDown();
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
       if (e.code !== "Space") return;
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable) return;
-
       e.preventDefault();
-      setMicOpen(false);
-      avatarFlush();  // send accumulated text immediately
-      avatarMute();   // then mute mic
+      pttUp();
+    };
+
+    // Listen for Space key forwarded from sandboxed iframes via postMessage
+    const handleMessage = (e: MessageEvent) => {
+      if (e.data?.type !== "ptt") return;
+      if (e.data.action === "down") pttDown();
+      else if (e.data.action === "up") pttUp();
     };
 
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
+    window.addEventListener("message", handleMessage);
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
+      window.removeEventListener("message", handleMessage);
     };
   }, [avatarMute, avatarUnmute, avatarFlush]);
 
@@ -123,7 +140,12 @@ export default function SessionPage() {
   );
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-black">
+    <div className="relative h-screen w-screen overflow-hidden bg-neutral-background">
+      {/* Animated particle network background — grab effect on mouse move */}
+      <ParticlesBackground />
+      {/* Light overlay so particles stay subtle behind content */}
+      <div className="absolute inset-0 bg-white/30" />
+
       {/* Main content area — full screen */}
       <main className="absolute inset-0">
         <ContentModeView
@@ -147,22 +169,6 @@ export default function SessionPage() {
         collapsed={avatarCollapsed}
         onCollapsedChange={setAvatarCollapsed}
       />
-
-      {/* Mode indicator badge */}
-      <div className="absolute top-3 left-3 z-10">
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-black/60 backdrop-blur-sm px-3 py-1 text-xs font-medium text-white/90" style={{ WebkitBackdropFilter: "blur(4px)" }}>
-          <span className={`w-1.5 h-1.5 rounded-full ${
-            contentMode === "welcome" ? "bg-purple-400" :
-            contentMode === "math" ? "bg-blue-400" :
-            contentMode === "sandbox" ? "bg-green-400" :
-            "bg-purple-400"
-          }`} />
-          {contentMode === "welcome" ? "Minerva" :
-           contentMode === "math" ? "Math Canvas" :
-           contentMode === "sandbox" ? "Interactive" :
-           "Video"}
-        </span>
-      </div>
 
       {/* Bottom control bar */}
       <BottomControlBar
@@ -207,8 +213,8 @@ export default function SessionPage() {
           <div
             className={`rounded-full px-4 py-2 text-sm font-medium transition-all duration-150 ${
               micOpen
-                ? "bg-[#67E8F9]/90 text-[#0C0A14] scale-105"
-                : "bg-white/10 text-white/60"
+                ? "bg-brand-primary text-white scale-105"
+                : "bg-neutral-surface text-text-secondary border border-border-light"
             }`}
           >
             {micOpen ? "Listening..." : "Hold Space to talk"}

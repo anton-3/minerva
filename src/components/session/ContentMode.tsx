@@ -72,17 +72,12 @@ export function ContentModeView({
 
 function WelcomePanel() {
   return (
-    <div className="w-full h-full flex items-center justify-center bg-[#0C0A14]">
+    <div className="w-full h-full flex items-center justify-center">
       <div className="text-center max-w-md px-6">
-        {/* Logo mark */}
-        <div className="mx-auto mb-6 w-16 h-16 rounded-2xl bg-[#A78BFA]/10 border border-[#A78BFA]/20 flex items-center justify-center">
-          <span className="text-[#A78BFA] font-bold text-2xl">M</span>
-        </div>
-
-        <h2 className="text-2xl font-bold text-white mb-2">
+        <h2 className="font-display text-2xl font-bold text-text-primary mb-2">
           Welcome to Minerva
         </h2>
-        <p className="text-white/50 text-sm leading-relaxed mb-8">
+        <p className="text-text-secondary text-sm leading-relaxed mb-8">
           Your AI tutor is ready. Ask about any subject — math, physics,
           chemistry, history, biology, or anything you&apos;re curious about.
         </p>
@@ -92,15 +87,15 @@ function WelcomePanel() {
           {["Algebra", "Physics", "Chemistry", "World History", "Biology", "Economics"].map((topic) => (
             <span
               key={topic}
-              className="rounded-full bg-white/5 border border-white/10 px-3 py-1 text-xs text-white/40"
+              className="rounded-full px-3 py-1 text-xs bg-neutral-surface border border-border-light text-text-secondary"
             >
               {topic}
             </span>
           ))}
         </div>
 
-        <p className="mt-8 text-white/25 text-xs">
-          Hold Space to talk · Visuals appear automatically
+        <p className="mt-8 text-text-secondary/40 text-xs">
+          Hold <span className="text-brand-primary">Space</span> to talk &middot; Visuals appear automatically
         </p>
       </div>
     </div>

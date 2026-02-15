@@ -62,77 +62,43 @@
   --radius-4xl: calc(var(--radius) + 16px);
 }
 
-/* Minerva — Soft Lavender + Aqua
-   Dark-only theme. Deep purple-black backgrounds with lavender primary and aqua accent. */
+/* Minerva — Light Theme
+   Soft blue-lavender (#92A0E1) + purple (#C2A0E1) + warm gold accent (#F5C563)
+   Clean white surfaces on #F7F9FC background. */
 
 :root {
   --radius: 0.625rem;
-  --background: #0C0A14;
-  --foreground: #FAFAFA;
-  --card: #161327;
-  --card-foreground: #FAFAFA;
-  --popover: #161327;
-  --popover-foreground: #FAFAFA;
-  --primary: #A78BFA;
-  --primary-foreground: #0C0A14;
-  --secondary: #1E1A2E;
-  --secondary-foreground: #FAFAFA;
-  --muted: #1E1A2E;
-  --muted-foreground: rgba(255,255,255,0.5);
-  --accent: #67E8F9;
-  --accent-foreground: #0C0A14;
+  --background: #F7F9FC;
+  --foreground: #111111;
+  --card: #FFFFFF;
+  --card-foreground: #111111;
+  --popover: #FFFFFF;
+  --popover-foreground: #111111;
+  --primary: #92A0E1;
+  --primary-foreground: #FFFFFF;
+  --secondary: #F0F2F8;
+  --secondary-foreground: #111111;
+  --muted: #F0F2F8;
+  --muted-foreground: #525252;
+  --accent: #F5C563;
+  --accent-foreground: #111111;
   --destructive: #EF4444;
-  --border: rgba(167,139,250,0.1);
-  --input: rgba(167,139,250,0.15);
-  --ring: #A78BFA;
-  --chart-1: #A78BFA;
-  --chart-2: #67E8F9;
-  --chart-3: #C4B5FD;
-  --chart-4: #22D3EE;
-  --chart-5: #818CF8;
-  --sidebar: #0E0C18;
-  --sidebar-foreground: #FAFAFA;
-  --sidebar-primary: #A78BFA;
-  --sidebar-primary-foreground: #0C0A14;
-  --sidebar-accent: #1E1A2E;
-  --sidebar-accent-foreground: #FAFAFA;
-  --sidebar-border: rgba(167,139,250,0.08);
-  --sidebar-ring: #A78BFA;
-}
-
-/* Dark mode uses same values (dark-only app) */
-.dark {
-  --background: #0C0A14;
-  --foreground: #FAFAFA;
-  --card: #161327;
-  --card-foreground: #FAFAFA;
-  --popover: #161327;
-  --popover-foreground: #FAFAFA;
-  --primary: #A78BFA;
-  --primary-foreground: #0C0A14;
-  --secondary: #1E1A2E;
-  --secondary-foreground: #FAFAFA;
-  --muted: #1E1A2E;
-  --muted-foreground: rgba(255,255,255,0.5);
-  --accent: #67E8F9;
-  --accent-foreground: #0C0A14;
-  --destructive: #EF4444;
-  --border: rgba(167,139,250,0.1);
-  --input: rgba(167,139,250,0.15);
-  --ring: #A78BFA;
-  --chart-1: #A78BFA;
-  --chart-2: #67E8F9;
-  --chart-3: #C4B5FD;
-  --chart-4: #22D3EE;
-  --chart-5: #818CF8;
-  --sidebar: #0E0C18;
-  --sidebar-foreground: #FAFAFA;
-  --sidebar-primary: #A78BFA;
-  --sidebar-primary-foreground: #0C0A14;
-  --sidebar-accent: #1E1A2E;
-  --sidebar-accent-foreground: #FAFAFA;
-  --sidebar-border: rgba(167,139,250,0.08);
-  --sidebar-ring: #A78BFA;
+  --border: rgba(0, 0, 0, 0.08);
+  --input: rgba(0, 0, 0, 0.08);
+  --ring: #92A0E1;
+  --chart-1: #92A0E1;
+  --chart-2: #C2A0E1;
+  --chart-3: #F5C563;
+  --chart-4: #A8B5F0;
+  --chart-5: #D4C5F0;
+  --sidebar: #FFFFFF;
+  --sidebar-foreground: #111111;
+  --sidebar-primary: #92A0E1;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #F0F2F8;
+  --sidebar-accent-foreground: #111111;
+  --sidebar-border: rgba(0, 0, 0, 0.08);
+  --sidebar-ring: #92A0E1;
 }
 
 @layer base {
@@ -146,19 +112,6 @@
   input, textarea, select {
     -webkit-appearance: none;
   }
-}
-
-/* Subtle grain texture overlay — breaks the flat digital look */
-body::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
-  background-repeat: repeat;
-  background-size: 256px 256px;
-  opacity: 0.03;
-  pointer-events: none;
-  z-index: 9999;
 }
 
 /* Landing page custom utilities */

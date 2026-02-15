@@ -34,7 +34,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center space-y-2">
           <h1 className="font-display text-2xl font-bold">Minerva</h1>
-          <p className="text-muted-foreground text-sm">
+          <p className="text-text-secondary text-sm">
             AI-powered tutoring for every child
           </p>
         </div>
@@ -93,7 +93,7 @@ export default function LoginPage() {
                 maxLength={4}
                 value={pin}
                 onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
-                className="w-full rounded-lg border border-input bg-background px-3 py-4 text-center text-2xl font-mono tracking-[0.5em] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                className="w-full rounded-lg border border-input bg-background px-3 py-4 text-center text-2xl font-mono tracking-[0.5em] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary"
                 placeholder="0000"
               />
             </div>
