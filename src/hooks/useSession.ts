@@ -17,6 +17,7 @@ import { useZoom } from "./useZoom";
 import { useCanvas } from "./useCanvas";
 import { useTutorBrain } from "./useTutorBrain";
 import { useUserCamera } from "./useUserCamera";
+import { captureFrame } from "@/lib/camera/scanner";
 
 export function useSession() {
 // Use individual selectors for stable references — avoids infinite re-render loops
@@ -45,15 +46,28 @@ export function useSession() {
   const wiredRef = useRef(false);
   const sessionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Wire HeyGen ASR transcriptions → tutor brain
+  // Wire HeyGen ASR transcriptions → tutor brain.
+  // When user says "read", attach a camera screenshot so the model can see homework.
   useEffect(() => {
     if (!wiredRef.current) {
       avatar.onUserMessage((text) => {
+        const trimmed = text.trim();
+        const includeScreenshot =
+          trimmed.length > 0 &&
+          trimmed.toLowerCase().includes("read") &&
+          userCamera.videoRef.current;
+        if (includeScreenshot) {
+          const result = captureFrame(userCamera.videoRef.current!);
+          if (result) {
+            brain.handleStudentMessage(text, result);
+            return;
+          }
+        }
         brain.handleStudentMessage(text);
       });
       wiredRef.current = true;
     }
-  }, [avatar, brain]);
+  }, [avatar, brain, userCamera.videoRef]);
 
   // Track avatar status in store
   useEffect(() => {

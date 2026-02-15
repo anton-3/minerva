@@ -12,7 +12,6 @@ import { FloatingVideoOverlay } from "@/components/session/FloatingVideoOverlay"
 import { BottomControlBar } from "@/components/session/BottomControlBar";
 import { ChatSheet } from "@/components/session/ChatSheet";
 import type { ContentMode } from "@/types/session";
-import { captureFrame } from "@/lib/camera/scanner";
 import { ParticlesBackground } from "@/components/session/ParticlesBackground";
 
 export default function SessionPage() {
@@ -128,17 +127,6 @@ export default function SessionPage() {
     setContentMode(modes[nextIndex]);
   }, [contentMode, setContentMode]);
 
-  // Handle document scan — send captured frame to Claude Vision
-  const handleScan = useCallback(
-    (result: { base64: string; mediaType: "image/jpeg" }) => {
-      handleTextMessage(
-        "I'm showing you my paper — please look at what I've written and help me with it",
-        { base64: result.base64, mediaType: result.mediaType }
-      );
-    },
-    [handleTextMessage]
-  );
-
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-neutral-background">
       {/* Animated particle network background — grab effect on mouse move */}
@@ -164,7 +152,6 @@ export default function SessionPage() {
         avatarStatus={avatarStatus}
         onAttachAvatar={attach}
         userCamera={userCamera}
-        onScan={handleScan}
         isThinking={isThinking}
         collapsed={avatarCollapsed}
         onCollapsedChange={setAvatarCollapsed}
@@ -187,12 +174,6 @@ export default function SessionPage() {
             userCamera.stopCamera();
           } else {
             userCamera.startCamera();
-          }
-        }}
-        onScan={() => {
-          if (userCamera.videoRef.current) {
-            const result = captureFrame(userCamera.videoRef.current);
-            if (result) handleScan(result);
           }
         }}
       />

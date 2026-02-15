@@ -12,9 +12,7 @@ import { useRef, useEffect, useState, useCallback, type RefCallback } from "reac
 import { Rnd } from "react-rnd";
 import type { AvatarStatus } from "@/lib/heygen/types";
 import type { UseUserCamera } from "@/hooks/useUserCamera";
-import { detectDocument, type DetectionResult } from "@/lib/camera/detector";
-import { captureFrame } from "@/lib/camera/scanner";
-import { Camera, ScanLine } from "lucide-react";
+import { Camera } from "lucide-react";
 
 // ─── Types ───
 
@@ -24,7 +22,6 @@ interface FloatingVideoOverlayProps {
   avatarStatus: AvatarStatus;
   onAttachAvatar: (element: HTMLVideoElement) => void;
   userCamera: UseUserCamera;
-  onScan?: (result: { base64: string; mediaType: "image/jpeg" }) => void;
   isThinking?: boolean;
   collapsed?: boolean;
   onCollapsedChange?: (collapsed: boolean) => void;
@@ -161,46 +158,6 @@ function ResizeGrips() {
   );
 }
 
-// ─── Document Detection Overlay ───
-
-function DocumentOverlay({ detection }: { detection: DetectionResult | null }) {
-  if (!detection?.detected || !detection.corners) return null;
-
-  const [tl, tr, br, bl] = detection.corners;
-  const bs = 20;
-
-  return (
-    <div className="absolute inset-0 z-10 pointer-events-none">
-      <div className="absolute inset-0 border-2 border-green-400/60 rounded-lg animate-pulse" />
-      <svg className="absolute inset-0 w-full h-full">
-        <line x1={`${tl.x*100}%`} y1={`${tl.y*100}%`} x2={`${tl.x*100+bs}%`} y2={`${tl.y*100}%`} stroke="#4ade80" strokeWidth="3" strokeLinecap="round" />
-        <line x1={`${tl.x*100}%`} y1={`${tl.y*100}%`} x2={`${tl.x*100}%`} y2={`${tl.y*100+bs}%`} stroke="#4ade80" strokeWidth="3" strokeLinecap="round" />
-        <line x1={`${tr.x*100}%`} y1={`${tr.y*100}%`} x2={`${tr.x*100-bs}%`} y2={`${tr.y*100}%`} stroke="#4ade80" strokeWidth="3" strokeLinecap="round" />
-        <line x1={`${tr.x*100}%`} y1={`${tr.y*100}%`} x2={`${tr.x*100}%`} y2={`${tr.y*100+bs}%`} stroke="#4ade80" strokeWidth="3" strokeLinecap="round" />
-        <line x1={`${br.x*100}%`} y1={`${br.y*100}%`} x2={`${br.x*100-bs}%`} y2={`${br.y*100}%`} stroke="#4ade80" strokeWidth="3" strokeLinecap="round" />
-        <line x1={`${br.x*100}%`} y1={`${br.y*100}%`} x2={`${br.x*100}%`} y2={`${br.y*100-bs}%`} stroke="#4ade80" strokeWidth="3" strokeLinecap="round" />
-        <line x1={`${bl.x*100}%`} y1={`${bl.y*100}%`} x2={`${bl.x*100+bs}%`} y2={`${bl.y*100}%`} stroke="#4ade80" strokeWidth="3" strokeLinecap="round" />
-        <line x1={`${bl.x*100}%`} y1={`${bl.y*100}%`} x2={`${bl.x*100}%`} y2={`${bl.y*100-bs}%`} stroke="#4ade80" strokeWidth="3" strokeLinecap="round" />
-      </svg>
-      <div className="absolute bottom-1 left-1/2 -translate-x-1/2 bg-green-500/80 backdrop-blur-sm text-white text-[9px] font-medium px-1.5 py-0.5 rounded-full">
-        Paper detected
-      </div>
-    </div>
-  );
-}
-
-// ─── Scan Flash ───
-
-function ScanFlash({ active }: { active: boolean }) {
-  if (!active) return null;
-  return (
-    <div
-      className="absolute inset-0 z-20 bg-white/80 rounded-lg pointer-events-none"
-      style={{ animation: "flash 200ms ease-out forwards" }}
-    />
-  );
-}
-
 // ─── Canvas Video Mirror ───
 // Draws a <video> onto a <canvas> at native resolution (devicePixelRatio-aware)
 
@@ -257,7 +214,6 @@ export function FloatingVideoOverlay({
   avatarStatus,
   onAttachAvatar,
   userCamera,
-  onScan,
   isThinking = false,
   collapsed = false,
   onCollapsedChange,
@@ -266,8 +222,6 @@ export function FloatingVideoOverlay({
   const [minimized, setMinimized] = useState(false);
   const avatarVideoRef = useRef<HTMLVideoElement>(null);
   const attachedRef = useRef(false);
-  const [detection, setDetection] = useState<DetectionResult | null>(null);
-  const [scanFlash, setScanFlash] = useState(false);
   const [showPulse, setShowPulse] = useState(false);
   const rndRef = useRef<Rnd>(null);
 
@@ -325,40 +279,6 @@ export function FloatingVideoOverlay({
       rndRef.current.updateSize({ width: dim.width, height: dim.height });
     }
   }, [viewMode, minimized]);
-
-  // Document detection loop (only in gallery mode with active camera)
-  useEffect(() => {
-    if (!userCamera.isActive || viewMode !== "gallery") {
-      setDetection(null);
-      return;
-    }
-
-    let frameCount = 0;
-    let animId: number;
-
-    const loop = () => {
-      frameCount++;
-      if (frameCount % 3 === 0 && userCamera.videoRef.current) {
-        const result = detectDocument(userCamera.videoRef.current);
-        setDetection(result);
-      }
-      animId = requestAnimationFrame(loop);
-    };
-
-    animId = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(animId);
-  }, [userCamera.isActive, userCamera.videoRef, viewMode]);
-
-  // Handle scan
-  const handleScan = useCallback(() => {
-    if (!userCamera.videoRef.current) return;
-    const result = captureFrame(userCamera.videoRef.current);
-    if (!result) return;
-
-    setScanFlash(true);
-    setTimeout(() => setScanFlash(false), 200);
-    onScan?.(result);
-  }, [userCamera.videoRef, onScan]);
 
   // Don't render if avatar is disconnected and camera is off
   if (!avatarActive && !userCamera.isActive) return null;
@@ -578,8 +498,6 @@ export function FloatingVideoOverlay({
 
                 {/* Camera tile — bottom half */}
                 <div className="relative flex-1 min-h-0 overflow-hidden">
-                  <ScanFlash active={scanFlash} />
-                  <DocumentOverlay detection={detection} />
                   {userCamera.isActive ? (
                     <canvas
                       ref={(canvas) => {
@@ -603,15 +521,6 @@ export function FloatingVideoOverlay({
                     <span className={`w-1.5 h-1.5 rounded-full ${userCamera.isActive ? "bg-green-500" : "bg-gray-500"}`} />
                     <span className="text-white/90 text-[10px] font-medium">You</span>
                   </div>
-                  {userCamera.isActive && (
-                    <button
-                      onClick={handleScan}
-                      className="absolute bottom-1 right-1.5 z-10 flex items-center gap-1 bg-white/15 hover:bg-white/25 backdrop-blur-sm text-white text-[10px] font-medium px-1.5 py-1 rounded transition-colors"
-                    >
-                      <ScanLine size={12} />
-                      Scan
-                    </button>
-                  )}
                 </div>
               </div>
             )}
@@ -620,7 +529,6 @@ export function FloatingVideoOverlay({
       )}
 
       <style>{`
-        @keyframes flash { 0% { opacity: 0.8; } 100% { opacity: 0; } }
         @keyframes thinking-glow {
           0%, 100% { box-shadow: 0 0 8px 2px rgba(146, 160, 225, 0.2); }
           50% { box-shadow: 0 0 20px 6px rgba(146, 160, 225, 0.4); }
