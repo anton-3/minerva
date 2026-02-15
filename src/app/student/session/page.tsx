@@ -26,6 +26,8 @@ export default function SessionPage() {
     avatarMute,
     avatarUnmute,
     avatarFlush,
+    muteAvatarAudio,
+    unmuteAvatarAudio,
     startSession,
     endSession,
     handleTextMessage,
@@ -71,15 +73,18 @@ export default function SessionPage() {
   // Push-to-talk: hold Space to unmute, release to mute.
   // Handles both direct key events AND postMessage from sandboxed iframes
   // (iframes capture focus on click, so parent window misses key events).
+  // Also mutes avatar audio while spacebar is held to prevent feedback.
   useEffect(() => {
     const pttDown = () => {
       setMicOpen(true);
+      muteAvatarAudio();      // mute avatar audio so user doesn't hear it while speaking
       avatarUnmute();
     };
     const pttUp = () => {
       setMicOpen(false);
-      avatarFlush();  // send accumulated text immediately
-      avatarMute();   // then mute mic
+      avatarFlush();          // send accumulated text immediately
+      avatarMute();           // then mute mic
+      unmuteAvatarAudio();    // restore avatar audio
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -113,7 +118,7 @@ export default function SessionPage() {
       window.removeEventListener("keyup", handleKeyUp);
       window.removeEventListener("message", handleMessage);
     };
-  }, [avatarMute, avatarUnmute, avatarFlush]);
+  }, [avatarMute, avatarUnmute, avatarFlush, muteAvatarAudio, unmuteAvatarAudio]);
 
   const handleNewMessage = useCallback(() => {
     if (!chatOpen) {

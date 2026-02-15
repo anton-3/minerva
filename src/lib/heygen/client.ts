@@ -141,6 +141,7 @@ export function createAvatarClient(): AvatarClient {
   let session: LiveAvatarSession | null = null;
   let pendingElement: HTMLMediaElement | null = null;
   let streamReady = false;
+  let avatarAudioMuted = false;
 
   // Debounce ASR: accumulate fragments, flush on push-to-talk release
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -440,6 +441,8 @@ export function createAvatarClient(): AvatarClient {
 
     attach(element: HTMLMediaElement) {
       pendingElement = element;
+      // Apply current muted state to the element
+      element.muted = avatarAudioMuted;
       tryAttach();
     },
 
@@ -480,6 +483,20 @@ export function createAvatarClient(): AvatarClient {
         } catch (err) {
           console.error("[AvatarClient] Failed to unmute:", err);
         }
+      }
+    },
+
+    muteAvatarAudio() {
+      avatarAudioMuted = true;
+      if (pendingElement) {
+        pendingElement.muted = true;
+      }
+    },
+
+    unmuteAvatarAudio() {
+      avatarAudioMuted = false;
+      if (pendingElement) {
+        pendingElement.muted = false;
       }
     },
 

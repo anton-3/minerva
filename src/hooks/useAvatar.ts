@@ -58,6 +58,14 @@ export function useAvatar() {
     if (clientRef.current) clientRef.current.flush();
   }, []);
 
+  const muteAvatarAudio = useCallback(() => {
+    if (clientRef.current) clientRef.current.muteAvatarAudio();
+  }, []);
+
+  const unmuteAvatarAudio = useCallback(() => {
+    if (clientRef.current) clientRef.current.unmuteAvatarAudio();
+  }, []);
+
   const onUserMessage = useCallback((cb: (text: string) => void) => {
     userMsgCbsRef.current.push(cb);
   }, []);
@@ -68,5 +76,5 @@ export function useAvatar() {
     };
   }, []);
 
-  return { status, startSession, endSession, speak, interrupt, attach, mute, unmute, flush, onUserMessage };
+  return { status, startSession, endSession, speak, interrupt, attach, mute, unmute, flush, muteAvatarAudio, unmuteAvatarAudio, onUserMessage };
 }
