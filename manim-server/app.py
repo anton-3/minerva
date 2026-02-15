@@ -1,4 +1,5 @@
 import glob
+import json
 import logging
 import os
 import re
@@ -24,11 +25,10 @@ BASE_URL = os.environ.get("BASE_URL", "http://localhost:5000")
 FLASK_HOST = os.environ.get("FLASK_HOST", "0.0.0.0")
 FLASK_PORT = int(os.environ.get("FLASK_PORT", "5000"))
 
-VIDEOS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "videos")
+VIDEOS_DIR = os.environ.get("VIDEOS_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "videos"))
 os.makedirs(VIDEOS_DIR, exist_ok=True)
 
-# In-memory video database (list of {filename, prompt} dicts)
-_video_db: list[dict] = []
+DB_PATH = os.path.join(VIDEOS_DIR, "videos.json")
 
 client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
@@ -163,13 +163,23 @@ def _find_video(media_dir: str) -> str | None:
 
 
 def _load_db() -> list[dict]:
-    """Return the in-memory video database."""
-    return _video_db
+    """Load the video DB from *DB_PATH*, returning [] on missing/corrupt file."""
+    try:
+        with open(DB_PATH, "r") as f:
+            data = json.load(f)
+        if isinstance(data, list):
+            return data
+    except (FileNotFoundError, json.JSONDecodeError):
+        pass
+    return []
 
 
 def _save_to_db(filename: str, prompt: str) -> None:
-    """Append a {filename, prompt} record to the in-memory database."""
-    _video_db.append({"filename": filename, "prompt": prompt})
+    """Append a {filename, prompt} record to the JSON video DB."""
+    records = _load_db()
+    records.append({"filename": filename, "prompt": prompt})
+    with open(DB_PATH, "w") as f:
+        json.dump(records, f, indent=2)
 
 
 # ---------------------------------------------------------------------------
