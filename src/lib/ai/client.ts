@@ -332,7 +332,7 @@ export function createTutorBrain(): TutorBrain {
         const result = streamText({
           model,
           maxOutputTokens: 4096,
-          temperature: 0.5,
+          temperature: 0,
           abortSignal: signal,
           system: systemPrompt,
           messages,
