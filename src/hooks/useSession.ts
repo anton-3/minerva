@@ -1,8 +1,8 @@
 // useSession hook — session state machine
 // Manages session lifecycle: idle → connecting → active → ended
-// Coordinates: Zoom Video SDK (call layer) + LiveAvatar FULL (avatar TTS + ASR) +
+// Coordinates: User Camera + LiveAvatar FULL (avatar TTS + ASR) +
 // Canvas + Claude brain.
-// HeyGen handles both TTS and STT. Zoom is optional (self-view video only).
+// HeyGen handles both TTS and STT. User camera via native getUserMedia.
 //
 // Speech audit fixes (Session 7):
 // - Wire avatar.interrupt to brain options
@@ -16,6 +16,7 @@ import { useAvatar } from "./useAvatar";
 import { useZoom } from "./useZoom";
 import { useCanvas } from "./useCanvas";
 import { useTutorBrain } from "./useTutorBrain";
+import { useUserCamera } from "./useUserCamera";
 
 export function useSession() {
   // Use individual selectors for stable references — avoids infinite re-render loops
@@ -23,6 +24,7 @@ export function useSession() {
   const conversationHistory = useSessionStore((s) => s.conversationHistory);
   const contentMode = useSessionStore((s) => s.contentMode);
   const manimVideoUrl = useSessionStore((s) => s.manimVideoUrl);
+  const sandboxHtml = useSessionStore((s) => s.sandboxHtml);
   const setStatus = useSessionStore((s) => s.setStatus);
   const setAvatarStatus = useSessionStore((s) => s.setAvatarStatus);
   const setSessionId = useSessionStore((s) => s.setSessionId);
@@ -32,9 +34,10 @@ export function useSession() {
   const avatar = useAvatar();
   const zoom = useZoom();
   const canvas = useCanvas();
+  const userCamera = useUserCamera();
   const brain = useTutorBrain({
     speak: avatar.speak,
-    interrupt: avatar.interrupt, // Bug 2: brain can interrupt avatar on new message
+    interrupt: avatar.interrupt,
     executeSequence: canvas.executeSequence,
     getSnapshot: canvas.getSnapshot,
   });
@@ -68,12 +71,10 @@ export function useSession() {
       setSessionId(newSessionId);
 
       // Start LiveAvatar session FIRST (FULL mode — TTS + ASR via voiceChat)
-      // Must start before Zoom so HeyGen/LiveKit gets the mic without interference.
       await avatar.startSession();
 
-      // Start Zoom Video SDK session AFTER HeyGen (optional — for Zoom Education Track)
-      // Zoom is video-only — no audio. HeyGen handles all audio (TTS + ASR).
-      // TODO: Re-enable Zoom after confirming HeyGen voice chat works alone
+      // Zoom is currently disabled — using native getUserMedia for camera instead
+      // TODO: Re-enable Zoom if needed for Education Track
       // zoom
       //   .joinSession(`minerva-${newSessionId.slice(0, 8)}`, "Student")
       //   .then(() => console.log("[useSession] Zoom session joined"))
@@ -81,7 +82,7 @@ export function useSession() {
 
       setStatus("active");
 
-      // Bug 9: Use sendGreeting instead of fake "hi" — no fake student message in transcript
+      // Bug 9: Use sendGreeting instead of fake "hi"
       brain.sendGreeting();
     } catch (err) {
       console.error("[useSession] Failed to start session:", err);
@@ -91,24 +92,25 @@ export function useSession() {
 
   const endSession = useCallback(async () => {
     try {
-      // End both sessions in parallel
+      // End sessions in parallel
       await Promise.allSettled([
         avatar.endSession(),
         zoom.leaveSession(),
       ]);
 
+      // Stop user camera
+      userCamera.stopCamera();
+
       // Read latest state directly to avoid stale closures
       const { sessionId, transcript } = useSessionStore.getState();
 
       if (sessionId) {
-        // 1. Mark session as completed
         fetch("/api/session", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id: sessionId, status: "completed" }),
         })
           .then(async () => {
-            // 2. Generate summary with inline transcript
             if (transcript.length > 0) {
               await fetch("/api/session/summary", {
                 method: "POST",
@@ -133,7 +135,7 @@ export function useSession() {
       console.error("[useSession] Error ending session:", err);
       setStatus("ended");
     }
-  }, [avatar, zoom, setStatus]);
+  }, [avatar, zoom, userCamera, setStatus]);
 
   // Keep endSessionRef in sync so the timer can call it
   endSessionRef.current = endSession;
@@ -160,6 +162,8 @@ export function useSession() {
     isProcessing: brain.isProcessing,
     conversationHistory,
     attach: avatar.attach,
+    avatarMute: avatar.mute,
+    avatarUnmute: avatar.unmute,
     startSession,
     endSession,
     handleTextMessage: brain.handleStudentMessage,
@@ -170,12 +174,16 @@ export function useSession() {
     // Content mode
     contentMode,
     manimVideoUrl,
+    sandboxHtml,
     setContentMode,
     setManimVideoUrl,
-    // Zoom controls — exposed for UI
+    // User camera
+    userCamera,
+    // Zoom controls — kept for potential future use
     zoomStatus: zoom.status,
     zoomStartVideo: zoom.startVideo,
     zoomToggleMute: zoom.toggleMute,
+    zoomSetMuted: zoom.setMuted,
     zoomIsMuted: zoom.isMuted,
   };
 }

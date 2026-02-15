@@ -145,6 +145,21 @@ export async function createZoomClient(): Promise<ZoomClient> {
       }
     },
 
+    async setMuted(value: boolean) {
+      try {
+        const stream = client.getMediaStream();
+        if (value && !muted) {
+          await stream.muteAudio();
+          muted = true;
+        } else if (!value && muted) {
+          await stream.unmuteAudio();
+          muted = false;
+        }
+      } catch (err) {
+        console.error("[ZoomClient] Failed to set muted:", err);
+      }
+    },
+
     isMuted() {
       return muted;
     },

@@ -1,7 +1,6 @@
 // ContentMode — extensible content mode switcher
 // Renders the appropriate content panel based on the active mode.
-// Currently supports: "math" (Desmos/GeoGebra) and "manim" (video).
-// To add a new mode: extend ContentMode type, add a case here.
+// Supports: "math" (Desmos/GeoGebra), "sandbox" (interactive HTML), "manim" (video).
 
 "use client";
 
@@ -9,11 +8,13 @@ import type { ContentMode as ContentModeType, MathTool } from "@/types/session";
 import type { ToolManager } from "@/lib/canvas/tools";
 import { MathToolPanel } from "./MathToolPanel";
 import { ManimPlayer } from "./ManimPlayer";
+import { SandboxPanel } from "./SandboxPanel";
 
 interface ContentModeProps {
   mode: ContentModeType;
   toolManager: ToolManager;
   manimUrl: string | null;
+  sandboxHtml: string | null;
   onToolChange?: (tool: MathTool) => void;
   onManimEnded?: () => void;
 }
@@ -22,6 +23,7 @@ export function ContentModeView({
   mode,
   toolManager,
   manimUrl,
+  sandboxHtml,
   onToolChange,
   onManimEnded,
 }: ContentModeProps) {
@@ -29,14 +31,27 @@ export function ContentModeView({
     <div className="w-full h-full relative">
       {/* Math mode — Desmos / GeoGebra */}
       <div
-        className={`absolute inset-0 ${mode === "math" ? "block" : "hidden"}`}
+        className={`absolute inset-0 transition-all duration-300 ${
+          mode === "math" ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"
+        }`}
       >
         <MathToolPanel toolManager={toolManager} onToolChange={onToolChange} />
       </div>
 
+      {/* Sandbox mode — interactive HTML/CSS/JS */}
+      <div
+        className={`absolute inset-0 transition-all duration-300 ${
+          mode === "sandbox" ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"
+        }`}
+      >
+        <SandboxPanel html={sandboxHtml} />
+      </div>
+
       {/* Manim mode — Video player */}
       <div
-        className={`absolute inset-0 ${mode === "manim" ? "block" : "hidden"}`}
+        className={`absolute inset-0 transition-all duration-300 ${
+          mode === "manim" ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"
+        }`}
       >
         {manimUrl ? (
           <ManimPlayer url={manimUrl} onEnded={onManimEnded} />
@@ -64,13 +79,6 @@ export function ContentModeView({
           </div>
         )}
       </div>
-
-      {/*
-        To add more modes:
-        1. Add the mode to ContentMode type in src/types/session.ts
-        2. Add a new <div> block here with the mode check
-        3. Create the corresponding panel component
-      */}
     </div>
   );
 }

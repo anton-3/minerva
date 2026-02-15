@@ -2,9 +2,134 @@
 
 > **For AI agents**: Read this file first to understand where the project is. Update it after every meaningful task or group of tasks.
 
-**Last updated**: 2026-02-14 (Session 8)
+**Last updated**: 2026-02-14 (Session 10b)
 **Branch**: `001-minerva-mvp`
-**Overall status**: Phases 1-8 COMPLETE (T001-T067). **NEW**: Video-call UI redesign — Zoom-style layout with draggable avatar PiP, bottom control bar, slide-out chat, extensible content modes (Math + Manim). TypeScript passes clean.
+**Overall status**: Phases 1-8 COMPLETE (T001-T067). **NEW**: Session 10b — Zoom-style floating PiP overlay (replaces side-by-side panels), 3 view modes (strip/speaker/gallery), resizable + draggable, sandbox viewport fit. TypeScript passes clean (0 errors).
+
+---
+
+## Session 10b: Floating Video Overlay + Sandbox Viewport Fix
+
+**Major change**: Replaced side-by-side `react-resizable-panels` video grid with a true Zoom-style floating PiP overlay. Reverted CSS design system injection that made sandbox output look generic.
+
+### Floating Video Overlay (replaces VideoGrid)
+- [x] Created `FloatingVideoOverlay.tsx` using `react-rnd` — draggable + resizable floating PiP
+- [x] Three view modes matching Zoom's actual behavior:
+  - **Strip** (— icon): Thin dark bar showing "Talking: Minerva" or status text
+  - **Speaker** (□ icon): One large video tile with name label + hover controls
+  - **Gallery** (⋮⋮⋮ icon): Two stacked video tiles (avatar top, camera bottom)
+- [x] View mode switch icons + minimize button **only visible on hover** (group-hover pattern)
+- [x] Video persistence: `<video>` elements always mounted as `sr-only`, `<canvas>` mirrors via `requestAnimationFrame` + `drawImage()` — stream never lost across mode/minimize changes
+- [x] Resize handles with stripe patterns (matching Zoom): bottom (horizontal stripes), right (vertical stripes), corner (diagonal lines SVG)
+- [x] `lockAspectRatio` for speaker mode, per-mode min/max sizes
+- [x] Document detection + scan button preserved on camera tile in gallery mode
+- [x] Minimizable to small pill (top-right corner)
+- [x] Deleted `VideoGrid.tsx`, removed `react-resizable-panels` package
+
+### Sandbox Viewport Fix
+- [x] Injected minimal CSS: `html,body{margin:0;padding:0;overflow:hidden;width:100%;height:100vh;max-height:100vh;}`
+- [x] Added "Content MUST fit in one screen" to Claude prompt sandbox rules
+- [x] Reverted CSS design system injection (user feedback: made output look "AI-ish generic")
+- [x] Reverted prompt changes that increased char limit and added design patterns
+
+### Session Page Update
+- [x] Content now fills full screen (`absolute inset-0 bottom-[64px]`)
+- [x] FloatingVideoOverlay sits on top at z-50 (not side-by-side)
+- [x] Removed `viewMode` state from page (managed internally by overlay)
+
+### Bug Fixes (during implementation)
+- [x] Avatar disappearing on view mode switch — fixed by always-mounted video elements
+- [x] Sharp corners on video tiles — added rounded-xl per mode
+- [x] Minimize/expand losing video — restructured to single return path with canvas mirroring
+- [x] React 19 ref callback cleanup — confirmed React 19 supports cleanup returns from ref callbacks
+
+### Files Changed
+| File | Action |
+|------|--------|
+| `src/components/session/FloatingVideoOverlay.tsx` | **NEW** — floating Zoom-style PiP overlay |
+| `src/components/session/VideoGrid.tsx` | **DELETED** |
+| `src/app/student/session/page.tsx` | **MODIFIED** — full-screen content + floating overlay |
+| `src/components/session/SandboxPanel.tsx` | **MODIFIED** — viewport CSS injection (reverted design system) |
+| `src/lib/claude/prompts.ts` | **MODIFIED** — added "fit in one screen" rule (reverted design patterns) |
+| `package.json` | **MODIFIED** — removed `react-resizable-panels` |
+
+### Build Status
+- `npx tsc --noEmit` passes with 0 errors
+
+---
+
+## Session 9: Universal Tutor — 6-Phase Upgrade
+
+**Major change**: Transformed Minerva from math-only tutor to universal tutor for ANY subject.
+
+### Phase 1: Bug Fixes (7 issues)
+- [x] **1.1** Wired `contentMode` + `manimVideoUrl` in useTutorBrain (were silently dropped)
+- [x] **1.2** Fixed MathToolPanel tab desync (added `onActiveTool` callback to ToolManager)
+- [x] **1.3** Deleted orphaned components (AvatarPanel.tsx, ChatPanel.tsx, SessionControls.tsx)
+- [x] **1.4** Fixed GeoGebra hardcoded 800x500 (ResizeObserver for dynamic dimensions)
+- [x] **1.5** Fixed stale tldraw references (page.tsx badge, commands.ts comment)
+- [x] **1.6** Fixed Desmos duplicate script race condition (shared `desmos-loader.ts`)
+- [x] **1.7** Removed dead `respondStream()` from claude/client.ts (104 lines deleted)
+
+### Phase 2: Sandbox Mode — Universal Visualization
+- [x] Extended `ContentMode` type: `"math" | "sandbox" | "manim"`
+- [x] Added `sandboxHtml` to types, Zustand store, Zod schema
+- [x] Created `SandboxPanel.tsx` — renders Claude HTML in `<iframe sandbox="allow-scripts">`
+- [x] Wired through ContentMode → useSession → useTutorBrain → SessionPage
+- [x] Updated mode toggle to cycle through all 3 modes
+- [x] Rewrote system prompt for universal tutoring + sandbox generation
+
+### Phase 3: File Upload with Claude Vision
+- [x] Added `imageData` to `TutorBrainRequest` (base64 + mediaType)
+- [x] Updated Claude client to build multimodal content blocks
+- [x] Added upload button + image preview to ChatSheet (paperclip icon, 5MB limit)
+- [x] Wired image through hooks (useTutorBrain accepts optional imageData)
+- [x] Added 5MB body size check to API route
+- [x] Added IMAGE ANALYSIS section to system prompt
+
+### Phase 4: Adaptive Learning
+- [x] Added `MasteryScore` type and `masteryScores` to request/store
+- [x] Inject mastery context into Claude (formatted as "Subject/Topic: X%")
+- [x] Added `velocity` field to progressUpdate ("improving"/"plateau"/"struggling")
+- [x] Updated Zod schema for velocity tracking
+- [x] Added ADAPTIVE DIFFICULTY section to prompt (3 tiers)
+
+### Phase 5: Professional Educator Persona
+- [x] Rewrote persona: "15 years experience, genuinely loves helping students discover"
+- [x] Added AGE-ADAPTIVE LANGUAGE (4 brackets: 6-9, 10-12, 13-15, 16-18)
+- [x] Expanded subject coverage: ANY topic the student is curious about
+
+### Phase 6: UI Polish
+- [x] Smooth mode transitions (opacity + scale CSS transitions, 300ms)
+- [x] Mode indicator badge (top-left, color-coded: blue/green/purple)
+- [x] Updated landing page for universal tutor (description, feature cards, value props)
+
+### Files Created
+- `src/lib/canvas/desmos-loader.ts` — shared Desmos API script loader
+- `src/components/session/SandboxPanel.tsx` — sandboxed iframe for interactive HTML
+
+### Files Modified (key)
+- `src/types/session.ts` — ContentMode, sandboxHtml, imageData, MasteryScore, velocity
+- `src/stores/sessionStore.ts` — sandboxHtml, masteryScores state + actions
+- `src/lib/claude/client.ts` — Zod schema, vision support, mastery context, removed respondStream
+- `src/lib/claude/prompts.ts` — complete rewrite: universal tutor, sandbox, vision, adaptive
+- `src/hooks/useTutorBrain.ts` — sandboxHtml, imageData, masteryScores wiring
+- `src/hooks/useSession.ts` — sandboxHtml selector exposed
+- `src/components/session/ContentMode.tsx` — SandboxPanel, smooth transitions
+- `src/components/session/ChatSheet.tsx` — file upload UI
+- `src/components/session/DesmosPanel.tsx` — shared script loader
+- `src/components/session/Desmos3DPanel.tsx` — shared script loader
+- `src/components/session/GeoGebraPanel.tsx` — ResizeObserver
+- `src/lib/canvas/tools/manager.ts` — onActiveTool callback
+- `src/components/session/MathToolPanel.tsx` — subscribe to tool changes
+- `src/app/student/session/page.tsx` — mode badge, sandbox wiring, 3-mode toggle
+- `src/app/page.tsx` — universal tutor copy
+- `src/app/api/tutor/respond/route.ts` — 5MB size check
+
+### Files Deleted
+- `src/components/session/AvatarPanel.tsx` (orphaned)
+- `src/components/session/ChatPanel.tsx` (orphaned)
+- `src/components/session/SessionControls.tsx` (orphaned)
 
 ---
 
@@ -296,10 +421,11 @@ type CanvasCommand =
 
 ## Notes for Next Session
 
-- **Speech audit** is COMPLETE — all 12 bugs fixed, code compiles clean
+- **Session 10b** is COMPLETE — floating PiP overlay, sandbox viewport fix, all working
+- **FloatingVideoOverlay** uses `react-rnd` + canvas mirroring — videos never unmount
+- **Document scanner** uses pure JS Sobel edge detection — no npm deps, ~140 lines
+- **Sandbox**: minimal viewport CSS only (design system reverted per user feedback)
 - **Phase 2 (T012-T015)** requires a real Supabase project — need API keys in .env.local
 - **T063-T068** are demo prep tasks — need API keys + deployment environment
-- **middleware.ts keeps reappearing** — was deleted but came back. Must use `proxy.ts` only (Next.js 16).
-- **Pre-existing lint warnings**: 5 errors in parent/page.tsx, session/page.tsx, SessionControls.tsx, useSession.ts — all pre-date speech audit, none from our changes
-- `npm run build` passes clean (Turbopack, 3.8s, 20 routes)
+- **Pre-existing build error**: `/parent` page fails during static generation (local DB "kimsanov" doesn't exist) — unrelated to our code
 - `npx tsc --noEmit` passes with 0 errors

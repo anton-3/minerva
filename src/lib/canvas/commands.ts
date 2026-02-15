@@ -18,7 +18,6 @@ export function createCanvasExecutor(toolManager: ToolManager): CanvasExecutor {
     execute(command: CanvasCommand): string | void {
       try {
         toolManager.execute(command);
-        // Return void - we don't track shape IDs like tldraw did
       } catch (err) {
         // Canvas errors never break the session (per contract)
         console.error("[canvas] Error executing command:", err);

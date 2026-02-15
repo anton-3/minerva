@@ -179,3 +179,11 @@
 .animate-float {
   animation: float 4s ease-in-out infinite;
 }
+
+/* Force GeoGebra applet to fill its container */
+#ggb-element-holder,
+#ggb-element-holder > div,
+#ggb-element {
+  width: 100% !important;
+  height: 100% !important;
+}

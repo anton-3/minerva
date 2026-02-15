@@ -10,6 +10,10 @@ export interface AvatarClient {
   speak(text: string): Promise<void>;
   interrupt(): void;
   attach(element: HTMLMediaElement): void;
+  /** Mute the microphone (for push-to-talk) */
+  mute(): Promise<void>;
+  /** Unmute the microphone (for push-to-talk) */
+  unmute(): Promise<void>;
   /** Fires when HeyGen ASR transcribes student speech (debounced) */
   onUserMessage(callback: (text: string) => void): void;
   onStatusChange(callback: (status: AvatarStatus) => void): void;

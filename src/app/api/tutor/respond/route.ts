@@ -29,6 +29,15 @@ function looksLikeFactualQuestion(message: string): boolean {
 
 export async function POST(request: Request) {
   try {
+    // Reject oversized payloads (5MB limit for image uploads)
+    const contentLength = request.headers.get("content-length");
+    if (contentLength && parseInt(contentLength) > 5 * 1024 * 1024) {
+      return NextResponse.json(
+        { error: "Request too large. Max 5MB." },
+        { status: 413 }
+      );
+    }
+
     const body = (await request.json()) as TutorBrainRequest;
 
     if (!body.studentMessage) {

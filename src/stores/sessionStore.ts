@@ -11,6 +11,7 @@ import type {
   StudentProfile,
   LearningPlanContext,
   ContentMode,
+  MasteryScore,
 } from "@/types/session";
 
 interface SessionActions {
@@ -23,6 +24,8 @@ interface SessionActions {
   addTranscriptEntry: (entry: TranscriptEntry) => void;
   setContentMode: (mode: ContentMode) => void;
   setManimVideoUrl: (url: string | null) => void;
+  setSandboxHtml: (html: string | null) => void;
+  setMasteryScores: (scores: MasteryScore[]) => void;
   reset: () => void;
 }
 
@@ -36,6 +39,8 @@ const initialState: SessionState = {
   learningPlan: null,
   contentMode: "math",
   manimVideoUrl: null,
+  sandboxHtml: null,
+  masteryScores: [],
 };
 
 export const useSessionStore = create<SessionState & SessionActions>((set) => ({
@@ -59,6 +64,8 @@ export const useSessionStore = create<SessionState & SessionActions>((set) => ({
 
   setContentMode: (contentMode) => set({ contentMode }),
   setManimVideoUrl: (manimVideoUrl) => set({ manimVideoUrl }),
+  setSandboxHtml: (sandboxHtml) => set({ sandboxHtml }),
+  setMasteryScores: (masteryScores) => set({ masteryScores }),
 
   reset: () => set(initialState),
 }));

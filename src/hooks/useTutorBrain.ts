@@ -23,7 +23,7 @@ interface UseTutorBrainOptions {
   getSnapshot: () => string;
 }
 
-const API_TIMEOUT_MS = 8000; // Bug 5: 8s timeout on Claude API
+const API_TIMEOUT_MS = 15000; // 15s timeout — sandbox HTML responses can be larger
 
 export function useTutorBrain(options: UseTutorBrainOptions) {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -33,7 +33,7 @@ export function useTutorBrain(options: UseTutorBrainOptions) {
   // Bug 2: AbortController to cancel in-flight requests
   const abortRef = useRef<AbortController | null>(null);
 
-  const handleStudentMessage = useCallback(async (message: string) => {
+  const handleStudentMessage = useCallback(async (message: string, imageData?: TutorBrainRequest["imageData"]) => {
     const store = useSessionStore.getState();
 
     // Bug 2: abort any in-flight request before starting a new one
@@ -75,6 +75,8 @@ export function useTutorBrain(options: UseTutorBrainOptions) {
           grade: 7,
         },
         canvasState,
+        ...(imageData && { imageData }),
+        ...(store.masteryScores.length > 0 && { masteryScores: store.masteryScores }),
       };
 
       // Bug 5: timeout wrapper using AbortSignal.timeout merged with our cancel signal
@@ -119,6 +121,17 @@ export function useTutorBrain(options: UseTutorBrainOptions) {
             console.error("[useTutorBrain] Progress save error:", err)
           );
         }
+      }
+
+      // Process content mode switch from Claude
+      if (response.contentMode) {
+        useSessionStore.getState().setContentMode(response.contentMode);
+      }
+      if (response.manimVideoUrl) {
+        useSessionStore.getState().setManimVideoUrl(response.manimVideoUrl);
+      }
+      if (response.sandboxHtml) {
+        useSessionStore.getState().setSandboxHtml(response.sandboxHtml);
       }
 
       // Execute canvas commands (errors here never break the session)

@@ -4,7 +4,7 @@
 
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import dynamic from "next/dynamic";
 
 // Dynamic import of Geogebra component (requires browser)
@@ -27,25 +27,55 @@ interface GeoGebraPanelProps {
 export function GeoGebraPanel({ onAppletReady }: GeoGebraPanelProps) {
   const apiRef = useRef<unknown>(null);
   const readyRef = useRef(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
+
+  // Measure container and respond to resizes — also resize the GeoGebra applet via API
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const measure = () => {
+      const rect = el.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        const w = Math.floor(rect.width);
+        const h = Math.floor(rect.height);
+        setDimensions({ width: w, height: h });
+        // Resize the live applet via the GeoGebra API (react-geogebra ignores prop updates)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const ggb = apiRef.current as any;
+        if (ggb?.setSize) {
+          ggb.setSize(w, h);
+        }
+      }
+    };
+
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   // GeoGebra callback when applet is fully loaded
   const handleAppletLoad = useCallback(() => {
-    // The applet API is accessible via window after load
-    // react-geogebra provides it through the ref or callback
     if (readyRef.current) return;
     readyRef.current = true;
 
-    // Access the API from the iframe
-    // Note: react-geogebra exposes the API through different mechanisms
-    // We'll use the global ggbApplet if available
     const checkForApi = () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const ggb = (window as any).ggbApplet;
       if (ggb) {
         apiRef.current = ggb;
+        // Force resize to fill container after applet is ready
+        const el = containerRef.current;
+        if (el && ggb.setSize) {
+          const rect = el.getBoundingClientRect();
+          if (rect.width > 0 && rect.height > 0) {
+            ggb.setSize(Math.floor(rect.width), Math.floor(rect.height));
+          }
+        }
         onAppletReady(ggb);
       } else {
-        // Retry after a short delay
         setTimeout(checkForApi, 100);
       }
     };
@@ -60,14 +90,14 @@ export function GeoGebraPanel({ onAppletReady }: GeoGebraPanelProps) {
   }, []);
 
   return (
-    <div className="w-full h-full min-h-[400px] bg-white">
+    <div ref={containerRef} className="w-full h-full bg-white overflow-hidden">
       <Geogebra
         id="ggb-element"
-        appName="classic"
-        width={800}
-        height={500}
+        appName="geometry"
+        width={dimensions.width}
+        height={dimensions.height}
         showToolBar={true}
-        showAlgebraInput={true}
+        showAlgebraInput={false}
         showMenuBar={false}
         enableLabelDrags={true}
         enableShiftDragZoom={true}

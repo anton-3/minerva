@@ -197,8 +197,8 @@ export function createAvatarClient(): AvatarClient {
       }
       const { token } = await tokenRes.json();
 
-      // FULL mode — voiceChat:true auto-starts voice chat (no manual .start())
-      session = new LiveAvatarSession(token, { voiceChat: true });
+      // FULL mode — voiceChat starts muted (push-to-talk: student holds Space to unmute)
+      session = new LiveAvatarSession(token, { voiceChat: { defaultMuted: true } });
 
       // Session lifecycle events
       session.on(SessionEvent.SESSION_STATE_CHANGED, (state: SessionState) => {
@@ -423,6 +423,26 @@ export function createAvatarClient(): AvatarClient {
 
     onUserMessage(callback) {
       userMessageCallbacks.push(callback);
+    },
+
+    async mute() {
+      if (session) {
+        try {
+          await session.voiceChat.mute();
+        } catch (err) {
+          console.error("[AvatarClient] Failed to mute:", err);
+        }
+      }
+    },
+
+    async unmute() {
+      if (session) {
+        try {
+          await session.voiceChat.unmute();
+        } catch (err) {
+          console.error("[AvatarClient] Failed to unmute:", err);
+        }
+      }
     },
 
     onStatusChange(callback) {

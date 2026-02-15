@@ -24,11 +24,6 @@ import {
 
 export interface TutorBrain {
   respond(request: TutorBrainRequest): Promise<TutorBrainResponse>;
-  /** Streaming respond — calls onSpeech as soon as speech text is extracted from partial JSON */
-  respondStream(
-    request: TutorBrainRequest,
-    onSpeech: (text: string) => void,
-  ): Promise<TutorBrainResponse>;
   generateSummary(
     transcript: { speaker: string; text: string }[]
   ): Promise<SessionSummary>;
@@ -100,10 +95,15 @@ const TutorResponseSchema = z.object({
   speech: z.string(),
   canvasCommands: z.array(CanvasCommandSchema).optional(),
   progressUpdate: z
-    .object({ topic: z.string(), score: z.number() })
+    .object({
+      topic: z.string(),
+      score: z.number(),
+      velocity: z.enum(["improving", "plateau", "struggling"]).optional(),
+    })
     .optional(),
   manimVideoUrl: z.string().optional(),
-  contentMode: z.enum(["math", "manim"]).optional(),
+  contentMode: z.enum(["math", "sandbox", "manim"]).optional(),
+  sandboxHtml: z.string().optional(),
 });
 
 const SessionSummarySchema = z.object({
@@ -127,15 +127,39 @@ const LearningPlanSchema = z.object({
   currentTopic: z.string(),
 });
 
-// Extract speech from malformed responses via regex
-function extractSpeechFallback(text: string): TutorBrainResponse {
-  // Try to extract speech field from partially valid JSON
+// Try to parse JSON from text that might have extra content around it
+function tryParseJson(text: string): TutorBrainResponse | null {
+  // Direct parse first
+  try {
+    const obj = JSON.parse(text);
+    if (obj && typeof obj.speech === "string") return obj as TutorBrainResponse;
+  } catch {
+    // fall through
+  }
+
+  // Try extracting JSON object from text (Claude sometimes wraps with text)
+  const jsonMatch = text.match(/\{[\s\S]*"speech"\s*:[\s\S]*\}/);
+  if (jsonMatch) {
+    try {
+      const obj = JSON.parse(jsonMatch[0]);
+      if (obj && typeof obj.speech === "string") return obj as TutorBrainResponse;
+    } catch {
+      // fall through
+    }
+  }
+
+  // Extract speech field via regex as last structured attempt
   const speechMatch = text.match(/"speech"\s*:\s*"([^"]*(?:\\.[^"]*)*)"/);
   if (speechMatch) {
     return { speech: speechMatch[1].replace(/\\"/g, '"') };
   }
-  // Last resort: use entire text as speech
-  return { speech: text.slice(0, 500) };
+
+  return null;
+}
+
+// Extract speech from malformed responses via regex
+function extractSpeechFallback(text: string): TutorBrainResponse {
+  return tryParseJson(text) ?? { speech: text.slice(0, 500) || "I'm having trouble right now. Can you try again?" };
 }
 
 // Haiku for real-time tutoring (fast TTFT ~300ms vs Sonnet's ~1.5s)
@@ -169,11 +193,33 @@ export function createTutorBrain(): TutorBrain {
       if (request.canvasState) {
         contextParts.push(`Math Canvas:\n${request.canvasState}`);
       }
+      if (request.masteryScores && request.masteryScores.length > 0) {
+        const masteryText = request.masteryScores
+          .map((m) => `${m.subject}/${m.topic}: ${Math.round(m.score * 100)}%`)
+          .join(", ");
+        contextParts.push(`Mastery: ${masteryText}`);
+      }
 
       const contextBlock =
         contextParts.length > 0
           ? `\n\n--- Context ---\n${contextParts.join("\n")}\n--- End Context ---`
           : "";
+
+      // Build user content — text or multimodal (text + image)
+      const userText = `${request.studentMessage}${contextBlock}`;
+      const userContent: Anthropic.ContentBlockParam[] = request.imageData
+        ? [
+            {
+              type: "image" as const,
+              source: {
+                type: "base64" as const,
+                media_type: request.imageData.mediaType,
+                data: request.imageData.base64,
+              },
+            },
+            { type: "text" as const, text: userText },
+          ]
+        : [{ type: "text" as const, text: userText }];
 
       const messages: Anthropic.MessageParam[] = [
         ...recentHistory.map((m) => ({
@@ -182,28 +228,50 @@ export function createTutorBrain(): TutorBrain {
         })),
         {
           role: "user" as const,
-          content: `${request.studentMessage}${contextBlock}`,
+          content: userContent,
         },
       ];
 
       try {
-        const response = await client.messages.create({
+        const hasImage = !!request.imageData;
+
+        // Vision requests: skip output_config (structured outputs can be unreliable with images on Haiku)
+        // Instead, append JSON instruction to system prompt and parse manually
+        const systemPrompt = hasImage
+          ? TUTOR_SYSTEM_PROMPT + `\n\nRESPONSE FORMAT: You MUST respond with a valid JSON object. Example: {"speech": "your spoken response here", "contentMode": "sandbox", "sandboxHtml": "<html>...</html>"}\nOnly output the JSON object, nothing else.`
+          : TUTOR_SYSTEM_PROMPT;
+
+        const createParams: Anthropic.MessageCreateParams = {
           model: MODEL_FAST,
-          max_tokens: 300,
-          system: TUTOR_SYSTEM_PROMPT,
+          max_tokens: 4096,
+          system: systemPrompt,
           messages,
-          output_config: {
-            format: zodOutputFormat(TutorResponseSchema),
-          },
-          thinking: {
-            type: "disabled"
-          }
-        });
+          ...(hasImage
+            ? {}
+            : {
+                output_config: {
+                  format: zodOutputFormat(TutorResponseSchema),
+                },
+                thinking: {
+                  type: "disabled" as const,
+                },
+              }),
+        };
+
+        const response = await client.messages.create(createParams);
 
         const text =
           response.content[0].type === "text" ? response.content[0].text : "";
-        const parsed = TutorResponseSchema.safeParse(JSON.parse(text));
 
+        // Try robust parsing (handles extra text, partial JSON, etc.)
+        const robust = tryParseJson(text);
+        if (robust) {
+          const parsed = TutorResponseSchema.safeParse(robust);
+          return (parsed.success ? parsed.data : robust) as TutorBrainResponse;
+        }
+
+        // Direct Zod parse as fallback
+        const parsed = TutorResponseSchema.safeParse(JSON.parse(text));
         if (parsed.success) {
           return parsed.data as TutorBrainResponse;
         }
@@ -223,110 +291,6 @@ export function createTutorBrain(): TutorBrain {
       }
     },
 
-    async respondStream(
-      request: TutorBrainRequest,
-      onSpeech: (text: string) => void,
-    ): Promise<TutorBrainResponse> {
-      const recentHistory = request.conversationHistory.slice(-MAX_HISTORY);
-
-      const contextParts: string[] = [];
-      if (request.studentProfile) {
-        const p = request.studentProfile;
-        contextParts.push(
-          `Student: ${p.name}, age ${p.age}, grade ${p.grade}`
-        );
-      }
-      if (request.learningPlan) {
-        const lp = request.learningPlan;
-        contextParts.push(
-          `Learning Plan: ${lp.subject} — Current topic: "${lp.currentTopic}". Goals: ${lp.goals.join(", ")}`
-        );
-      }
-      if (request.canvasState) {
-        contextParts.push(`Whiteboard:\n${request.canvasState}`);
-      }
-
-      const contextBlock =
-        contextParts.length > 0
-          ? `\n\n--- Context ---\n${contextParts.join("\n")}\n--- End Context ---`
-          : "";
-
-      const messages: Anthropic.MessageParam[] = [
-        ...recentHistory.map((m) => ({
-          role: m.role as "user" | "assistant",
-          content: m.content,
-        })),
-        {
-          role: "user" as const,
-          content: `${request.studentMessage}${contextBlock}`,
-        },
-      ];
-
-      try {
-        const stream = client.messages.stream({
-          model: MODEL_FAST,
-          max_tokens: 300,
-          system: TUTOR_SYSTEM_PROMPT,
-          messages,
-          output_config: {
-            format: zodOutputFormat(TutorResponseSchema),
-          },
-        });
-
-        // Accumulate tokens and extract speech field early
-        let accumulated = "";
-        let speechEmitted = false;
-
-        stream.on("text", (text) => {
-          accumulated += text;
-
-          // Try to extract the speech field value from partial JSON as it streams
-          // Structured output generates: {"speech":"...","canvasCommands":...}
-          // We can regex-match the completed speech value before the full JSON is done
-          if (!speechEmitted) {
-            const match = accumulated.match(
-              /"speech"\s*:\s*"((?:[^"\\]|\\.)*)"\s*[,}]/
-            );
-            if (match) {
-              const speechText = match[1]
-                .replace(/\\"/g, '"')
-                .replace(/\\n/g, "\n")
-                .replace(/\\\\/g, "\\");
-              onSpeech(speechText);
-              speechEmitted = true;
-            }
-          }
-        });
-
-        const finalMessage = await stream.finalMessage();
-        const text =
-          finalMessage.content[0].type === "text"
-            ? finalMessage.content[0].text
-            : "";
-
-        const parsed = TutorResponseSchema.safeParse(JSON.parse(text));
-        if (parsed.success) {
-          // If speech wasn't emitted during streaming (shouldn't happen), emit now
-          if (!speechEmitted) onSpeech(parsed.data.speech);
-          return parsed.data as TutorBrainResponse;
-        }
-
-        const raw = JSON.parse(text) as TutorBrainResponse;
-        if (!speechEmitted) onSpeech(raw.speech);
-        return raw;
-      } catch (err) {
-        console.error("[tutor] Stream error:", err);
-        if (err instanceof SyntaxError) {
-          const fallback = extractSpeechFallback(String(err));
-          onSpeech(fallback.speech);
-          return fallback;
-        }
-        const fallbackSpeech =
-          "I'm having a little trouble right now. Can you repeat what you said?";
-        onSpeech(fallbackSpeech);
-        return { speech: fallbackSpeech };
-      }
-    },
 
     async generateSummary(
       transcript: { speaker: string; text: string }[]

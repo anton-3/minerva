@@ -46,6 +46,14 @@ export function useAvatar() {
     if (clientRef.current) clientRef.current.attach(element);
   }, []);
 
+  const mute = useCallback(async () => {
+    if (clientRef.current) await clientRef.current.mute();
+  }, []);
+
+  const unmute = useCallback(async () => {
+    if (clientRef.current) await clientRef.current.unmute();
+  }, []);
+
   const onUserMessage = useCallback((cb: (text: string) => void) => {
     userMsgCbsRef.current.push(cb);
   }, []);
@@ -56,5 +64,5 @@ export function useAvatar() {
     };
   }, []);
 
-  return { status, startSession, endSession, speak, interrupt, attach, onUserMessage };
+  return { status, startSession, endSession, speak, interrupt, attach, mute, unmute, onUserMessage };
 }
