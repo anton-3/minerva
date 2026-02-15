@@ -11,6 +11,9 @@ importers:
       '@ai-sdk/anthropic':
         specifier: ^3.0.44
         version: 3.0.44(zod@4.3.6)
+      '@ai-sdk/google':
+        specifier: ^3.0.29
+        version: 3.0.29(zod@4.3.6)
       '@heygen/liveavatar-web-sdk':
         specifier: ^0.0.10
         version: 0.0.10(@types/dom-mediacapture-record@1.0.22)
@@ -65,9 +68,6 @@ importers:
       react-is:
         specifier: ^19.2.3
         version: 19.2.4
-      react-resizable-panels:
-        specifier: ^4.6.4
-        version: 4.6.4(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       react-rnd:
         specifier: ^10.5.2
         version: 10.5.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
@@ -137,6 +137,12 @@ packages:
 
   '@ai-sdk/gateway@3.0.46':
     resolution: {integrity: sha512-zH1UbNRjG5woOXXFOrVCZraqZuFTtmPvLardMGcgLkzpxKV0U3tAGoyWKSZ862H+eBJfI/Hf2yj/zzGJcCkycg==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
+  '@ai-sdk/google@3.0.29':
+    resolution: {integrity: sha512-x0hcU10AA+i1ZUQHloGD5qXWsB+Y8qnxlmFUef6Ly4rB53MGVbQExkI9nOKiCO3mu2TGiiNoQMeKWSeQVLfRUA==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -4171,12 +4177,6 @@ packages:
       '@types/react':
         optional: true
 
-  react-resizable-panels@4.6.4:
-    resolution: {integrity: sha512-E7Szs1xyaMZ7xOI2gG4TECNz4r/gmpV1AsXyZRnER6OQnfFf9uclFmrHHZR3h/iF8vQS+nQ1LKyZv9bzwGxPSg==}
-    peerDependencies:
-      react: ^18.0.0 || ^19.0.0
-      react-dom: ^18.0.0 || ^19.0.0
-
   react-rnd@10.5.2:
     resolution: {integrity: sha512-0Tm4x7k7pfHf2snewJA8x7Nwgt3LV+58MVEWOVsFjk51eYruFEa6Wy7BNdxt4/lH0wIRsu7Gm3KjSXY2w7YaNw==}
     peerDependencies:
@@ -4820,6 +4820,12 @@ snapshots:
       '@ai-sdk/provider': 3.0.8
       '@ai-sdk/provider-utils': 4.0.15(zod@4.3.6)
       '@vercel/oidc': 3.1.0
+      zod: 4.3.6
+
+  '@ai-sdk/google@3.0.29(zod@4.3.6)':
+    dependencies:
+      '@ai-sdk/provider': 3.0.8
+      '@ai-sdk/provider-utils': 4.0.15(zod@4.3.6)
       zod: 4.3.6
 
   '@ai-sdk/provider-utils@4.0.15(zod@4.3.6)':
@@ -8828,11 +8834,6 @@ snapshots:
       use-sidecar: 1.1.3(@types/react@19.2.14)(react@19.2.3)
     optionalDependencies:
       '@types/react': 19.2.14
-
-  react-resizable-panels@4.6.4(react-dom@19.2.3(react@19.2.3))(react@19.2.3):
-    dependencies:
-      react: 19.2.3
-      react-dom: 19.2.3(react@19.2.3)
 
   react-rnd@10.5.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3):
     dependencies:
