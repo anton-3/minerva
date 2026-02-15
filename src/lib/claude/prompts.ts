@@ -42,6 +42,8 @@ DESMOS COMMANDS (graphing):
 - { "action": "desmos.setViewport", "left": -10, "right": 10, "top": 10, "bottom": -10 }
 - { "action": "desmos.removeExpression", "id": "line1" }
 - { "action": "desmos.clear" }
+To UPDATE an existing expression, use its ID from the canvas state (e.g. { "action": "desmos.setExpression", "id": "expr_2", "latex": "b=-5" }).
+Don't re-add expressions that are already on the canvas — check the Math Canvas state first.
 
 DESMOS 3D COMMANDS:
 - { "action": "desmos3d.setExpression", "latex": "z=x^2+y^2" }

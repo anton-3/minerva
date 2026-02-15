@@ -15,6 +15,17 @@ interface DesmosCalculator {
   destroy(): void;
 }
 
+// Matches slider/variable assignments like "b=1", "m=-3.5", "a_{1}=7"
+// RHS must be a plain number — excludes equations like "y=x^2" or "f(x)=2x"
+const SLIDER_PATTERN = /^([a-zA-Z_][a-zA-Z_0-9]*(?:_\{[^}]*\})?)\s*=\s*-?\d*\.?\d+$/;
+
+/** Extract variable name if latex is a simple numeric assignment (slider) */
+function getSliderVarName(latex: string | undefined): string | null {
+  if (!latex) return null;
+  const match = latex.match(SLIDER_PATTERN);
+  return match ? match[1] : null;
+}
+
 export class DesmosWrapper implements ToolWrapper {
   readonly name = "desmos" as const;
   private calculator: DesmosCalculator | null = null;
@@ -38,7 +49,61 @@ export class DesmosWrapper implements ToolWrapper {
     try {
       switch (command.action) {
         case "desmos.setExpression": {
-          const id = command.id ?? `expr_${++this.expressionCounter}`;
+          // If an explicit ID is provided, always execute (intentional update)
+          if (command.id) {
+            this.calculator.setExpression({
+              id: command.id,
+              latex: command.latex,
+              color: command.color,
+              hidden: command.hidden,
+            });
+            break;
+          }
+
+          // No explicit ID — check for duplicate latex before adding
+          const existing = this.calculator
+            .getExpressions()
+            .find((e) => e.latex === command.latex && !e.hidden);
+
+          if (existing?.id) {
+            console.debug(
+              `[desmos] Skipping duplicate: "${command.latex}" already exists as [${existing.id}]`
+            );
+            // If color was specified and differs, update the existing expression
+            if (command.color && command.color !== existing.color) {
+              this.calculator.setExpression({
+                id: existing.id,
+                latex: command.latex,
+                color: command.color,
+              });
+              console.debug(`[desmos] Updated color of [${existing.id}] to ${command.color}`);
+            }
+            break;
+          }
+
+          // Check for slider/variable reassignment (e.g. "b=-5" should update existing "b=1")
+          const newVarName = getSliderVarName(command.latex);
+          if (newVarName) {
+            const expressions = this.calculator.getExpressions();
+            const existingSlider = expressions.find((e) => {
+              if (e.hidden) return false;
+              return getSliderVarName(e.latex) === newVarName;
+            });
+
+            if (existingSlider?.id) {
+              this.calculator.setExpression({
+                id: existingSlider.id,
+                latex: command.latex,
+                color: command.color ?? existingSlider.color,
+              });
+              console.debug(
+                `[desmos] Updated slider [${existingSlider.id}]: "${existingSlider.latex}" → "${command.latex}"`
+              );
+              break;
+            }
+          }
+
+          const id = `expr_${++this.expressionCounter}`;
           this.calculator.setExpression({
             id,
             latex: command.latex,
@@ -93,12 +158,19 @@ export class DesmosWrapper implements ToolWrapper {
       const visible = expressions.filter((e) => !e.hidden && e.latex);
       if (visible.length === 0) return "Desmos: No visible expressions.";
 
-      const descriptions = visible
-        .slice(0, 10) // Limit to first 10 for context
-        .map((e) => `- ${e.latex}`)
+      const total = visible.length;
+      const shown = visible.slice(0, 15);
+      const descriptions = shown
+        .map((e) => {
+          const id = e.id ? `[${e.id}]` : "[?]";
+          const color = e.color ? ` (${e.color})` : "";
+          return `- ${id} ${e.latex}${color}`;
+        })
         .join("\n");
 
-      return `Desmos expressions:\n${descriptions}`;
+      const overflow = total > shown.length ? `\n(${total - shown.length} more not shown)` : "";
+
+      return `Desmos (${total} expressions):\n${descriptions}${overflow}`;
     } catch {
       return "Desmos state unavailable.";
     }
