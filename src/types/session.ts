@@ -9,7 +9,7 @@ export type MathTool = "desmos" | "desmos3d" | "geogebra";
 // ─── Content Modes ───────────────────────────────────────────────────────────
 // Extensible: add new modes here and implement a corresponding panel component
 
-export type ContentMode = "math" | "manim";
+export type ContentMode = "math" | "sandbox" | "manim";
 
 // ─── Canvas Commands ────────────────────────────────────────────────────────
 // Multi-tool canvas system supporting Desmos 2D, Desmos 3D, and GeoGebra
@@ -44,21 +44,33 @@ export interface StudentProfile {
   grade: number;
 }
 
+export interface MasteryScore {
+  subject: string;
+  topic: string;
+  score: number;
+}
+
 export interface TutorBrainRequest {
   studentMessage: string;
   conversationHistory: ConversationMessage[];
   learningPlan: LearningPlanContext | null;
   studentProfile: StudentProfile;
   canvasState: string;
+  imageData?: {
+    base64: string;
+    mediaType: "image/jpeg" | "image/png" | "image/gif" | "image/webp";
+  };
+  masteryScores?: MasteryScore[];
 }
 
 export interface TutorBrainResponse {
   speech: string;
   canvasCommands?: CanvasCommand[];
-  progressUpdate?: { topic: string; score: number };
+  progressUpdate?: { topic: string; score: number; velocity?: "improving" | "plateau" | "struggling" };
   internalNotes?: string;
   manimVideoUrl?: string;
   contentMode?: ContentMode;
+  sandboxHtml?: string;
 }
 
 export interface ConversationMessage {
@@ -108,6 +120,8 @@ export interface SessionState {
   learningPlan: LearningPlanContext | null;
   contentMode: ContentMode;
   manimVideoUrl: string | null;
+  sandboxHtml: string | null;
+  masteryScores: MasteryScore[];
 }
 
 // ─── Session Summary ────────────────────────────────────────────────────────

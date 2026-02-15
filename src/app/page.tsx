@@ -40,10 +40,10 @@ export default function Home() {
           <span className="text-primary">brilliant, patient tutor</span>
         </h1>
         <p className="mt-6 text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-          Minerva is an AI-powered avatar tutor that teaches through real-time
-          conversation and an interactive whiteboard. Personalized learning
-          plans, progress tracking, and session summaries — all for a fraction
-          of the cost.
+          Minerva is an AI-powered avatar tutor that teaches any subject through
+          real-time conversation and interactive visuals. Math, physics,
+          history, chemistry, life skills — with adaptive learning, file upload,
+          and session summaries for parents.
         </p>
         <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
           <Link
@@ -75,7 +75,7 @@ export default function Home() {
           <FeatureCard
             step="2"
             title="Child Learns with Avatar"
-            description="Your child speaks with a patient AI tutor in a video call. The tutor draws on an interactive whiteboard to explain concepts using the Socratic method."
+            description="Your child speaks with a patient AI tutor face-to-face. Interactive visuals, graphs, simulations, and diagrams appear in real time for any subject."
           />
           <FeatureCard
             step="3"
@@ -97,8 +97,8 @@ export default function Home() {
               description="Never frustrated, never rushed. Explains concepts as many times as needed."
             />
             <ValueProp
-              title="Visual Teaching"
-              description="Interactive whiteboard draws equations, graphs, and diagrams in real-time."
+              title="Any Subject"
+              description="Math, physics, chemistry, history, biology, economics, music, life skills — Minerva teaches it all with interactive visuals."
             />
             <ValueProp
               title="Socratic Method"
@@ -124,7 +124,7 @@ export default function Home() {
           <TechBadge name="Claude" detail="Tutor Brain" />
           <TechBadge name="HeyGen" detail="Avatar" />
           <TechBadge name="Perplexity Sonar" detail="Knowledge" />
-          <TechBadge name="tldraw" detail="Canvas" />
+          <TechBadge name="Desmos + GeoGebra" detail="Math Canvas" />
           <TechBadge name="Zoom Video SDK" detail="Call Framework" />
           <TechBadge name="Supabase" detail="Database" />
           <TechBadge name="Next.js" detail="Framework" />

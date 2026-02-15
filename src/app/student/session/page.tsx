@@ -32,6 +32,7 @@ export default function SessionPage() {
     // Content mode
     contentMode,
     manimVideoUrl,
+    sandboxHtml,
     setContentMode,
     // Zoom
     zoomStatus,
@@ -114,7 +115,7 @@ export default function SessionPage() {
   }, [chatOpen]);
 
   const handleToggleMode = useCallback(() => {
-    const modes: ContentMode[] = ["math", "manim"];
+    const modes: ContentMode[] = ["math", "sandbox", "manim"];
     const currentIndex = modes.indexOf(contentMode);
     const nextIndex = (currentIndex + 1) % modes.length;
     setContentMode(modes[nextIndex]);
@@ -130,10 +131,25 @@ export default function SessionPage() {
           mode={contentMode}
           toolManager={toolManager}
           manimUrl={manimVideoUrl}
+          sandboxHtml={sandboxHtml}
           onToolChange={setActiveTool}
           onManimEnded={() => setContentMode("math")}
         />
       </main>
+
+      {/* Mode indicator badge */}
+      <div className="absolute top-3 left-3 z-10">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-black/60 backdrop-blur-sm px-3 py-1 text-xs font-medium text-white/90">
+          <span className={`w-1.5 h-1.5 rounded-full ${
+            contentMode === "math" ? "bg-blue-400" :
+            contentMode === "sandbox" ? "bg-green-400" :
+            "bg-purple-400"
+          }`} />
+          {contentMode === "math" ? "Math Canvas" :
+           contentMode === "sandbox" ? "Interactive" :
+           "Video"}
+        </span>
+      </div>
 
       {/* Draggable avatar PiP overlay */}
       <DraggableAvatar status={avatarStatus} onAttach={attach} />
