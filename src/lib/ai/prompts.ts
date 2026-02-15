@@ -151,7 +151,7 @@ Manim creates 3Blue1Brown-style math animations.
 WORKFLOW for showing videos:
 1. When introducing a new math topic, FIRST call listVideos with relevant keywords
 2. If relevant videos are found, call showVideo with existingFile parameter
-3. ONLY generate new videos if no relevant video exists AND student would benefit
+3. Because videos take 30s to generate, do not generate them.
 
 listVideos tool:
 - keyword: search term for video topic (e.g., "quadratic", "derivative", "pythagorean")
