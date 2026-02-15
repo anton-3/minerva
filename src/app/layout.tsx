@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Space_Grotesk } from "next/font/google";
+import { Geist, Geist_Mono, Space_Grotesk, DM_Sans, Outfit } from "next/font/google";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -17,10 +17,22 @@ const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
 });
 
+const dmSans = DM_Sans({
+  variable: "--font-dm-sans",
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600"],
+});
+
+const outfit = Outfit({
+  variable: "--font-outfit",
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700", "800"],
+});
+
 export const metadata: Metadata = {
-  title: "Minerva — AI Avatar Tutor",
+  title: "Minerva AI | Lifelike Socratic Education 24/7",
   description:
-    "A patient, brilliant AI tutor that teaches through conversation and an interactive whiteboard. Built for every child who deserves great teaching.",
+    "Minerva provides individualized education via a lifelike AI avatar using real-time voice and the Socratic method.",
 };
 
 export default function RootLayout({
@@ -31,7 +43,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} antialiased min-h-screen`}
+        className={`${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} ${dmSans.variable} ${outfit.variable} antialiased min-h-screen`}
       >
         {children}
       </body>
