@@ -22,18 +22,13 @@ export function ModelPicker({ className }: ModelPickerProps) {
   const selectedModel = useSessionStore((s) => s.selectedModel);
   const setSelectedModel = useSessionStore((s) => s.setSelectedModel);
 
-  // Find the current model config for display
-  const currentModel = AI_MODELS.find((m) => m.id === selectedModel);
-
   return (
     <Select
       value={selectedModel}
       onValueChange={(v) => setSelectedModel(v as AIModelId)}
     >
       <SelectTrigger size="sm" className={className}>
-        <SelectValue>
-          {currentModel?.displayName ?? "Select Model"}
-        </SelectValue>
+        <SelectValue placeholder="Model">Model</SelectValue>
       </SelectTrigger>
       <SelectContent>
         {AI_MODELS.map((model) => (

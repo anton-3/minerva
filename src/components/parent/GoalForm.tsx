@@ -1,10 +1,11 @@
-// GoalForm — form to create/edit learning goals
-// Owner: Person D (Dashboard + Design)
-// See: specs/001-minerva-mvp/tasks.md (T045)
-
+// GoalForm — form to create/edit learning goals with shadcn components
 "use client";
 
 import { useState } from "react";
+import { Plus, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import type { GoalEntry } from "@/db/types";
 
 interface GoalFormProps {
@@ -55,57 +56,51 @@ export function GoalForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-2">
-        <label htmlFor="subject" className="text-sm font-medium">
-          Subject
-        </label>
-        <input
+        <Label htmlFor="subject">Subject</Label>
+        <Input
           id="subject"
-          type="text"
           value={subject}
           onChange={(e) => setSubject(e.target.value)}
           placeholder="e.g., Algebra, Physics, Writing"
           required
-          className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         />
       </div>
 
       <div className="space-y-2">
-        <label className="text-sm font-medium">Learning Goals</label>
+        <Label>Learning Goals</Label>
         {goals.map((goal, i) => (
           <div key={i} className="flex gap-2">
-            <input
-              type="text"
+            <Input
               value={goal.description}
               onChange={(e) => updateGoal(i, e.target.value)}
               placeholder="e.g., Master solving linear equations"
-              className="flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             />
             {goals.length > 1 && (
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="icon"
                 onClick={() => removeGoal(i)}
-                className="text-muted-foreground hover:text-foreground px-2"
+                className="shrink-0"
               >
-                Remove
-              </button>
+                <X className="h-4 w-4" />
+              </Button>
             )}
           </div>
         ))}
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="sm"
           onClick={addGoal}
-          className="text-sm text-muted-foreground hover:text-foreground"
+          className="text-text-secondary"
         >
-          + Add goal
-        </button>
+          <Plus className="h-3.5 w-3.5 mr-1" />
+          Add goal
+        </Button>
       </div>
 
-      <button
-        type="submit"
-        className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-      >
-        Save Goals
-      </button>
+      <Button type="submit">Save Goals</Button>
     </form>
   );
 }
