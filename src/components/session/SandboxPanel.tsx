@@ -37,9 +37,13 @@ export function SandboxPanel({ html }: SandboxPanelProps) {
     );
   }
 
+  // Force content to fit viewport — no scrolling
+  const viewportCss = `<style>html,body{margin:0;padding:0;overflow:hidden;width:100%;height:100vh;max-height:100vh;}</style>`;
+  const enrichedHtml = viewportCss + html;
+
   return (
     <iframe
-      srcDoc={html}
+      srcDoc={enrichedHtml}
       sandbox="allow-scripts"
       className="w-full h-full border-0"
       style={{ background: "#fff" }}

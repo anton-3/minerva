@@ -1,5 +1,5 @@
 // BottomControlBar — Zoom-style control bar at bottom of screen
-// Contains: session timer, mic/camera controls, join/leave, chat toggle, self-view
+// Contains: session timer, camera/scan controls, join/leave, chat toggle
 // Fixed at the bottom of the viewport.
 
 "use client";
@@ -16,6 +16,7 @@ import {
   MessageSquare,
   Monitor,
   Eraser,
+  ScanLine,
 } from "lucide-react";
 
 interface BottomControlBarProps {
@@ -26,14 +27,13 @@ interface BottomControlBarProps {
   chatOpen: boolean;
   onToggleChat: () => void;
   unreadCount: number;
-  // Zoom self-view
-  zoomConnected: boolean;
-  zoomIsMuted: boolean;
-  onToggleMute: () => void;
-  selfViewRef: React.RefObject<HTMLDivElement | null>;
   // Content mode
   onToggleMode?: () => void;
   currentMode?: string;
+  // Camera controls
+  cameraActive?: boolean;
+  onToggleCamera?: () => void;
+  onScan?: () => void;
 }
 
 function formatTime(seconds: number): string {
@@ -50,12 +50,11 @@ export function BottomControlBar({
   chatOpen,
   onToggleChat,
   unreadCount,
-  zoomConnected,
-  zoomIsMuted,
-  onToggleMute,
-  selfViewRef,
   onToggleMode,
   currentMode,
+  cameraActive,
+  onToggleCamera,
+  onScan,
 }: BottomControlBarProps) {
   const [elapsed, setElapsed] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -114,28 +113,29 @@ export function BottomControlBar({
 
         {/* Center: Main controls */}
         <div className="flex items-center gap-2">
-          {/* Mic toggle */}
-          {isActive && (
+          {/* Camera toggle */}
+          {isActive && onToggleCamera && (
             <button
-              onClick={onToggleMute}
+              onClick={onToggleCamera}
               className={`p-3 rounded-full transition-colors ${
-                zoomIsMuted
-                  ? "bg-red-500/20 text-red-400 hover:bg-red-500/30"
-                  : "bg-white/10 text-white hover:bg-white/20"
+                cameraActive
+                  ? "bg-white/10 text-white hover:bg-white/20"
+                  : "bg-red-500/20 text-red-400 hover:bg-red-500/30"
               }`}
-              title={zoomIsMuted ? "Unmute" : "Mute"}
+              title={cameraActive ? "Turn off camera" : "Turn on camera"}
             >
-              {zoomIsMuted ? <MicOff size={20} /> : <Mic size={20} />}
+              {cameraActive ? <Video size={20} /> : <VideoOff size={20} />}
             </button>
           )}
 
-          {/* Camera toggle (placeholder for future) */}
-          {isActive && zoomConnected && (
+          {/* Scan document */}
+          {isActive && cameraActive && onScan && (
             <button
+              onClick={onScan}
               className="p-3 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
-              title="Camera"
+              title="Scan document"
             >
-              <Video size={20} />
+              <ScanLine size={20} />
             </button>
           )}
 
@@ -155,7 +155,7 @@ export function BottomControlBar({
             <button
               onClick={onToggleMode}
               className="p-3 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
-              title={`Switch to ${currentMode === "math" ? "Video" : "Math"} mode`}
+              title={`Switch mode (${currentMode})`}
             >
               <Monitor size={20} />
             </button>
@@ -189,9 +189,8 @@ export function BottomControlBar({
           )}
         </div>
 
-        {/* Right: Chat toggle + Self-view */}
+        {/* Right: Chat toggle */}
         <div className="flex items-center gap-3 min-w-[200px] justify-end">
-          {/* Chat toggle */}
           <button
             onClick={onToggleChat}
             className={`relative p-3 rounded-full transition-colors ${
@@ -208,14 +207,6 @@ export function BottomControlBar({
               </span>
             )}
           </button>
-
-          {/* Self-view thumbnail in control bar */}
-          {zoomConnected && (
-            <div
-              ref={selfViewRef}
-              className="w-[80px] h-[45px] rounded-lg border border-white/20 bg-black overflow-hidden [&_video-player]:w-full [&_video-player]:h-full"
-            />
-          )}
         </div>
       </div>
     </div>
