@@ -10,6 +10,7 @@ import type {
   TranscriptEntry,
   StudentProfile,
   LearningPlanContext,
+  ContentMode,
 } from "@/types/session";
 
 interface SessionActions {
@@ -20,6 +21,8 @@ interface SessionActions {
   setLearningPlan: (plan: LearningPlanContext | null) => void;
   addMessage: (message: ConversationMessage) => void;
   addTranscriptEntry: (entry: TranscriptEntry) => void;
+  setContentMode: (mode: ContentMode) => void;
+  setManimVideoUrl: (url: string | null) => void;
   reset: () => void;
 }
 
@@ -31,6 +34,8 @@ const initialState: SessionState = {
   transcript: [],
   studentProfile: null,
   learningPlan: null,
+  contentMode: "math",
+  manimVideoUrl: null,
 };
 
 export const useSessionStore = create<SessionState & SessionActions>((set) => ({
@@ -51,6 +56,9 @@ export const useSessionStore = create<SessionState & SessionActions>((set) => ({
     set((state) => ({
       transcript: [...state.transcript, entry],
     })),
+
+  setContentMode: (contentMode) => set({ contentMode }),
+  setManimVideoUrl: (manimVideoUrl) => set({ manimVideoUrl }),
 
   reset: () => set(initialState),
 }));

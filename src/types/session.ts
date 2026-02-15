@@ -6,6 +6,11 @@
 
 export type MathTool = "desmos" | "desmos3d" | "geogebra";
 
+// ─── Content Modes ───────────────────────────────────────────────────────────
+// Extensible: add new modes here and implement a corresponding panel component
+
+export type ContentMode = "math" | "manim";
+
 // ─── Canvas Commands ────────────────────────────────────────────────────────
 // Multi-tool canvas system supporting Desmos 2D, Desmos 3D, and GeoGebra
 
@@ -52,6 +57,8 @@ export interface TutorBrainResponse {
   canvasCommands?: CanvasCommand[];
   progressUpdate?: { topic: string; score: number };
   internalNotes?: string;
+  manimVideoUrl?: string;
+  contentMode?: ContentMode;
 }
 
 export interface ConversationMessage {
@@ -99,6 +106,8 @@ export interface SessionState {
   transcript: TranscriptEntry[];
   studentProfile: StudentProfile | null;
   learningPlan: LearningPlanContext | null;
+  contentMode: ContentMode;
+  manimVideoUrl: string | null;
 }
 
 // ─── Session Summary ────────────────────────────────────────────────────────

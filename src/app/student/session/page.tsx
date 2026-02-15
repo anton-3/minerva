@@ -1,18 +1,17 @@
-// Session Page — THE core tutoring experience
-// Zoom Video SDK provides the call layer (student webcam self-view).
-// HeyGen LiveAvatar renders the AI tutor avatar.
-// Multi-tool Canvas: Desmos, Desmos 3D, GeoGebra (interactive math visualization).
-// Layout: Avatar (left) + Canvas (center) + Chat (right sidebar)
-// Student self-view (small Zoom webcam) overlays bottom-left of avatar panel.
+// Session Page — Video-call style tutoring UI
+// Full-screen layout with draggable avatar PiP, bottom control bar,
+// slide-out chat sheet, and extensible content modes (Math / Manim).
+// No navbar — Zoom/Google Meet-style immersive experience.
 
 "use client";
 
 import { useRef, useEffect, useCallback, useState } from "react";
 import { useSession } from "@/hooks/useSession";
-import { AvatarPanel } from "@/components/session/AvatarPanel";
-import { CanvasPanel } from "@/components/session/CanvasPanel";
-import { ChatPanel } from "@/components/session/ChatPanel";
-import { SessionControls } from "@/components/session/SessionControls";
+import { DraggableAvatar } from "@/components/session/DraggableAvatar";
+import { ContentModeView } from "@/components/session/ContentMode";
+import { BottomControlBar } from "@/components/session/BottomControlBar";
+import { ChatSheet } from "@/components/session/ChatSheet";
+import type { ContentMode } from "@/types/session";
 
 export default function SessionPage() {
   const {
@@ -28,6 +27,10 @@ export default function SessionPage() {
     toolManager,
     clearCanvas,
     setActiveTool,
+    // Content mode
+    contentMode,
+    manimVideoUrl,
+    setContentMode,
     // Zoom
     zoomStatus,
     zoomStartVideo,
@@ -37,6 +40,8 @@ export default function SessionPage() {
 
   const selfViewRef = useRef<HTMLDivElement>(null);
   const [videoStarted, setVideoStarted] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   // Start Zoom video when connected and container is ready
   const startSelfView = useCallback(async () => {
@@ -61,76 +66,72 @@ export default function SessionPage() {
     }
   }, [zoomStatus]);
 
+  // Reset unread count when chat opens
+  useEffect(() => {
+    if (chatOpen) {
+      setUnreadCount(0);
+    }
+  }, [chatOpen]);
+
+  const handleNewMessage = useCallback(() => {
+    if (!chatOpen) {
+      setUnreadCount((prev) => prev + 1);
+    }
+  }, [chatOpen]);
+
+  const handleToggleMode = useCallback(() => {
+    const modes: ContentMode[] = ["math", "manim"];
+    const currentIndex = modes.indexOf(contentMode);
+    const nextIndex = (currentIndex + 1) % modes.length;
+    setContentMode(modes[nextIndex]);
+  }, [contentMode, setContentMode]);
+
   const zoomConnected = zoomStatus === "connected";
 
   return (
-    <div className="flex flex-col h-screen bg-background">
-      {/* Top bar */}
-      <header className="flex items-center justify-between px-6 py-3 border-b border-border shrink-0">
-        <div className="flex items-center gap-3">
-          <h1 className="text-lg font-semibold">Minerva</h1>
-          {status === "active" && (
-            <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
-              Session Active
-            </span>
-          )}
-          {zoomConnected && (
-            <span className="text-xs text-blue-600 bg-blue-50 dark:bg-blue-950 dark:text-blue-400 px-2 py-0.5 rounded-full">
-              Zoom Connected
-            </span>
-          )}
-        </div>
-        <SessionControls
-          status={status}
-          onStart={startSession}
-          onEnd={endSession}
-          onClearCanvas={clearCanvas}
+    <div className="relative h-screen w-screen overflow-hidden bg-black">
+      {/* Main content area — full screen minus bottom bar */}
+      <main className="absolute inset-0 bottom-[64px]">
+        <ContentModeView
+          mode={contentMode}
+          toolManager={toolManager}
+          manimUrl={manimVideoUrl}
+          onToolChange={setActiveTool}
+          onManimEnded={() => setContentMode("math")}
         />
-      </header>
-
-      {/* Main content — grid: avatar | canvas | chat */}
-      <main className="flex-1 grid grid-cols-[1fr_1.5fr_320px] gap-4 p-4 overflow-hidden">
-        {/* Left column: AI Avatar + Student self-view overlay */}
-        <div className="min-h-0 relative">
-          <AvatarPanel status={avatarStatus} onAttach={attach} />
-
-          {/* Student self-view — small Zoom webcam overlay (bottom-left) */}
-          {zoomConnected && (
-            <div className="absolute bottom-3 left-3 flex flex-col items-start gap-1">
-              <video-player-container
-                ref={selfViewRef}
-                className="block w-[160px] h-[90px] rounded-lg border-2 border-white/30 shadow-lg bg-black overflow-hidden [&_video-player]:w-full [&_video-player]:h-full"
-              />
-              <button
-                onClick={async () => {
-                  await zoomToggleMute();
-                }}
-                className={`text-xs px-2 py-1 rounded-md shadow ${
-                  zoomIsMuted
-                    ? "bg-red-500 text-white"
-                    : "bg-white/80 text-black"
-                }`}
-              >
-                {zoomIsMuted ? "Unmute" : "Mute"}
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Center: Canvas (multi-tool math visualization) */}
-        <div className="min-h-0">
-          <CanvasPanel toolManager={toolManager} onToolChange={setActiveTool} />
-        </div>
-
-        {/* Right: Chat sidebar */}
-        <div className="min-h-0">
-          <ChatPanel
-            messages={conversationHistory}
-            onSendMessage={handleTextMessage}
-            isProcessing={isProcessing}
-          />
-        </div>
       </main>
+
+      {/* Draggable avatar PiP overlay */}
+      <DraggableAvatar status={avatarStatus} onAttach={attach} />
+
+      {/* Bottom control bar */}
+      <BottomControlBar
+        status={status}
+        onStart={startSession}
+        onEnd={endSession}
+        onClearCanvas={clearCanvas}
+        chatOpen={chatOpen}
+        onToggleChat={() => setChatOpen((prev) => !prev)}
+        unreadCount={unreadCount}
+        zoomConnected={zoomConnected}
+        zoomIsMuted={zoomIsMuted}
+        onToggleMute={async () => {
+          await zoomToggleMute();
+        }}
+        selfViewRef={selfViewRef}
+        onToggleMode={handleToggleMode}
+        currentMode={contentMode}
+      />
+
+      {/* Chat slide-out sheet */}
+      <ChatSheet
+        open={chatOpen}
+        onOpenChange={setChatOpen}
+        messages={conversationHistory}
+        onSendMessage={handleTextMessage}
+        isProcessing={isProcessing}
+        onNewMessage={handleNewMessage}
+      />
     </div>
   );
 }

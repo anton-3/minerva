@@ -29,6 +29,7 @@
     "react-dom": "19.2.3",
     "react-geogebra": "^1.2.5",
     "react-is": "^19.2.3",
+    "react-rnd": "^10.5.2",
     "recharts": "^3.7.0",
     "tailwind-merge": "^3.4.0",
     "zod": "^4.3.6",

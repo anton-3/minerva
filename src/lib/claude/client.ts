@@ -102,6 +102,8 @@ const TutorResponseSchema = z.object({
   progressUpdate: z
     .object({ topic: z.string(), score: z.number() })
     .optional(),
+  manimVideoUrl: z.string().optional(),
+  contentMode: z.enum(["math", "manim"]).optional(),
 });
 
 const SessionSummarySchema = z.object({

@@ -2,9 +2,44 @@
 
 > **For AI agents**: Read this file first to understand where the project is. Update it after every meaningful task or group of tasks.
 
-**Last updated**: 2026-02-14 (Session 7)
+**Last updated**: 2026-02-14 (Session 8)
 **Branch**: `001-minerva-mvp`
-**Overall status**: Phases 1-8 COMPLETE (T001-T067). **NEW**: Replaced tldraw with multi-tool canvas (Desmos 2D, Desmos 3D, GeoGebra). All features built: session page, parent dashboard, learning plan generation, session recording + summary, Perplexity knowledge lookup, landing page, edge case handling. 20 routes. TypeScript passes clean.
+**Overall status**: Phases 1-8 COMPLETE (T001-T067). **NEW**: Video-call UI redesign — Zoom-style layout with draggable avatar PiP, bottom control bar, slide-out chat, extensible content modes (Math + Manim). TypeScript passes clean.
+
+---
+
+## Session 8: Video-Call UI Redesign
+
+**Major change**: Redesigned session page from 3-column grid layout to Zoom/Google Meet-style video call UI.
+
+### What Changed
+- **Removed navbar** — immersive full-screen experience
+- **Draggable avatar PiP** — floating, draggable avatar overlay using `react-rnd`, minimizable
+- **Bottom control bar** — centered controls (mic, camera, join/leave), timer on left, chat + self-view on right
+- **Slide-out chat** — hidden behind a chat button, uses shadcn Sheet (slides from right)
+- **Extensible content modes** — `ContentMode` union type: "math" (current Desmos/GeoGebra) and "manim" (video player)
+- **Manim video player** — HTML5 video player with loading/error states, auto-play
+- **Self-view in control bar** — Zoom webcam thumbnail shown in bottom-right of control bar (Google Meet style)
+- **Unread message badge** — red badge on chat button shows unread count when chat is closed
+
+### New Files
+- `src/components/session/DraggableAvatar.tsx` — draggable avatar PiP (react-rnd, fixed size 280x158)
+- `src/components/session/BottomControlBar.tsx` — Zoom-style control bar with all session controls
+- `src/components/session/ChatSheet.tsx` — slide-out chat panel (shadcn Sheet)
+- `src/components/session/ManimPlayer.tsx` — video player for Manim animations
+- `src/components/session/ContentMode.tsx` — extensible content mode switcher
+
+### Modified Files
+- `src/app/student/session/page.tsx` — complete rewrite: full-screen layout, no navbar
+- `src/types/session.ts` — added `ContentMode` type, `manimVideoUrl` + `contentMode` to `SessionState` and `TutorBrainResponse`
+- `src/stores/sessionStore.ts` — added `contentMode`, `manimVideoUrl`, `setContentMode`, `setManimVideoUrl`
+- `src/hooks/useSession.ts` — exposes `contentMode`, `manimVideoUrl`, `setContentMode`, `setManimVideoUrl`
+- `src/lib/claude/client.ts` — Zod schema updated with `manimVideoUrl` and `contentMode` fields
+
+### Architecture Notes
+- **ContentMode is extensible**: Add new modes by extending the `ContentMode` union type and adding a panel in `ContentMode.tsx`
+- **Claude can now return** `manimVideoUrl` and `contentMode` in its response to trigger video playback or mode switching
+- **Old components preserved**: `AvatarPanel.tsx`, `ChatPanel.tsx`, `SessionControls.tsx` still exist but are no longer used by the session page (can be removed in cleanup)
 
 ---
 
