@@ -12,9 +12,7 @@ import {
   Phone,
   PhoneOff,
   MessageSquare,
-  Monitor,
   Eraser,
-  ScanLine,
 } from "lucide-react";
 
 interface BottomControlBarProps {
@@ -31,7 +29,6 @@ interface BottomControlBarProps {
   // Camera controls
   cameraActive?: boolean;
   onToggleCamera?: () => void;
-  onScan?: () => void;
 }
 
 function formatTime(seconds: number): string {
@@ -145,18 +142,6 @@ export function BottomControlBar({
                 title={cameraActive ? "Turn off camera" : "Turn on camera"}
               >
                 {cameraActive ? <Video size={18} /> : <VideoOff size={18} />}
-              </button>
-            )}
-
-            {/* Scan document — only when camera active */}
-            {cameraActive && onScan && (
-              <button
-                onClick={onScan}
-                className="p-3 rounded-full bg-white/80 backdrop-blur-md border border-border-light text-text-secondary hover:bg-white transition-colors"
-                style={{ WebkitBackdropFilter: "blur(12px)" }}
-                title="Scan document"
-              >
-                <ScanLine size={18} />
               </button>
             )}
 

@@ -2,9 +2,29 @@
 
 > **For AI agents**: Read this file first to understand where the project is. Update it after every meaningful task or group of tasks.
 
-**Last updated**: 2026-02-15 (Session 12 - Tool Calling Speech Fix)
+**Last updated**: 2026-02-15 (Session 13 - Read-triggered camera screenshot)
 **Branch**: `001-minerva-mvp`
-**Overall status**: Phases 1-8 COMPLETE (T001-T067). Session 12 fixed a critical bug where Claude would call tools without generating speech text, leaving the avatar silent.
+**Overall status**: Phases 1-8 COMPLETE (T001-T067). Session 13: read-triggered camera screenshot; removed paper detection and scan button.
+
+---
+
+## Session 13: Read-triggered camera screenshot
+
+**Goal**: Conversational homework help — when the user stops talking (push-to-talk release) and their words contain "read", send a screenshot of the camera with the message so the model can see the homework. Remove paper-detection and scan-button UI to minimize friction and latency.
+
+**Changes**:
+- **Removed**: Paper detection loop and "Paper detected" overlay in FloatingVideoOverlay; Scan button in overlay (gallery) and in BottomControlBar; handleScan and onScan wiring from session page.
+- **Added**: In useSession, when `onUserMessage(text)` fires, if `text` contains "read" (case-insensitive) and the camera is on, capture one frame via `captureFrame(userCamera.videoRef.current)` and call `brain.handleStudentMessage(text, result)`; otherwise `brain.handleStudentMessage(text)`.
+
+**Files changed**:
+| File | Change |
+|------|--------|
+| `src/app/student/session/page.tsx` | Removed captureFrame import, handleScan, onScan props |
+| `src/components/session/FloatingVideoOverlay.tsx` | Removed onScan prop, DocumentOverlay, ScanFlash, detection state/loop, handleScan, Scan button |
+| `src/components/session/BottomControlBar.tsx` | Removed onScan prop and scan button |
+| `src/hooks/useSession.ts` | Import captureFrame; in onUserMessage, if "read" then capture frame and pass imageData |
+
+**Note**: `src/lib/camera/detector.ts` is now unused (left in repo for possible future use).
 
 ---
 
