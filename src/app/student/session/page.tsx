@@ -110,13 +110,23 @@ export default function SessionPage() {
       else if (e.data.action === "up") pttUp();
     };
 
+    // Toggle chat with 'C' key
+    const handleChatToggle = (e: KeyboardEvent) => {
+      if (e.code !== "KeyC" || e.repeat) return;
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable) return;
+      setChatOpen((prev) => !prev);
+    };
+
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
     window.addEventListener("message", handleMessage);
+    window.addEventListener("keydown", handleChatToggle);
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
       window.removeEventListener("message", handleMessage);
+      window.removeEventListener("keydown", handleChatToggle);
     };
   }, [avatarMute, avatarUnmute, avatarFlush, muteAvatarAudio, unmuteAvatarAudio]);
 

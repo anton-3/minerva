@@ -72,25 +72,22 @@ export function MathToolPanel({ toolManager, onToolChange }: MathToolPanelProps)
 
   return (
     <div className="flex flex-col h-full rounded-lg overflow-hidden border border-border bg-background">
-      {/* Tool tabs */}
-      <div className="flex border-b border-border bg-muted/50">
+      {/* Tool tabs — floating pill bar */}
+      <div className="flex items-center gap-1 p-1.5 bg-white/60 backdrop-blur-md border-b border-border-light">
         {(["desmos", "desmos3d", "geogebra"] as MathTool[]).map((tool) => (
           <button
             key={tool}
             onClick={() => handleToolChange(tool)}
             className={`
-              flex-1 px-4 py-2 text-sm font-medium transition-colors
+              px-4 py-1.5 text-xs font-medium rounded-full transition-all
               ${
                 activeTool === tool
-                  ? "bg-background text-foreground border-b-2 border-primary"
-                  : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+                  ? "bg-brand-primary text-white shadow-sm"
+                  : "text-text-secondary hover:text-text-primary hover:bg-black/5"
               }
             `}
           >
             {TOOL_LABELS[tool]}
-            {/* {toolsReady[tool] && (
-              <span className="ml-1 text-xs text-green-500">*</span>
-            )} */}
           </button>
         ))}
       </div>

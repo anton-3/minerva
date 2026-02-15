@@ -30,9 +30,9 @@ interface FloatingVideoOverlayProps {
 // ─── Dimensions per mode ───
 
 const DIMENSIONS: Record<ViewMode, { width: number; height: number }> = {
-  strip: { width: 350, height: 40 },
+  strip: { width: 320, height: 40 },
   speaker: { width: 320, height: 200 },
-  gallery: { width: 280, height: 340 },
+  gallery: { width: 320, height: 340 },
 };
 
 const MIN_SIZES: Record<ViewMode, { width: number; height: number }> = {

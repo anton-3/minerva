@@ -128,7 +128,7 @@ function isPureNoise(text: string): boolean {
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
-const FALLBACK_DEBOUNCE_MS = 200; // Short fallback to catch trailing ASR fragments after mute
+const FALLBACK_DEBOUNCE_MS = 800; // Debounce natural speech pauses — prevents splitting utterances into separate messages
 const ECHO_COOLDOWN_MS = 300; // Cooldown after AVATAR_SPEAK_ENDED
 const ASR_IGNORE_MS = 1500; // Ignore initial ASR burst
 const SESSION_START_TIMEOUT_MS = 15000; // Timeout for session.start()
@@ -152,6 +152,7 @@ export function createAvatarClient(): AvatarClient {
   let echoCooldownActive = false;
   let asrEnabled = false;
   let pushToTalkActive = false;
+  let postFlushCooldown = false; // Prevents trailing ASR fragments from creating new messages
 
   // speak() promise resolution
   let speakResolve: (() => void) | null = null;
@@ -183,6 +184,10 @@ export function createAvatarClient(): AvatarClient {
       console.log("[AvatarClient] Filtered pure noise:", text);
       return;
     }
+
+    // Post-flush cooldown — ignore trailing ASR fragments for 500ms after a flush
+    postFlushCooldown = true;
+    setTimeout(() => { postFlushCooldown = false; }, 500);
 
     // Start latency cycle — this is T0 for the whole pipeline
     cycleStartMs = performance.now();
@@ -292,6 +297,14 @@ export function createAvatarClient(): AvatarClient {
         // Ignore during echo cooldown after avatar finishes
         if (echoCooldownActive) {
           console.log("[AvatarClient] Dropped (echo cooldown):", text);
+          return;
+        }
+
+        // Ignore trailing fragments right after a flush (prevents split messages)
+        if (postFlushCooldown && !pushToTalkActive) {
+          // Accumulate instead of dropping — will merge with next utterance
+          pendingText += (pendingText ? " " : "") + text;
+          console.log("[AvatarClient] Accumulating during post-flush cooldown:", text);
           return;
         }
 
