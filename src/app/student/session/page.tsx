@@ -1,17 +1,18 @@
 // Session Page — Video-call style tutoring UI
-// Full-screen layout with draggable avatar PiP, bottom control bar,
-// slide-out chat sheet, and extensible content modes (Math / Manim).
+// Full-screen content with floating Zoom-style video overlay,
+// bottom control bar, slide-out chat sheet, and extensible content modes.
 // No navbar — Zoom/Google Meet-style immersive experience.
 
 "use client";
 
-import { useRef, useEffect, useCallback, useState } from "react";
+import { useEffect, useCallback, useState } from "react";
 import { useSession } from "@/hooks/useSession";
-import { DraggableAvatar } from "@/components/session/DraggableAvatar";
 import { ContentModeView } from "@/components/session/ContentMode";
+import { FloatingVideoOverlay } from "@/components/session/FloatingVideoOverlay";
 import { BottomControlBar } from "@/components/session/BottomControlBar";
 import { ChatSheet } from "@/components/session/ChatSheet";
 import type { ContentMode } from "@/types/session";
+import { captureFrame } from "@/lib/camera/scanner";
 
 export default function SessionPage() {
   const {
@@ -34,41 +35,13 @@ export default function SessionPage() {
     manimVideoUrl,
     sandboxHtml,
     setContentMode,
-    // Zoom
-    zoomStatus,
-    zoomStartVideo,
-    zoomToggleMute,
-    zoomIsMuted,
+    // User camera
+    userCamera,
   } = useSession();
 
-  const selfViewRef = useRef<HTMLDivElement>(null);
-  const [videoStarted, setVideoStarted] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [micOpen, setMicOpen] = useState(false);
-
-  // Start Zoom video when connected and container is ready
-  const startSelfView = useCallback(async () => {
-    if (selfViewRef.current && zoomStatus === "connected" && !videoStarted) {
-      try {
-        await zoomStartVideo(selfViewRef.current);
-        setVideoStarted(true);
-      } catch (err) {
-        console.warn("[SessionPage] Failed to start Zoom video:", err);
-      }
-    }
-  }, [zoomStatus, zoomStartVideo, videoStarted]);
-
-  useEffect(() => {
-    startSelfView();
-  }, [startSelfView]);
-
-  // Reset video state on disconnect
-  useEffect(() => {
-    if (zoomStatus === "disconnected" || zoomStatus === "idle") {
-      setVideoStarted(false);
-    }
-  }, [zoomStatus]);
 
   // Reset unread count when chat opens
   useEffect(() => {
@@ -81,7 +54,6 @@ export default function SessionPage() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.code !== "Space" || e.repeat) return;
-      // Don't intercept when typing in an input, textarea, or contentEditable
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable) return;
 
@@ -121,7 +93,16 @@ export default function SessionPage() {
     setContentMode(modes[nextIndex]);
   }, [contentMode, setContentMode]);
 
-  const zoomConnected = zoomStatus === "connected";
+  // Handle document scan — send captured frame to Claude Vision
+  const handleScan = useCallback(
+    (result: { base64: string; mediaType: "image/jpeg" }) => {
+      handleTextMessage(
+        "I'm showing you my paper — please look at what I've written and help me with it",
+        { base64: result.base64, mediaType: result.mediaType }
+      );
+    },
+    [handleTextMessage]
+  );
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-black">
@@ -137,6 +118,14 @@ export default function SessionPage() {
         />
       </main>
 
+      {/* Floating Zoom-style video overlay */}
+      <FloatingVideoOverlay
+        avatarStatus={avatarStatus}
+        onAttachAvatar={attach}
+        userCamera={userCamera}
+        onScan={handleScan}
+      />
+
       {/* Mode indicator badge */}
       <div className="absolute top-3 left-3 z-10">
         <span className="inline-flex items-center gap-1.5 rounded-full bg-black/60 backdrop-blur-sm px-3 py-1 text-xs font-medium text-white/90">
@@ -151,9 +140,6 @@ export default function SessionPage() {
         </span>
       </div>
 
-      {/* Draggable avatar PiP overlay */}
-      <DraggableAvatar status={avatarStatus} onAttach={attach} />
-
       {/* Bottom control bar */}
       <BottomControlBar
         status={status}
@@ -163,14 +149,22 @@ export default function SessionPage() {
         chatOpen={chatOpen}
         onToggleChat={() => setChatOpen((prev) => !prev)}
         unreadCount={unreadCount}
-        zoomConnected={zoomConnected}
-        zoomIsMuted={zoomIsMuted}
-        onToggleMute={async () => {
-          await zoomToggleMute();
-        }}
-        selfViewRef={selfViewRef}
         onToggleMode={handleToggleMode}
         currentMode={contentMode}
+        cameraActive={userCamera.isActive}
+        onToggleCamera={() => {
+          if (userCamera.isActive) {
+            userCamera.stopCamera();
+          } else {
+            userCamera.startCamera();
+          }
+        }}
+        onScan={() => {
+          if (userCamera.videoRef.current) {
+            const result = captureFrame(userCamera.videoRef.current);
+            if (result) handleScan(result);
+          }
+        }}
       />
 
       {/* Chat slide-out sheet */}

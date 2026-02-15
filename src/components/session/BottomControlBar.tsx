@@ -1,14 +1,12 @@
-// BottomControlBar — Zoom-style control bar at bottom of screen
-// Contains: session timer, mic/camera controls, join/leave, chat toggle, self-view
-// Fixed at the bottom of the viewport.
+// BottomControlBar — Floating control buttons at bottom of screen
+// Contains: session timer, camera/scan controls, join/leave, chat toggle
+// Three floating groups: bottom-left, bottom-center, bottom-right.
 
 "use client";
 
 import { useState, useEffect, useRef } from "react";
 import type { SessionStatus } from "@/types/session";
 import {
-  Mic,
-  MicOff,
   Video,
   VideoOff,
   Phone,
@@ -16,6 +14,7 @@ import {
   MessageSquare,
   Monitor,
   Eraser,
+  ScanLine,
 } from "lucide-react";
 
 interface BottomControlBarProps {
@@ -26,14 +25,13 @@ interface BottomControlBarProps {
   chatOpen: boolean;
   onToggleChat: () => void;
   unreadCount: number;
-  // Zoom self-view
-  zoomConnected: boolean;
-  zoomIsMuted: boolean;
-  onToggleMute: () => void;
-  selfViewRef: React.RefObject<HTMLDivElement | null>;
   // Content mode
   onToggleMode?: () => void;
   currentMode?: string;
+  // Camera controls
+  cameraActive?: boolean;
+  onToggleCamera?: () => void;
+  onScan?: () => void;
 }
 
 function formatTime(seconds: number): string {
@@ -50,12 +48,11 @@ export function BottomControlBar({
   chatOpen,
   onToggleChat,
   unreadCount,
-  zoomConnected,
-  zoomIsMuted,
-  onToggleMute,
-  selfViewRef,
   onToggleMode,
   currentMode,
+  cameraActive,
+  onToggleCamera,
+  onScan,
 }: BottomControlBarProps) {
   const [elapsed, setElapsed] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -115,28 +112,29 @@ export function BottomControlBar({
 
       {/* Center: Main controls — floating bottom-center */}
       <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2">
-        {/* Mic toggle */}
-        {isActive && (
+        {/* Camera toggle */}
+        {isActive && onToggleCamera && (
           <button
-            onClick={onToggleMute}
+            onClick={onToggleCamera}
             className={`p-3 rounded-full backdrop-blur-md transition-colors ${
-              zoomIsMuted
-                ? "bg-red-500/30 text-red-400 hover:bg-red-500/40"
-                : "bg-black/60 text-white hover:bg-black/80"
+              cameraActive
+                ? "bg-black/60 text-white hover:bg-black/80"
+                : "bg-red-500/30 text-red-400 hover:bg-red-500/40"
             }`}
-            title={zoomIsMuted ? "Unmute" : "Mute"}
+            title={cameraActive ? "Turn off camera" : "Turn on camera"}
           >
-            {zoomIsMuted ? <MicOff size={20} /> : <Mic size={20} />}
+            {cameraActive ? <Video size={20} /> : <VideoOff size={20} />}
           </button>
         )}
 
-        {/* Camera toggle (placeholder for future) */}
-        {isActive && zoomConnected && (
+        {/* Scan document */}
+        {isActive && cameraActive && onScan && (
           <button
+            onClick={onScan}
             className="p-3 rounded-full bg-black/60 backdrop-blur-md text-white hover:bg-black/80 transition-colors"
-            title="Camera"
+            title="Scan document"
           >
-            <Video size={20} />
+            <ScanLine size={20} />
           </button>
         )}
 
@@ -156,7 +154,7 @@ export function BottomControlBar({
           <button
             onClick={onToggleMode}
             className="p-3 rounded-full bg-black/60 backdrop-blur-md text-white hover:bg-black/80 transition-colors"
-            title={`Switch to ${currentMode === "math" ? "Video" : "Math"} mode`}
+            title={`Switch mode (${currentMode})`}
           >
             <Monitor size={20} />
           </button>
@@ -190,9 +188,8 @@ export function BottomControlBar({
         )}
       </div>
 
-      {/* Right: Chat toggle + Self-view — floating bottom-right */}
+      {/* Right: Chat toggle — floating bottom-right */}
       <div className="fixed bottom-4 right-4 z-40 flex items-center gap-3">
-        {/* Chat toggle */}
         <button
           onClick={onToggleChat}
           className={`relative p-3 rounded-full backdrop-blur-md transition-colors ${
@@ -209,14 +206,6 @@ export function BottomControlBar({
             </span>
           )}
         </button>
-
-        {/* Self-view thumbnail */}
-        {zoomConnected && (
-          <div
-            ref={selfViewRef}
-            className="w-[80px] h-[45px] rounded-lg border border-white/20 bg-black overflow-hidden [&_video-player]:w-full [&_video-player]:h-full"
-          />
-        )}
       </div>
     </>
   );

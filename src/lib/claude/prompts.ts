@@ -112,6 +112,7 @@ Rules for sandboxHtml:
 - Everything inline — no external CDN links (the iframe has no network access)
 - Use Canvas API or SVG for visualizations. Keep it interactive when possible.
 - Clean, colorful, labeled visuals. White background. Large readable text.
+- Content MUST fit in one screen. No scrolling. Size everything relative to viewport (use vh/vw units). The entire visualization should be visible without scrolling.
 - Max 3000 chars. Simple but effective.
 
 Examples of what to generate:
