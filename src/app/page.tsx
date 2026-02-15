@@ -9,6 +9,7 @@ import { SocialProof } from "@/components/landing/SocialProof";
 import { ParentPortal } from "@/components/landing/ParentPortal";
 import { FAQ } from "@/components/landing/FAQ";
 import { Footer } from "@/components/landing/Footer";
+import { AvatarOverlay } from "@/components/shared/AvatarOverlay";
 
 export default function LandingPage() {
   const mainRef = useRef<HTMLDivElement>(null);
@@ -52,6 +53,9 @@ export default function LandingPage() {
         <FAQ />
       </main>
       <Footer />
+      
+      {/* Avatar overlay - triggered by 'M' key */}
+      <AvatarOverlay />
     </div>
   );
 }

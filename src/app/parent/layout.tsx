@@ -11,6 +11,7 @@ import {
   MessageSquare,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { AvatarOverlay } from "@/components/shared/AvatarOverlay";
 
 const navItems = [
   { href: "/parent", label: "Dashboard", icon: LayoutDashboard },
@@ -77,6 +78,9 @@ export default function ParentLayout({
 
       {/* Main content */}
       <main className="flex-1 p-8 overflow-auto">{children}</main>
+      
+      {/* Avatar overlay - triggered by 'M' key */}
+      <AvatarOverlay />
     </div>
   );
 }

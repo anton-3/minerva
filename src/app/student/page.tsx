@@ -6,6 +6,7 @@
 "use client";
 
 import Link from "next/link";
+import { AvatarOverlay } from "@/components/shared/AvatarOverlay";
 
 export default function StudentHome() {
   return (
@@ -31,6 +32,9 @@ export default function StudentHome() {
           Sessions are powered by AI. Your tutor adapts to your learning style.
         </p>
       </div>
+      
+      {/* Avatar overlay - triggered by 'M' key */}
+      <AvatarOverlay />
     </div>
   );
 }
