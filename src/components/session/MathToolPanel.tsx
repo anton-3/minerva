@@ -88,9 +88,9 @@ export function MathToolPanel({ toolManager, onToolChange }: MathToolPanelProps)
             `}
           >
             {TOOL_LABELS[tool]}
-            {toolsReady[tool] && (
+            {/* {toolsReady[tool] && (
               <span className="ml-1 text-xs text-green-500">*</span>
-            )}
+            )} */}
           </button>
         ))}
       </div>

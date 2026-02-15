@@ -125,8 +125,8 @@ export default function SessionPage() {
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-black">
-      {/* Main content area — full screen minus bottom bar */}
-      <main className="absolute inset-0 bottom-[64px]">
+      {/* Main content area — full screen */}
+      <main className="absolute inset-0">
         <ContentModeView
           mode={contentMode}
           toolManager={toolManager}
@@ -185,7 +185,7 @@ export default function SessionPage() {
 
       {/* Push-to-talk indicator */}
       {status === "active" && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-[80px] flex justify-center">
+        <div className="pointer-events-none absolute inset-x-0 bottom-[72px] flex justify-center">
           <div
             className={`rounded-full px-4 py-2 text-sm font-medium transition-all duration-150 ${
               micOpen

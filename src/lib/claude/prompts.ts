@@ -52,16 +52,55 @@ DESMOS 3D COMMANDS:
 - { "action": "desmos3d.clear" }
 
 GEOGEBRA COMMANDS (geometry):
+CRITICAL: Only use the EXACT commands listed below. GeoGebra will silently fail on made-up commands. There is NO "RightAngle" command, NO "Label" command, NO "Text" command in Geometry mode. You MUST use English command names.
+
+Creating points:
 - { "action": "geogebra.evalCommand", "command": "A = (1, 2)" }
 - { "action": "geogebra.evalCommand", "command": "B = (4, 6)" }
+- { "action": "geogebra.evalCommand", "command": "M = Midpoint(A, B)" }
+
+Lines and segments:
+- { "action": "geogebra.evalCommand", "command": "Segment(A, B)" }
 - { "action": "geogebra.evalCommand", "command": "Line(A, B)" }
-- { "action": "geogebra.evalCommand", "command": "Circle(A, 3)" }
-- { "action": "geogebra.evalCommand", "command": "Polygon(A, B, C)" }
-- { "action": "geogebra.evalCommand", "command": "Angle(A, B, C)" }
-- { "action": "geogebra.evalCommand", "command": "Perpendicular(A, line)" }
+- { "action": "geogebra.evalCommand", "command": "Ray(A, B)" }
+- { "action": "geogebra.evalCommand", "command": "PerpendicularLine(A, f)" } — perpendicular to line f through point A
+- { "action": "geogebra.evalCommand", "command": "PerpendicularBisector(A, B)" }
+- { "action": "geogebra.evalCommand", "command": "AngleBisector(A, B, C)" }
+
+Circles:
+- { "action": "geogebra.evalCommand", "command": "Circle(A, 3)" } — center A, radius 3
+- { "action": "geogebra.evalCommand", "command": "Circle(A, B)" } — center A through B
+- { "action": "geogebra.evalCommand", "command": "Semicircle(A, B)" }
+
+Polygons:
+- { "action": "geogebra.evalCommand", "command": "Polygon(A, B, C)" } — triangle
+- { "action": "geogebra.evalCommand", "command": "Polygon(A, B, C, D)" } — quadrilateral
+- { "action": "geogebra.evalCommand", "command": "Polygon(A, B, 6)" } — regular polygon with 6 sides
+
+Angles and measurements:
+- { "action": "geogebra.evalCommand", "command": "Angle(B, A, C)" } — angle at vertex A (middle point is vertex!)
+- { "action": "geogebra.evalCommand", "command": "Distance(A, B)" }
+- { "action": "geogebra.evalCommand", "command": "Area(poly1)" }
+- { "action": "geogebra.evalCommand", "command": "Slope(f)" }
+
+Intersections:
+- { "action": "geogebra.evalCommand", "command": "Intersect(f, g)" }
+
+Transformations:
+- { "action": "geogebra.evalCommand", "command": "Rotate(A, 45°, B)" } — rotate A by 45° around B
+- { "action": "geogebra.evalCommand", "command": "Reflect(A, f)" } — reflect A over line f
+- { "action": "geogebra.evalCommand", "command": "Translate(A, Vector(B, C))" }
+
+Vectors:
+- { "action": "geogebra.evalCommand", "command": "Vector(A, B)" }
+
+Other actions:
 - { "action": "geogebra.setCoords", "name": "A", "x": 3, "y": 4 }
 - { "action": "geogebra.deleteObject", "name": "A" }
 - { "action": "geogebra.clear" }
+
+To show a right angle: draw the perpendicular line, then use Angle(P1, Vertex, P2) — GeoGebra auto-marks 90° angles with a square.
+To label/annotate: assign results to named variables like "hyp = Segment(A, C)". Do NOT use a "Text" or "Label" command.
 
 Clear all: { "action": "clear" }
 
