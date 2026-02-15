@@ -15,6 +15,7 @@ interface ContentModeProps {
   toolManager: ToolManager;
   manimUrl: string | null;
   sandboxHtml: string | null;
+  isThinking?: boolean;
   onToolChange?: (tool: MathTool) => void;
   onManimEnded?: () => void;
 }
@@ -24,6 +25,7 @@ export function ContentModeView({
   toolManager,
   manimUrl,
   sandboxHtml,
+  isThinking,
   onToolChange,
   onManimEnded,
 }: ContentModeProps) {
@@ -53,7 +55,7 @@ export function ContentModeView({
           mode === "sandbox" ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"
         }`}
       >
-        <SandboxPanel html={sandboxHtml} />
+        <SandboxPanel html={sandboxHtml} isThinking={isThinking} />
       </div>
 
       {/* Manim mode — Video player */}
@@ -65,7 +67,7 @@ export function ContentModeView({
         {manimUrl ? (
           <ManimPlayer url={manimUrl} onEnded={onManimEnded} />
         ) : (
-          <div className="w-full h-full flex items-center justify-center bg-black/95">
+          <div className="w-full h-full flex items-center justify-center">
             <div className="text-center">
               <svg
                 width="64"
@@ -74,14 +76,14 @@ export function ContentModeView({
                 fill="none"
                 stroke="currentColor"
                 strokeWidth="1"
-                className="text-white/20 mx-auto mb-4"
+                className="text-text-secondary/30 mx-auto mb-4"
               >
                 <polygon points="5 3 19 12 5 21 5 3" />
               </svg>
-              <p className="text-white/40 text-sm">
+              <p className="text-text-secondary/60 text-sm">
                 No video loaded yet
               </p>
-              <p className="text-white/20 text-xs mt-1">
+              <p className="text-text-secondary/30 text-xs mt-1">
                 The tutor will load a video when appropriate
               </p>
             </div>
@@ -94,17 +96,17 @@ export function ContentModeView({
 
 function WelcomePanel() {
   return (
-    <div className="w-full h-full flex items-center justify-center bg-[#0C0A14]">
+    <div className="w-full h-full flex items-center justify-center">
       <div className="text-center max-w-md px-6">
-        {/* Logo mark */}
-        <div className="mx-auto mb-6 w-16 h-16 rounded-2xl bg-[#A78BFA]/10 border border-[#A78BFA]/20 flex items-center justify-center">
-          <span className="text-[#A78BFA] font-display font-bold text-2xl">M</span>
+        {/* Logo placeholder — replace with actual logo asset */}
+        <div className="mx-auto mb-6 w-20 h-20 rounded-2xl bg-neutral-surface border border-border-light flex items-center justify-center overflow-hidden">
+          <span className="text-text-secondary/40 text-xs tracking-wide uppercase">Logo</span>
         </div>
 
-        <h2 className="font-display text-2xl font-bold text-white mb-2">
+        <h2 className="font-display text-2xl font-bold text-text-primary mb-2">
           Welcome to Minerva
         </h2>
-        <p className="text-white/50 text-sm leading-relaxed mb-8">
+        <p className="text-text-secondary text-sm leading-relaxed mb-8">
           Your AI tutor is ready. Ask about any subject — math, physics,
           chemistry, history, biology, or anything you&apos;re curious about.
         </p>
@@ -114,15 +116,15 @@ function WelcomePanel() {
           {["Algebra", "Physics", "Chemistry", "World History", "Biology", "Economics"].map((topic) => (
             <span
               key={topic}
-              className="rounded-full bg-white/5 border border-white/10 px-3 py-1 text-xs text-white/40"
+              className="rounded-full px-3 py-1 text-xs bg-neutral-surface border border-border-light text-text-secondary"
             >
               {topic}
             </span>
           ))}
         </div>
 
-        <p className="mt-8 text-white/25 text-xs">
-          Hold Space to talk &middot; Visuals appear automatically
+        <p className="mt-8 text-text-secondary/40 text-xs">
+          Hold <span className="text-brand-primary">Space</span> to talk &middot; Visuals appear automatically
         </p>
       </div>
     </div>
