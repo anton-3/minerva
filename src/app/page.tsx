@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
-import Link from "next/link";
+import { useEffect, useRef } from "react";
 
-export default function Home() {
+export default function LandingPage() {
+  const mainRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
@@ -17,19 +18,20 @@ export default function Home() {
       { threshold: 0.05 }
     );
 
-    document
-      .querySelectorAll("[data-animation-on-scroll]")
-      .forEach((el) => {
-        el.classList.add("animate-on-scroll-hidden");
-        observer.observe(el);
+    const el = mainRef.current;
+    if (el) {
+      el.querySelectorAll("[data-aos]").forEach((node) => {
+        node.classList.add("animate-on-scroll-hidden");
+        observer.observe(node);
       });
+    }
 
     return () => observer.disconnect();
   }, []);
 
   return (
-    <div className="font-primary bg-neutral-background text-text-primary overflow-x-hidden">
-      {/* ─── HEADER ─── */}
+    <div ref={mainRef} className="font-primary bg-neutral-background text-text-primary overflow-x-hidden">
+      {/* ───────────────────────── 1. NAVBAR ───────────────────────── */}
       <header
         className="fixed top-0 left-0 w-full z-50 py-3"
         style={{
@@ -40,12 +42,12 @@ export default function Home() {
         }}
       >
         <nav className="max-w-7xl mx-auto px-6 flex items-center justify-between">
-          <Link
+          <a
             href="/"
             className="text-xl font-heading font-semibold text-text-primary flex items-center gap-2"
           >
             <span className="text-brand-primary">🦉</span> Minerva AI
-          </Link>
+          </a>
 
           <div className="hidden md:flex items-center gap-2">
             <a
@@ -68,25 +70,28 @@ export default function Home() {
             </a>
           </div>
 
-          <Link
+          <a
             href="/login"
-            className="inline-flex items-center gap-2 px-6 py-3 bg-text-primary text-white font-medium text-sm rounded-sm hover:shadow-[0_4px_12px_rgba(0,0,0,0.1)] transition-all hover:-translate-y-0.5"
+            className="inline-flex items-center gap-2 px-6 py-3 bg-text-primary text-white font-medium text-sm rounded-sm hover:shadow-soft transition-all hover:-translate-y-0.5"
           >
             Start Learning
-          </Link>
+          </a>
         </nav>
       </header>
 
       <main>
-        {/* ─── HERO ─── */}
+        {/* ───────────────────────── 2. HERO ───────────────────────── */}
         <section className="hero-gradient pt-40 pb-16 px-6 relative overflow-hidden">
-          {/* Blur gradient orb */}
+          {/* Blur gradient blob */}
           <div className="absolute bottom-32 left-1/2 -translate-x-1/2 w-[1220px] h-[543px] blur-gradient rounded-full -rotate-12 z-0" />
 
           <div className="max-w-7xl mx-auto relative z-10">
-            {/* Badge */}
-            <div className="flex justify-center mb-10" data-animation-on-scroll>
-              <span className="inline-flex items-center gap-2 px-3 py-1.5 bg-brand-accent/20 rounded-lg text-sm text-text-primary">
+            {/* Announcement badge */}
+            <div className="flex justify-center mb-10" data-aos>
+              <a
+                href="/login"
+                className="inline-flex items-center gap-2 px-3 py-1.5 bg-brand-accent/20 rounded-lg text-sm text-text-primary hover:scale-105 transition-transform"
+              >
                 <span className="font-medium">
                   ✨ Meet Minerva: The Future of Socratic Learning
                 </span>
@@ -100,36 +105,33 @@ export default function Home() {
                 >
                   <path d="M5 12h14M12 5l7 7-7 7" />
                 </svg>
-              </span>
+              </a>
             </div>
 
-            {/* Headline */}
-            <div
-              className="max-w-4xl mx-auto text-center mb-16"
-              data-animation-on-scroll
-            >
+            {/* Hero heading */}
+            <div className="max-w-4xl mx-auto text-center mb-16" data-aos>
               <h1 className="font-heading text-6xl md:text-7xl lg:text-8xl font-normal tracking-mega-tight leading-none mb-6">
-                One-on-One Education{" "}
+                Every Child Deserves a{" "}
                 <span className="italic text-brand-primary">
-                  For Every Student
+                  brilliant, patient educator
                 </span>
               </h1>
               <p className="text-lg md:text-xl text-text-primary leading-relaxed max-w-2xl mx-auto mb-10">
                 Lifelike AI avatars that educate the Socratic way. Real-time
                 voice conversations, interactive math modules, and 100% adaptive
-                curriculum.
+                curriculum. Built with Zoom, HeyGen, Claude, and more!
               </p>
 
-              {/* CTAs */}
+              {/* CTA buttons */}
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                <Link
+                <a
                   href="/login"
-                  className="w-full sm:w-auto px-8 py-4 bg-text-primary text-white font-medium text-base rounded-sm hover:shadow-[0_4px_12px_rgba(0,0,0,0.1)] transition-all hover:-translate-y-0.5"
+                  className="w-full sm:w-auto px-8 py-4 bg-text-primary text-white font-medium text-base rounded-sm hover:shadow-soft transition-all hover:-translate-y-0.5"
                 >
                   Start your journey
-                </Link>
+                </a>
                 <a
-                  href="#how-it-works"
+                  href="/login"
                   className="w-full sm:w-auto px-8 py-4 bg-transparent text-text-primary font-medium text-base rounded-sm hover:bg-black/5 transition-all flex items-center justify-center gap-2"
                 >
                   Watch demo
@@ -148,9 +150,9 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Product Mockup */}
-            <div className="max-w-5xl mx-auto" data-animation-on-scroll>
-              <div className="bg-white/30 rounded-xl md:rounded-2xl p-2 md:p-3 shadow-[0_20px_40px_rgba(0,0,0,0.1)]">
+            {/* Product mockup */}
+            <div className="max-w-5xl mx-auto" data-aos>
+              <div className="bg-white/30 rounded-xl md:rounded-2xl p-2 md:p-3 shadow-medium">
                 <div className="aspect-video bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-lg md:rounded-xl overflow-hidden relative">
                   {/* Window chrome */}
                   <div className="bg-gray-800 px-4 py-3 flex items-center justify-between border-b border-gray-700">
@@ -160,26 +162,23 @@ export default function Home() {
                       <div className="w-3 h-3 rounded-full bg-green-500" />
                     </div>
                     <div className="bg-gray-700 rounded px-4 py-1.5 text-[10px] md:text-xs text-gray-300 font-mono">
-                      SESSION: Calculus Part 1 &bull; Socratic Method Active
+                      SESSION: Calculus Part 1 • Socratic Method Active
                     </div>
                     <div className="text-brand-primary text-xs font-bold animate-pulse">
                       LIVE VOICE
                     </div>
                   </div>
 
-                  {/* Content grid */}
+                  {/* Simulation content */}
                   <div className="grid grid-cols-1 md:grid-cols-3 h-full pb-12">
-                    {/* Left: Avatar */}
+                    {/* Left: AI Avatar */}
                     <div className="relative overflow-hidden flex items-center justify-center bg-gray-900 border-r border-gray-700">
-                      <div className="absolute inset-0 bg-gradient-to-br from-brand-primary/20 to-brand-secondary/20" />
-                      <div className="relative z-10 flex flex-col items-center gap-4">
-                        <div className="w-24 h-24 rounded-full bg-gradient-to-br from-brand-primary to-brand-secondary flex items-center justify-center text-4xl shadow-lg">
-                          🦉
-                        </div>
-                        <span className="text-white/60 text-xs font-medium">
-                          AI Mentor Minerva
-                        </span>
-                      </div>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src="https://files2.heygen.ai/avatar/v3/74447a27859a456c955e01f21ef18216_45620/preview_talk_1.webp"
+                        alt="AI Mentor Minerva"
+                        className="absolute inset-0 w-full h-full object-cover opacity-80"
+                      />
                       <div className="absolute bottom-4 left-4 right-4 bg-black/40 backdrop-blur-md p-3 rounded-lg border border-white/10">
                         <div className="flex items-center gap-3">
                           <div className="flex gap-1">
@@ -201,11 +200,11 @@ export default function Home() {
                       </div>
                     </div>
 
-                    {/* Right: Canvas simulation */}
+                    {/* Right: Interactive Canvas */}
                     <div className="md:col-span-2 bg-gray-50 flex flex-col">
                       <div className="flex-1 p-4 relative overflow-hidden">
+                        {/* Simulated Desmos */}
                         <div className="w-full h-full border border-gray-200 rounded-lg bg-white relative shadow-inner overflow-hidden">
-                          {/* Canvas header */}
                           <div className="p-2 border-b border-gray-100 flex justify-between bg-gray-50/50">
                             <span className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-widest">
                               Desmos Render Engine
@@ -215,7 +214,6 @@ export default function Home() {
                               <div className="w-4 h-4 rounded bg-gray-200" />
                             </div>
                           </div>
-
                           {/* Dot grid */}
                           <div
                             className="absolute inset-0 opacity-10"
@@ -225,7 +223,6 @@ export default function Home() {
                               backgroundSize: "20px 20px",
                             }}
                           />
-
                           {/* SVG graph */}
                           <svg
                             className="absolute inset-0 w-full h-full overflow-visible"
@@ -247,8 +244,7 @@ export default function Home() {
                               />
                             </circle>
                           </svg>
-
-                          {/* Floating equation */}
+                          {/* Floating equation card */}
                           <div className="absolute top-12 left-6 bg-white shadow-xl rounded-md p-3 border border-border-light z-20 animate-float">
                             <p className="text-xs font-mono text-gray-800 font-bold">
                               f(x) = sin(x) + cos(0.5x)
@@ -260,7 +256,7 @@ export default function Home() {
                         </div>
                       </div>
 
-                      {/* Mastery bar */}
+                      {/* Mastery progress bar */}
                       <div className="h-12 bg-white border-t border-gray-200 px-4 flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <span className="text-[10px] font-bold text-gray-500">
@@ -284,89 +280,127 @@ export default function Home() {
                       </div>
                     </div>
                   </div>
+
+                  {/* Subtle glow overlay */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-brand-primary via-brand-secondary to-transparent opacity-10 pointer-events-none" />
                 </div>
               </div>
             </div>
           </div>
         </section>
 
-        {/* ─── THE SOCRATIC EDGE ─── */}
+        {/* ───────────────── 3. HOW IT WORKS (SOCRATIC EDGE) ───────────────── */}
         <section
-          className="py-24 bg-neutral-background px-6"
+          className="py-20 bg-neutral-surface overflow-hidden"
           id="how-it-works"
         >
-          <div className="max-w-7xl mx-auto">
-            <div className="text-center mb-16" data-animation-on-scroll>
-              <p className="text-sm font-mono font-medium text-brand-primary uppercase tracking-wide mb-4">
-                The Socratic Edge
-              </p>
-              <h2 className="font-heading text-4xl md:text-5xl font-normal tracking-tighter mb-4">
-                She doesn&apos;t just give answers.
-                <br />
-                <span className="italic text-brand-primary">
-                  She teaches how to think.
-                </span>
-              </h2>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
-              <FeatureCard
-                emoji="🤝"
-                title="Patience of a Saint"
-                description="Minerva never gets frustrated. She will rephrase, illustrate, and guide a student through a concept 100 times if that's what it takes to reach that 'Aha!' moment."
-              />
-              <FeatureCard
-                emoji="❓"
-                title="Masterful Inquiry"
-                description="Powered by Claude 4.5, our AI uses the Socratic method to break down complex problems into manageable questions, building genuine understanding."
-                delay="0.1s"
-              />
-              <FeatureCard
-                emoji="🗣️"
-                title="Natural Conversation"
-                description="Latency-free voice via HeyGen ensures the flow of conversation feels human, making learning a social, engaging experience rather than a chore."
-                delay="0.2s"
-              />
-            </div>
-
-            {/* Chat simulation */}
-            <div
-              className="max-w-2xl mx-auto"
-              data-animation-on-scroll
-            >
-              <div className="bg-neutral-surface rounded-2xl border border-border-light p-6 shadow-[0_20px_40px_rgba(0,0,0,0.1)]">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-brand-primary to-brand-secondary flex items-center justify-center text-lg">
-                    🦉
-                  </div>
-                  <div>
-                    <p className="font-heading font-semibold text-sm">
-                      MINERVA
-                    </p>
-                    <p className="text-[10px] text-text-secondary">
-                      Thinking...
-                    </p>
-                  </div>
+          <div className="max-w-7xl mx-auto px-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+              {/* Left: features list */}
+              <div data-aos>
+                <div className="inline-block px-3 py-1.5 bg-brand-accent/20 rounded text-xs font-mono font-medium text-text-primary uppercase tracking-wide mb-6">
+                  The Socratic Edge
                 </div>
-                <div className="space-y-4">
-                  <div className="bg-gray-50 p-3 rounded-lg border-l-4 border-brand-primary">
-                    <p className="text-sm font-medium italic">
-                      &ldquo;Great observation on the x-intercept! Now, if we
-                      increase the constant &lsquo;c&rsquo;, which way do you
-                      think the whole curve will shift?&rdquo;
-                    </p>
-                  </div>
-                  <div className="flex justify-end">
-                    <div className="bg-brand-primary text-white p-3 rounded-lg rounded-tr-none text-sm max-w-[80%]">
-                      &ldquo;Um, maybe it goes up? Because we&apos;re adding
-                      more to every point?&rdquo;
+                <h2 className="font-heading text-4xl md:text-5xl font-normal tracking-tighter leading-tight mb-6">
+                  She doesn&apos;t just give answers.{" "}
+                  <br />
+                  <span className="text-brand-primary italic">
+                    She teaches how to think.
+                  </span>
+                </h2>
+                <div className="space-y-8">
+                  {/* Feature 1 */}
+                  <div className="flex gap-4">
+                    <div className="w-12 h-12 bg-white rounded-lg shadow-soft flex items-center justify-center shrink-0 text-2xl">
+                      🤝
+                    </div>
+                    <div>
+                      <h3 className="font-heading text-xl font-semibold mb-2">
+                        Patience of a Saint
+                      </h3>
+                      <p className="text-text-secondary leading-relaxed">
+                        Minerva never gets frustrated. She will rephrase,
+                        illustrate, and guide a student through a concept 100
+                        times if that&apos;s what it takes to reach that
+                        &lsquo;Aha!&rsquo; moment.
+                      </p>
                     </div>
                   </div>
-                  <div className="bg-gray-50 p-3 rounded-lg border-l-4 border-brand-secondary">
-                    <p className="text-sm font-medium italic">
-                      &ldquo;Exactly! Let&apos;s watch the graph and see if
-                      you&apos;re right...&rdquo;
-                    </p>
+                  {/* Feature 2 */}
+                  <div className="flex gap-4">
+                    <div className="w-12 h-12 bg-white rounded-lg shadow-soft flex items-center justify-center shrink-0 text-2xl">
+                      ❓
+                    </div>
+                    <div>
+                      <h3 className="font-heading text-xl font-semibold mb-2">
+                        Masterful Inquiry
+                      </h3>
+                      <p className="text-text-secondary leading-relaxed">
+                        Powered by Claude 4.5, our AI uses the Socratic method
+                        to break down complex problems into manageable questions,
+                        building genuine understanding.
+                      </p>
+                    </div>
+                  </div>
+                  {/* Feature 3 */}
+                  <div className="flex gap-4">
+                    <div className="w-12 h-12 bg-white rounded-lg shadow-soft flex items-center justify-center shrink-0 text-2xl">
+                      🗣️
+                    </div>
+                    <div>
+                      <h3 className="font-heading text-xl font-semibold mb-2">
+                        Natural Conversation
+                      </h3>
+                      <p className="text-text-secondary leading-relaxed">
+                        Latency-free voice via HeyGen ensures the flow of
+                        conversation feels human, making learning a social,
+                        engaging experience rather than a chore.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right: chat mockup */}
+              <div className="relative" data-aos>
+                <div className="aspect-square gradient-peach rounded-2xl p-8 flex items-center justify-center">
+                  <div className="bg-white rounded-xl shadow-medium p-4 w-full space-y-4">
+                    {/* Chat header */}
+                    <div className="flex items-center gap-3 border-b border-border-light pb-3">
+                      <div className="w-10 h-10 rounded-full bg-brand-primary/20 flex items-center justify-center text-xl">
+                        🦉
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-gray-400">
+                          MINERVA
+                        </div>
+                        <div className="text-[10px] text-green-500 font-mono italic">
+                          Thinking...
+                        </div>
+                      </div>
+                    </div>
+                    {/* Chat messages */}
+                    <div className="space-y-4">
+                      <div className="bg-gray-50 p-3 rounded-lg border-l-4 border-brand-primary">
+                        <p className="text-sm font-medium italic">
+                          &ldquo;Great observation on the x-intercept! Now, if
+                          we increase the constant &lsquo;c&rsquo;, which way do
+                          you think the whole curve will shift?&rdquo;
+                        </p>
+                      </div>
+                      <div className="flex justify-end">
+                        <div className="bg-brand-primary text-white p-3 rounded-lg rounded-tr-none text-sm max-w-[80%]">
+                          &ldquo;Um, maybe it goes up? Because we&apos;re adding
+                          more to every point?&rdquo;
+                        </div>
+                      </div>
+                      <div className="bg-gray-50 p-3 rounded-lg border-l-4 border-brand-secondary">
+                        <p className="text-sm font-medium italic">
+                          &ldquo;Exactly! Let&apos;s watch the graph and see if
+                          you&apos;re right...&rdquo;
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -374,58 +408,88 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ─── INTERACTIVE CANVAS ─── */}
+        {/* ───────────────── 4. INTERACTIVE CANVAS ───────────────── */}
         <section className="py-24 bg-neutral-background px-6" id="canvas">
           <div className="max-w-7xl mx-auto">
-            <div className="text-center mb-16" data-animation-on-scroll>
+            <div className="text-center mb-16" data-aos>
               <h2 className="font-heading text-4xl md:text-5xl font-normal tracking-tighter mb-4">
                 Precision visualization tools.
               </h2>
               <p className="text-text-secondary max-w-2xl mx-auto">
-                Minerva controls a live digital workspace. When she talks about
-                a parabola, she draws it. When you manipulate a slider, she
+                Minerva controls a live digital workspace. When she talks about a
+                parabola, she draws it. When you manipulate a slider, she
                 explains the change.
               </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              <CanvasCard
-                emoji="📉"
-                title="Desmos Integration"
-                description="High-fidelity graphing for algebra, calculus, and trigonometry. See functions come to life instantly."
-              />
-              <CanvasCard
-                emoji="📐"
-                title="GeoGebra Constructions"
-                description="Interactive geometry. Drag points, measure angles, and prove theorems in an environment that understands math."
-                delay="0.1s"
-              />
-              <CanvasCard
-                emoji="✍️"
-                title="Dynamic Rendering"
-                description="No static slides. Every visual is generated on-the-fly based on the student's specific struggle or question."
-                delay="0.2s"
-              />
+              <div
+                className="bg-neutral-surface p-8 rounded-2xl border border-border-light hover:border-brand-primary transition-colors group"
+                data-aos
+              >
+                <div className="text-3xl mb-4 group-hover:scale-110 transition-transform">
+                  📉
+                </div>
+                <h3 className="font-heading text-xl font-semibold mb-2">
+                  Desmos Integration
+                </h3>
+                <p className="text-sm text-text-secondary">
+                  High-fidelity graphing for algebra, calculus, and trigonometry.
+                  See functions come to life instantly.
+                </p>
+              </div>
+              <div
+                className="bg-neutral-surface p-8 rounded-2xl border border-border-light hover:border-brand-primary transition-colors group"
+                data-aos
+                style={{ transitionDelay: "0.1s" }}
+              >
+                <div className="text-3xl mb-4 group-hover:scale-110 transition-transform">
+                  📐
+                </div>
+                <h3 className="font-heading text-xl font-semibold mb-2">
+                  GeoGebra Constructions
+                </h3>
+                <p className="text-sm text-text-secondary">
+                  Interactive geometry. Drag points, measure angles, and prove
+                  theorems in an environment that understands math.
+                </p>
+              </div>
+              <div
+                className="bg-neutral-surface p-8 rounded-2xl border border-border-light hover:border-brand-primary transition-colors group"
+                data-aos
+                style={{ transitionDelay: "0.2s" }}
+              >
+                <div className="text-3xl mb-4 group-hover:scale-110 transition-transform">
+                  ✍️
+                </div>
+                <h3 className="font-heading text-xl font-semibold mb-2">
+                  Dynamic Rendering
+                </h3>
+                <p className="text-sm text-text-secondary">
+                  No static slides. Every visual is generated on-the-fly based on
+                  the student&apos;s specific struggle or question.
+                </p>
+              </div>
             </div>
           </div>
         </section>
 
-        {/* ─── PARENT PORTAL (dark) ─── */}
+        {/* ───────────────── 5. PARENT PORTAL (DARK) ───────────────── */}
         <section
           className="py-24 bg-neutral-dark text-white rounded-[2rem] mx-4 md:mx-12 overflow-hidden"
           id="dashboard"
         >
           <div className="max-w-7xl mx-auto px-6">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-              {/* Session summary card */}
-              <div className="order-2 lg:order-1" data-animation-on-scroll>
+              {/* Left: session summary card */}
+              <div className="order-2 lg:order-1" data-aos>
                 <div className="relative bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-2xl">
                   <div className="flex items-center justify-between mb-8">
                     <h4 className="font-heading text-xl font-semibold">
                       Session Summary: Leo W.
                     </h4>
                     <span className="text-xs bg-brand-primary/20 text-brand-primary px-3 py-1 rounded-full border border-brand-primary/30">
-                      February 24
+                      February 14, 2026
                     </span>
                   </div>
 
@@ -474,8 +538,8 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Description */}
-              <div className="order-1 lg:order-2" data-animation-on-scroll>
+              {/* Right: copy */}
+              <div className="order-1 lg:order-2" data-aos>
                 <div className="inline-block px-3 py-1.5 bg-brand-primary/20 rounded text-xs font-mono font-medium text-brand-primary uppercase tracking-wide mb-6">
                   Parental Peace of Mind
                 </div>
@@ -486,62 +550,112 @@ export default function Home() {
                   </span>
                 </h2>
                 <p className="text-lg text-gray-300 mb-8 leading-relaxed">
-                  Stop wondering what&apos;s happening during education
-                  sessions. Get deep, AI-driven insights into your child&apos;s
-                  confidence, engagement, and actual mastery of subjects.
+                  Stop wondering what&apos;s happening during education sessions.
+                  Get deep, AI-driven insights into your child&apos;s confidence,
+                  engagement, and actual mastery of subjects.
                 </p>
                 <ul className="space-y-4">
-                  <CheckItem text="Set custom curriculum and goals (SAT, AP, State Exams)" />
-                  <CheckItem text="Real-time alerts for persistence roadblocks" />
-                  <CheckItem text="Weekly progress reports sent via WhatsApp/Email" />
+                  <li className="flex items-center gap-3">
+                    <div className="w-5 h-5 rounded-full bg-green-500/20 flex items-center justify-center text-[10px] text-green-400">
+                      ✓
+                    </div>
+                    <span className="text-gray-300 text-sm">
+                      Set custom curriculum and goals (SAT, AP, State Exams)
+                    </span>
+                  </li>
+                  <li className="flex items-center gap-3">
+                    <div className="w-5 h-5 rounded-full bg-green-500/20 flex items-center justify-center text-[10px] text-green-400">
+                      ✓
+                    </div>
+                    <span className="text-gray-300 text-sm">
+                      Real-time alerts for persistence roadblocks
+                    </span>
+                  </li>
+                  <li className="flex items-center gap-3">
+                    <div className="w-5 h-5 rounded-full bg-green-500/20 flex items-center justify-center text-[10px] text-green-400">
+                      ✓
+                    </div>
+                    <span className="text-gray-300 text-sm">
+                      Weekly progress reports sent via WhatsApp/Email
+                    </span>
+                  </li>
                 </ul>
               </div>
             </div>
           </div>
         </section>
 
-        {/* ─── FAQ ─── */}
+        {/* ───────────────── 6. FAQ ───────────────── */}
         <section className="py-24 bg-neutral-surface px-6" id="faq">
           <div className="max-w-3xl mx-auto">
             <h2 className="font-heading text-3xl md:text-4xl text-center mb-12">
               Questions? We have answers.
             </h2>
             <div className="space-y-6">
-              <FaqCard
-                question='How "lifelike" is the avatar?'
-                answer="Powered by HeyGen's streaming technology, Minerva blinks, expresses emotions, and syncs her speech perfectly to her voice. Students often forget they are talking to an AI within the first 5 minutes."
-              />
-              <FaqCard
-                question="Can it help with competitive exams like SAT or AP?"
-                answer="Yes. Our curriculum engine includes dedicated modules for SAT Math and multiple AP subjects (BC Calculus, Statistics, Physics), with practice problems from past exams."
-              />
-              <FaqCard
-                question="What if my child gets stuck?"
-                answer="Minerva is specifically tuned to recognize frustration. If a student is stuck, she will drop the Socratic method temporarily to offer a supportive hint or visualize the concepts in a different way on the canvas, ensuring the education process remains fluid."
-              />
+              <div
+                className="bg-white p-6 rounded-xl border border-border-light"
+                data-aos
+              >
+                <h4 className="font-bold text-text-primary mb-2">
+                  How &ldquo;lifelike&rdquo; is the avatar?
+                </h4>
+                <p className="text-sm text-text-secondary">
+                  Powered by HeyGen&apos;s streaming technology, Minerva blinks,
+                  expresses emotions, and syncs her speech perfectly to her
+                  voice. Students often forget they are talking to an AI within
+                  the first 5 minutes.
+                </p>
+              </div>
+              <div
+                className="bg-white p-6 rounded-xl border border-border-light"
+                data-aos
+              >
+                <h4 className="font-bold text-text-primary mb-2">
+                  Can it help with competitive exams like SAT or AP?
+                </h4>
+                <p className="text-sm text-text-secondary">
+                  Yes. Our curriculum engine includes dedicated modules for SAT
+                  Math and multiple AP subjects (BC Calculus, Statistics,
+                  Physics), with practice problems from past exams.
+                </p>
+              </div>
+              <div
+                className="bg-white p-6 rounded-xl border border-border-light"
+                data-aos
+              >
+                <h4 className="font-bold text-text-primary mb-2">
+                  What if my child gets stuck?
+                </h4>
+                <p className="text-sm text-text-secondary">
+                  Minerva is specifically tuned to recognize frustration. If a
+                  student is stuck, she will drop the Socratic method temporarily
+                  to offer a supportive hint or visualize the concepts in a
+                  different way on the canvas, ensuring the education process
+                  remains fluid.
+                </p>
+              </div>
             </div>
           </div>
         </section>
       </main>
 
-      {/* ─── FOOTER ─── */}
+      {/* ───────────────── 7. FOOTER ───────────────── */}
       <footer className="bg-neutral-surface pt-16 pb-8 border-t border-border-light">
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex flex-col md:flex-row justify-between items-center gap-8">
             <p className="text-sm text-text-secondary">
-              &copy; 2026 Minerva AI Education. Powered by Zoom, HeyGen, &amp;
-              Claude.
+              © 2026 Minerva AI Education. Powered by Zoom APIs, HeyGen, &amp; Claude.
             </p>
             <div className="flex gap-6">
               <a
                 href="#"
-                className="text-sm text-text-secondary hover:text-brand-primary transition-colors"
+                className="text-sm text-text-secondary hover:text-brand-primary"
               >
                 Privacy
               </a>
               <a
                 href="#"
-                className="text-sm text-text-secondary hover:text-brand-primary transition-colors"
+                className="text-sm text-text-secondary hover:text-brand-primary"
               >
                 Terms
               </a>
@@ -549,89 +663,6 @@ export default function Home() {
           </div>
         </div>
       </footer>
-    </div>
-  );
-}
-
-/* ─── Sub-components ─── */
-
-function FeatureCard({
-  emoji,
-  title,
-  description,
-  delay,
-}: {
-  emoji: string;
-  title: string;
-  description: string;
-  delay?: string;
-}) {
-  return (
-    <div
-      className="bg-neutral-surface p-8 rounded-2xl border border-border-light hover:border-brand-primary transition-colors group"
-      data-animation-on-scroll
-      style={delay ? { transitionDelay: delay } : undefined}
-    >
-      <div className="text-3xl mb-4 group-hover:scale-110 transition-transform">
-        {emoji}
-      </div>
-      <h3 className="font-heading text-xl font-semibold mb-2">{title}</h3>
-      <p className="text-sm text-text-secondary">{description}</p>
-    </div>
-  );
-}
-
-function CanvasCard({
-  emoji,
-  title,
-  description,
-  delay,
-}: {
-  emoji: string;
-  title: string;
-  description: string;
-  delay?: string;
-}) {
-  return (
-    <div
-      className="bg-neutral-surface p-8 rounded-2xl border border-border-light hover:border-brand-primary transition-colors group"
-      data-animation-on-scroll
-      style={delay ? { transitionDelay: delay } : undefined}
-    >
-      <div className="text-3xl mb-4 group-hover:scale-110 transition-transform">
-        {emoji}
-      </div>
-      <h3 className="font-heading text-xl font-semibold mb-2">{title}</h3>
-      <p className="text-sm text-text-secondary">{description}</p>
-    </div>
-  );
-}
-
-function CheckItem({ text }: { text: string }) {
-  return (
-    <li className="flex items-center gap-3">
-      <div className="w-5 h-5 rounded-full bg-green-500/20 flex items-center justify-center text-[10px] text-green-400 shrink-0">
-        ✓
-      </div>
-      <span className="text-gray-300 text-sm">{text}</span>
-    </li>
-  );
-}
-
-function FaqCard({
-  question,
-  answer,
-}: {
-  question: string;
-  answer: string;
-}) {
-  return (
-    <div
-      className="bg-white p-6 rounded-xl border border-border-light"
-      data-animation-on-scroll
-    >
-      <h4 className="font-bold text-text-primary mb-2">{question}</h4>
-      <p className="text-sm text-text-secondary">{answer}</p>
     </div>
   );
 }

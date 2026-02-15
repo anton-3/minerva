@@ -180,6 +180,10 @@
   animation: float 4s ease-in-out infinite;
 }
 
+.gradient-peach {
+  background: linear-gradient(135deg, #fef3e2, #fce4ec);
+}
+
 /* Force GeoGebra applet to fill its container */
 #ggb-element-holder,
 #ggb-element-holder > div,
