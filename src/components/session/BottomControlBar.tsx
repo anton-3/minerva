@@ -87,8 +87,9 @@ export function BottomControlBar({
         {isActive && (
           <div
             className={`flex items-center gap-2 px-3 py-2 rounded-full bg-black/60 backdrop-blur-md text-sm font-mono ${
-              isNearLimit ? "text-red-400" : "text-white/70"
+              isNearLimit ? "text-red-400" : "text-[#A78BFA]/80"
             }`}
+            style={{ WebkitBackdropFilter: "blur(12px)" }}
           >
             <span
               className={`w-2 h-2 rounded-full ${
@@ -111,60 +112,12 @@ export function BottomControlBar({
       </div>
 
       {/* Center: Main controls — floating bottom-center */}
-      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2">
-        {/* Camera toggle */}
-        {isActive && onToggleCamera && (
-          <button
-            onClick={onToggleCamera}
-            className={`p-3 rounded-full backdrop-blur-md transition-colors ${
-              cameraActive
-                ? "bg-black/60 text-white hover:bg-black/80"
-                : "bg-red-500/30 text-red-400 hover:bg-red-500/40"
-            }`}
-            title={cameraActive ? "Turn off camera" : "Turn on camera"}
-          >
-            {cameraActive ? <Video size={20} /> : <VideoOff size={20} />}
-          </button>
-        )}
-
-        {/* Scan document */}
-        {isActive && cameraActive && onScan && (
-          <button
-            onClick={onScan}
-            className="p-3 rounded-full bg-black/60 backdrop-blur-md text-white hover:bg-black/80 transition-colors"
-            title="Scan document"
-          >
-            <ScanLine size={20} />
-          </button>
-        )}
-
-        {/* Clear canvas */}
-        {isActive && (
-          <button
-            onClick={onClearCanvas}
-            className="p-3 rounded-full bg-black/60 backdrop-blur-md text-white hover:bg-black/80 transition-colors"
-            title="Clear Canvas"
-          >
-            <Eraser size={20} />
-          </button>
-        )}
-
-        {/* Content mode toggle */}
-        {isActive && onToggleMode && (
-          <button
-            onClick={onToggleMode}
-            className="p-3 rounded-full bg-black/60 backdrop-blur-md text-white hover:bg-black/80 transition-colors"
-            title={`Switch mode (${currentMode})`}
-          >
-            <Monitor size={20} />
-          </button>
-        )}
-
-        {/* Join / Leave button */}
+      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-1.5">
+        {/* Join / Leave button — always prominent */}
         {isIdle ? (
           <button
             onClick={onStart}
-            className="flex items-center gap-2 px-6 py-3 rounded-full bg-green-600 text-white font-medium hover:bg-green-500 shadow-lg shadow-green-600/30 transition-colors"
+            className="flex items-center gap-2 px-6 py-3 rounded-full bg-[#A78BFA] text-[#0C0A14] font-medium hover:bg-[#B89CFF] shadow-lg shadow-[#A78BFA]/30 transition-colors"
           >
             <Phone size={18} />
             Join Session
@@ -178,13 +131,53 @@ export function BottomControlBar({
             Connecting...
           </button>
         ) : (
-          <button
-            onClick={onEnd}
-            className="flex items-center gap-2 px-6 py-3 rounded-full bg-red-600 text-white font-medium hover:bg-red-500 shadow-lg shadow-red-600/30 transition-colors"
-          >
-            <PhoneOff size={18} />
-            Leave
-          </button>
+          <>
+            {/* Camera toggle */}
+            {onToggleCamera && (
+              <button
+                onClick={onToggleCamera}
+                className={`p-3 rounded-full backdrop-blur-md transition-colors ${
+                  cameraActive
+                    ? "bg-white/10 text-white hover:bg-white/15"
+                    : "bg-white/5 text-white/40 hover:bg-white/10"
+                }`}
+                title={cameraActive ? "Turn off camera" : "Turn on camera"}
+              >
+                {cameraActive ? <Video size={18} /> : <VideoOff size={18} />}
+              </button>
+            )}
+
+            {/* Scan document — only when camera active */}
+            {cameraActive && onScan && (
+              <button
+                onClick={onScan}
+                className="p-3 rounded-full bg-white/10 backdrop-blur-md text-white hover:bg-white/15 transition-colors"
+                title="Scan document"
+              >
+                <ScanLine size={18} />
+              </button>
+            )}
+
+            {/* Clear canvas — only in math mode */}
+            {currentMode === "math" && (
+              <button
+                onClick={onClearCanvas}
+                className="p-3 rounded-full bg-white/10 backdrop-blur-md text-white hover:bg-white/15 transition-colors"
+                title="Clear canvas"
+              >
+                <Eraser size={18} />
+              </button>
+            )}
+
+            {/* Leave button */}
+            <button
+              onClick={onEnd}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-red-600 text-white text-sm font-medium hover:bg-red-500 shadow-lg shadow-red-600/30 transition-colors ml-1"
+            >
+              <PhoneOff size={16} />
+              Leave
+            </button>
+          </>
         )}
       </div>
 
@@ -194,7 +187,7 @@ export function BottomControlBar({
           onClick={onToggleChat}
           className={`relative p-3 rounded-full backdrop-blur-md transition-colors ${
             chatOpen
-              ? "bg-blue-500/30 text-blue-400"
+              ? "bg-[#A78BFA]/20 text-[#A78BFA]"
               : "bg-black/60 text-white hover:bg-black/80"
           }`}
           title="Toggle Chat"

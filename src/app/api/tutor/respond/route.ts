@@ -177,6 +177,13 @@ export async function POST(request: Request) {
     });
     
     response = await handleManimGeneration(response);
+    
+    // Debug final response
+    console.log("[api/tutor/respond] Final response:", {
+      contentMode: response.contentMode,
+      hasVideoUrl: !!response.videoUrl,
+      videoUrl: response.videoUrl,
+    });
 
     return NextResponse.json(response);
   } catch (err) {

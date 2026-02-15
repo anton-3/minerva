@@ -102,7 +102,7 @@ const [chatOpen, setChatOpen] = useState(false);
   }, [chatOpen]);
 
 const handleToggleMode = useCallback(() => {
-    const modes: ContentMode[] = ["math", "sandbox", "video"];
+    const modes: ContentMode[] = ["welcome", "math", "sandbox", "video"];
     const currentIndex = modes.indexOf(contentMode);
     const nextIndex = (currentIndex + 1) % modes.length;
     setContentMode(modes[nextIndex]);
@@ -144,13 +144,19 @@ const handleToggleMode = useCallback(() => {
         onCollapsedChange={setAvatarCollapsed}
       />
 
-      {/* Mode indicator badge */}
+{/* Mode indicator badge */}
       <div className="absolute top-3 left-3 z-10">
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-black/60 backdrop-blur-sm px-3 py-1 text-xs font-medium text-white/90">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-black/60 backdrop-blur-sm px-3 py-1 text-xs font-medium text-white/90" style={{ WebkitBackdropFilter: "blur(4px)" }}>
           <span className={`w-1.5 h-1.5 rounded-full ${
-            contentMode === "math" ? "bg-blue-400" : contentMode === "sandbox" ? "bg-green-400" : "bg-purple-400"
+            contentMode === "welcome" ? "bg-purple-400" :
+            contentMode === "math" ? "bg-blue-400" :
+            contentMode === "sandbox" ? "bg-green-400" :
+            "bg-purple-400"
           }`} />
-          {contentMode === "math" ? "Math Canvas" : contentMode === "sandbox" ? "Interactive" : "Video"}
+          {contentMode === "welcome" ? "Minerva" :
+           contentMode === "math" ? "Math Canvas" :
+           contentMode === "sandbox" ? "Interactive" :
+           "Video"}
         </span>
       </div>
 
@@ -197,7 +203,7 @@ const handleToggleMode = useCallback(() => {
           <div
             className={`rounded-full px-4 py-2 text-sm font-medium transition-all duration-150 ${
               micOpen
-                ? "bg-red-500/90 text-white scale-105"
+                ? "bg-[#67E8F9]/90 text-[#0C0A14] scale-105"
                 : "bg-white/10 text-white/60"
             }`}
           >

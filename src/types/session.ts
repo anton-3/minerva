@@ -9,7 +9,7 @@ export type MathTool = "desmos" | "desmos3d" | "geogebra";
 // ─── Content Modes ───────────────────────────────────────────────────────────
 // Extensible: add new modes here and implement a corresponding panel component
 
-export type ContentMode = "math" | "sandbox" | "video";
+export type ContentMode = "welcome" | "math" | "sandbox" | "video";
 
 // ─── Canvas Commands ────────────────────────────────────────────────────────
 // Multi-tool canvas system supporting Desmos 2D, Desmos 3D, and GeoGebra

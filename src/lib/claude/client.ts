@@ -101,7 +101,7 @@ const TutorResponseSchema = z.object({
       velocity: z.enum(["improving", "plateau", "struggling"]).optional(),
     })
     .optional(),
-  contentMode: z.enum(["math", "sandbox", "video"]).optional(),
+contentMode: z.enum(["welcome", "math", "sandbox", "video"]).optional(),
   sandboxHtml: z.string().optional(),
   manimPrompt: z.string().optional(),
 });
@@ -244,6 +244,7 @@ export function createTutorBrain(): TutorBrain {
         const createParams: Anthropic.MessageCreateParams = {
           model: MODEL_FAST,
           max_tokens: 4096,
+          temperature: 0.4,
           system: systemPrompt,
           messages,
           ...(hasImage

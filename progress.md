@@ -2,9 +2,63 @@
 
 > **For AI agents**: Read this file first to understand where the project is. Update it after every meaningful task or group of tasks.
 
-**Last updated**: 2026-02-14 (Session 10b)
+**Last updated**: 2026-02-15 (Session 11)
 **Branch**: `001-minerva-mvp`
-**Overall status**: Phases 1-8 COMPLETE (T001-T067). **NEW**: Session 10b — Zoom-style floating PiP overlay (replaces side-by-side panels), 3 view modes (strip/speaker/gallery), resizable + draggable, sandbox viewport fit. TypeScript passes clean (0 errors).
+**Overall status**: Phases 1-8 COMPLETE (T001-T067). **NEW**: Session 11 — Design system overhaul (Soft Lavender + Aqua palette) + AI prompt rewrite (sandbox templates, speech rules, banned phrases). 15 files updated. TypeScript passes clean (0 errors).
+
+---
+
+## Session 11: Design System + AI Prompt Overhaul
+
+**Two major changes**: (1) Cohesive Soft Lavender (#A78BFA) + Aqua (#67E8F9) design identity across entire app. (2) Complete AI prompt rewrite with sandbox HTML templates and tighter speech rules.
+
+### Phase 1: Design System Foundation
+- [x] **globals.css** — Full lavender/aqua color palette replacing defaults. `--font-display` variable. SVG grain texture overlay (3% opacity). Safari input fix (`-webkit-appearance: none`).
+- [x] **layout.tsx** — Space Grotesk display font via `next/font/google`. `class="dark"` on `<html>`. Body includes `${spaceGrotesk.variable}`.
+
+### Phase 2: AI Prompt Rewrite
+- [x] **prompts.ts** — MAJOR rewrite:
+  - Fixed HTML skeleton for sandbox (consistent layout every time)
+  - 6 layout templates: centered, split, steps, comparison, chart, interactive
+  - Subject-based accent colors (Physics=blue, Chemistry=emerald, Biology=green, History=amber, Literature=purple, General=cyan)
+  - BANNED PHRASES: "Great question!", "Absolutely!", "Excellent!", "Fantastic!", "Not quite"
+  - USE INSTEAD: "yeah that's right", "nice, so...", "hmm what if..."
+  - Speech: 1-2 sentences MAX, always end with question, sound like cool older sibling
+  - Content routing: first response = visual, follow-ups = speech only unless needed
+  - Hard constraints: 3500 chars max, no CDN, no scrolling, clamp() for responsive sizing
+- [x] **client.ts** — Added `sandboxTemplate` to Zod schema (enum of 6 templates)
+
+### Phase 3: Component Theming (15 files)
+- [x] **SandboxPanel** — Fade-in transition, lavender empty state, updated viewport CSS
+- [x] **ChatSheet** — Lavender user bubbles (`bg-[#A78BFA]`), violet-tinted AI bubbles, 3 bouncing lavender dots for typing indicator, lavender focus ring
+- [x] **BottomControlBar** — Lavender join button (was green), lavender timer text, `-webkit-backdrop-filter` for Safari
+- [x] **FloatingVideoOverlay** — Lavender status dots, lavender thinking pulse/glow (was blue), lavender view mode icons
+- [x] **Landing page** — Dark bg (#0A0A0A), Space Grotesk headings, lavender TreeHacks badge, lavender feature cards with hover, lavender tech badges, lavender CTA section
+- [x] **Login page** — `font-display` on title
+- [x] **Session page** — Lavender/aqua/violet mode badge dots, `-webkit-backdrop-filter` on badge, aqua push-to-talk active state
+- [x] **Parent layout** — Dark sidebar (`bg-[#0E0C18]`), lavender logo, lavender nav hover
+- [x] **Parent dashboard** — `font-display` title, lavender/aqua stat card borders + values, lavender session badges
+
+### Build Status
+- `npx tsc --noEmit` — 0 errors
+- `npm run build` — compiles successfully (pre-existing DB error on /parent SSR unrelated)
+
+### Files Changed
+| File | Change |
+|------|--------|
+| `src/app/globals.css` | Lavender palette, grain texture, Safari fixes |
+| `src/app/layout.tsx` | Space Grotesk font, dark mode class |
+| `src/lib/claude/prompts.ts` | **MAJOR** — Sandbox templates, speech rules, routing |
+| `src/lib/claude/client.ts` | sandboxTemplate Zod enum |
+| `src/components/session/SandboxPanel.tsx` | Fade transition, lavender colors |
+| `src/components/session/ChatSheet.tsx` | Lavender bubbles, typing dots |
+| `src/components/session/BottomControlBar.tsx` | Lavender join, glass effect |
+| `src/components/session/FloatingVideoOverlay.tsx` | Lavender pulse/glow |
+| `src/app/page.tsx` | Dark theme + lavender/aqua accents |
+| `src/app/login/page.tsx` | font-display title |
+| `src/app/student/session/page.tsx` | Lavender badges, aqua push-to-talk |
+| `src/app/parent/layout.tsx` | Dark sidebar |
+| `src/app/parent/page.tsx` | Lavender stat cards |
 
 ---
 
@@ -418,10 +472,15 @@ type CanvasCommand =
 
 ## Notes for Next Session
 
-- **Session 10b** is COMPLETE — floating PiP overlay, sandbox viewport fix, all working
+- **Session 11** is COMPLETE — design system (lavender/aqua) + AI prompt rewrite (sandbox templates, speech rules)
+- **Design identity**: Soft Lavender (#A78BFA) primary + Aqua (#67E8F9) accent on deep purple-black (#0C0A14)
+- **Typography**: Space Grotesk (display/headlines) + Geist (body). Use `font-display` class for headings.
+- **AI sandbox templates**: 6 layouts (centered, split, steps, comparison, chart, interactive) with fixed HTML skeleton
+- **Speech rules**: 1-2 sentences max, banned cliché phrases, natural contractions, Socratic questioning
+- **framer-motion**: NOT installed (was in plan but CSS transitions used instead — simpler, no dependency)
+- **Safari**: `-webkit-backdrop-filter` added alongside `backdrop-filter` in key components
 - **FloatingVideoOverlay** uses `react-rnd` + canvas mirroring — videos never unmount
 - **Document scanner** uses pure JS Sobel edge detection — no npm deps, ~140 lines
-- **Sandbox**: minimal viewport CSS only (design system reverted per user feedback)
 - **Phase 2 (T012-T015)** requires a real Supabase project — need API keys in .env.local
 - **T063-T068** are demo prep tasks — need API keys + deployment environment
 - **Pre-existing build error**: `/parent` page fails during static generation (local DB "kimsanov" doesn't exist) — unrelated to our code

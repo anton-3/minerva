@@ -56,8 +56,8 @@ const statusLabels: Record<AvatarStatus, string> = {
 
 const statusColors: Record<AvatarStatus, string> = {
   connecting: "bg-yellow-500",
-  connected: "bg-green-500",
-  speaking: "bg-blue-500 animate-pulse",
+  connected: "bg-[#A78BFA]",
+  speaking: "bg-[#A78BFA] animate-pulse",
   listening: "bg-green-500",
   disconnected: "bg-gray-500",
 };
@@ -67,7 +67,7 @@ const statusColors: Record<AvatarStatus, string> = {
 function StripIcon({ active }: { active: boolean }) {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-      <rect x="2" y="7" width="12" height="2" rx="1" fill={active ? "#3b82f6" : "currentColor"} />
+      <rect x="2" y="7" width="12" height="2" rx="1" fill={active ? "#A78BFA" : "currentColor"} />
     </svg>
   );
 }
@@ -75,7 +75,7 @@ function StripIcon({ active }: { active: boolean }) {
 function SpeakerIcon({ active }: { active: boolean }) {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-      <rect x="3" y="3" width="10" height="10" rx="2" fill="none" stroke={active ? "#3b82f6" : "currentColor"} strokeWidth="1.5" />
+      <rect x="3" y="3" width="10" height="10" rx="2" fill="none" stroke={active ? "#A78BFA" : "currentColor"} strokeWidth="1.5" />
     </svg>
   );
 }
@@ -92,7 +92,7 @@ function GalleryIcon({ active }: { active: boolean }) {
             width="2.5"
             height="2.5"
             rx="0.5"
-            fill={active ? "#3b82f6" : "currentColor"}
+            fill={active ? "#A78BFA" : "currentColor"}
           />
         ))
       )}
@@ -285,11 +285,14 @@ export function FloatingVideoOverlay({
   // Pulse when thinking OR when avatar is speaking (includes greeting)
   const shouldPulse = isThinking || avatarStatus === "speaking";
 
-  // Delayed fade-out: stays active 800ms after conditions go false
   useEffect(() => {
     if (shouldPulse) {
       setShowPulse(true);
+      // Safety: force off after 45s (if status gets stuck)
+      const safety = setTimeout(() => setShowPulse(false), 45000);
+      return () => clearTimeout(safety);
     } else {
+      // Delayed fade-out: lingers 800ms for smooth transition
       const timer = setTimeout(() => setShowPulse(false), 800);
       return () => clearTimeout(timer);
     }
@@ -445,7 +448,7 @@ export function FloatingVideoOverlay({
         >
           <div className={`w-full h-full rounded-xl overflow-hidden shadow-2xl bg-zinc-900 group relative transition-all duration-700 ${
             showPulse
-              ? "border-2 border-blue-400/60 thinking-pulse"
+              ? "border-2 border-[#A78BFA]/60 thinking-pulse"
               : "border border-white/10"
           }`}>
 
@@ -619,8 +622,8 @@ export function FloatingVideoOverlay({
       <style>{`
         @keyframes flash { 0% { opacity: 0.8; } 100% { opacity: 0; } }
         @keyframes thinking-glow {
-          0%, 100% { box-shadow: 0 0 8px 2px rgba(96, 165, 250, 0.3); }
-          50% { box-shadow: 0 0 20px 6px rgba(96, 165, 250, 0.5); }
+          0%, 100% { box-shadow: 0 0 8px 2px rgba(167, 139, 250, 0.3); }
+          50% { box-shadow: 0 0 20px 6px rgba(167, 139, 250, 0.5); }
         }
         .thinking-pulse { animation: thinking-glow 2s ease-in-out infinite; }
       `}</style>

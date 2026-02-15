@@ -247,6 +247,13 @@ export function createAvatarClient(): AvatarClient {
         echoCooldownActive = true;
         setTimeout(() => {
           echoCooldownActive = false;
+
+          // Flush any text accumulated during avatar speech that never hit
+          // the barge-in threshold. After cooldown, it's safe to deliver.
+          if (pendingText.trim().length >= 2) {
+            console.log("[AvatarClient] Flushing post-speech pending text:", pendingText);
+            flushTranscription();
+          }
         }, ECHO_COOLDOWN_MS);
 
         notifyStatus("listening");
