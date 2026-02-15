@@ -33,7 +33,7 @@ export default async function ParentDashboard() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold">Dashboard</h1>
+        <h1 className="font-display text-2xl font-bold">Dashboard</h1>
         <p className="text-muted-foreground">
           Welcome back. Here is an overview of your children&apos;s learning.
         </p>
@@ -41,17 +41,17 @@ export default async function ParentDashboard() {
 
       {/* Quick stats */}
       <div className="grid grid-cols-3 gap-4">
-        <div className="rounded-lg border border-border bg-card p-4">
+        <div className="rounded-lg border border-[#A78BFA]/10 bg-card p-4">
           <p className="text-sm text-muted-foreground">Children</p>
-          <p className="text-2xl font-bold">{childrenList.length}</p>
+          <p className="text-2xl font-bold text-[#A78BFA]">{childrenList.length}</p>
         </div>
-        <div className="rounded-lg border border-border bg-card p-4">
+        <div className="rounded-lg border border-[#67E8F9]/10 bg-card p-4">
           <p className="text-sm text-muted-foreground">Total Sessions</p>
-          <p className="text-2xl font-bold">{recentSessions.length}</p>
+          <p className="text-2xl font-bold text-[#67E8F9]">{recentSessions.length}</p>
         </div>
-        <div className="rounded-lg border border-border bg-card p-4">
+        <div className="rounded-lg border border-[#A78BFA]/10 bg-card p-4">
           <p className="text-sm text-muted-foreground">This Week</p>
-          <p className="text-2xl font-bold">
+          <p className="text-2xl font-bold text-[#A78BFA]">
             {recentSessions.filter((s) => {
               if (!s.startedAt) return false;
               const diff = Date.now() - new Date(s.startedAt).getTime();
@@ -133,8 +133,8 @@ export default async function ParentDashboard() {
                 <span
                   className={`text-xs px-2 py-0.5 rounded-full ${
                     session.status === "completed"
-                      ? "bg-green-100 text-green-800"
-                      : "bg-gray-100 text-gray-600"
+                      ? "bg-[#A78BFA]/10 text-[#A78BFA]"
+                      : "bg-white/5 text-white/40"
                   }`}
                 >
                   {session.status}

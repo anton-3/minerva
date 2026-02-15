@@ -97,6 +97,11 @@ export function useTutorBrain(options: UseTutorBrainOptions) {
       // If this request was aborted (new message came in), bail
       if (controller.signal.aborted) return;
 
+      if (!res.ok) {
+        console.error("[useTutorBrain] API error:", res.status, res.statusText);
+        throw new Error(`API returned ${res.status}`);
+      }
+
       const response: TutorBrainResponse = await res.json();
 
       // Add tutor response to store
@@ -126,15 +131,40 @@ export function useTutorBrain(options: UseTutorBrainOptions) {
         }
       }
 
-      // Process content mode switch from Claude
-      if (response.contentMode) {
-        useSessionStore.getState().setContentMode(response.contentMode);
+      // Store sandbox/manim content FIRST (before switching modes)
+      if (response.sandboxHtml) {
+        useSessionStore.getState().setSandboxHtml(response.sandboxHtml);
       }
       if (response.manimVideoUrl) {
         useSessionStore.getState().setManimVideoUrl(response.manimVideoUrl);
       }
-      if (response.sandboxHtml) {
-        useSessionStore.getState().setSandboxHtml(response.sandboxHtml);
+
+      // Process content mode switch from Claude
+      // RULE: Never switch to sandbox unless sandboxHtml is present.
+      // Never switch to manim unless manimVideoUrl is present.
+      // Never switch to math unless canvasCommands are present.
+      const currentMode = useSessionStore.getState().contentMode;
+      const hasCanvas = response.canvasCommands && response.canvasCommands.length > 0;
+      const hasSandbox = !!response.sandboxHtml;
+      const hasManim = !!response.manimVideoUrl;
+
+      if (response.contentMode) {
+        // Only honor the mode switch if matching content exists
+        const modeValid =
+          (response.contentMode === "sandbox" && hasSandbox) ||
+          (response.contentMode === "math" && hasCanvas) ||
+          (response.contentMode === "manim" && hasManim);
+        if (modeValid) {
+          useSessionStore.getState().setContentMode(response.contentMode);
+        }
+      } else if (currentMode === "welcome") {
+        // Auto-exit welcome: only switch if we actually have content to show
+        if (hasSandbox) {
+          useSessionStore.getState().setContentMode("sandbox");
+        } else if (hasCanvas) {
+          useSessionStore.getState().setContentMode("math");
+        }
+        // If no content, stay on welcome — just a speech-only response
       }
 
       // Execute canvas commands (errors here never break the session)
@@ -145,6 +175,10 @@ export function useTutorBrain(options: UseTutorBrainOptions) {
       }
 
       // Speak the response — now properly waits for AVATAR_SPEAK_ENDED (Bug 3 fix)
+      if (!response.speech) {
+        console.error("[useTutorBrain] No speech in response:", response);
+        throw new Error("No speech in Claude response");
+      }
       await optionsRef.current.speak(response.speech);
     } catch (err) {
       // Don't log abort errors — they're expected (Bug 2)
@@ -162,17 +196,19 @@ export function useTutorBrain(options: UseTutorBrainOptions) {
         abortRef.current = null;
       }
       setIsProcessing(false);
+      setIsThinking(false);
     }
   }, []);
 
   // Bug 9: separate greeting method — doesn't add fake "hi" to transcript
+  // Uses LOCAL controller (not abortRef) so ASR-triggered handleStudentMessage
+  // can't accidentally abort the greeting fetch.
+  // IMPORTANT: Does NOT set isProcessing/isThinking — greeting is a background
+  // operation that must not lock the chat UI or block user messages.
   const sendGreeting = useCallback(async () => {
     const store = useSessionStore.getState();
 
-    setIsProcessing(true);
-
     const controller = new AbortController();
-    abortRef.current = controller;
 
     try {
       const request: TutorBrainRequest = {
@@ -199,6 +235,10 @@ export function useTutorBrain(options: UseTutorBrainOptions) {
       clearTimeout(timeoutId);
       if (controller.signal.aborted) return;
 
+      if (!res.ok) {
+        throw new Error(`API returned ${res.status}`);
+      }
+
       const response: TutorBrainResponse = await res.json();
 
       // Only add the tutor's greeting to history (no fake student message)
@@ -216,12 +256,6 @@ export function useTutorBrain(options: UseTutorBrainOptions) {
       await optionsRef.current
         .speak("Hello! I'm Minerva, your AI tutor. What would you like to learn today?")
         .catch(console.error);
-    } finally {
-      if (abortRef.current === controller) {
-        abortRef.current = null;
-      }
-      setIsProcessing(false);
-      setIsThinking(false);
     }
   }, []);
 

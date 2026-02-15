@@ -130,13 +130,15 @@ export default function SessionPage() {
 
       {/* Mode indicator badge */}
       <div className="absolute top-3 left-3 z-10">
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-black/60 backdrop-blur-sm px-3 py-1 text-xs font-medium text-white/90">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-black/60 backdrop-blur-sm px-3 py-1 text-xs font-medium text-white/90" style={{ WebkitBackdropFilter: "blur(4px)" }}>
           <span className={`w-1.5 h-1.5 rounded-full ${
-            contentMode === "math" ? "bg-blue-400" :
-            contentMode === "sandbox" ? "bg-green-400" :
-            "bg-purple-400"
+            contentMode === "welcome" ? "bg-[#A78BFA]" :
+            contentMode === "math" ? "bg-[#A78BFA]" :
+            contentMode === "sandbox" ? "bg-[#67E8F9]" :
+            "bg-[#C4B5FD]"
           }`} />
-          {contentMode === "math" ? "Math Canvas" :
+          {contentMode === "welcome" ? "Minerva" :
+           contentMode === "math" ? "Math Canvas" :
            contentMode === "sandbox" ? "Interactive" :
            "Video"}
         </span>
@@ -185,7 +187,7 @@ export default function SessionPage() {
           <div
             className={`rounded-full px-4 py-2 text-sm font-medium transition-all duration-150 ${
               micOpen
-                ? "bg-red-500/90 text-white scale-105"
+                ? "bg-[#67E8F9]/90 text-[#0C0A14] scale-105"
                 : "bg-white/10 text-white/60"
             }`}
           >

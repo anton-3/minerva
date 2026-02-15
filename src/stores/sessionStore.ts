@@ -37,7 +37,7 @@ const initialState: SessionState = {
   transcript: [],
   studentProfile: null,
   learningPlan: null,
-  contentMode: "math",
+  contentMode: "welcome",
   manimVideoUrl: null,
   sandboxHtml: null,
   masteryScores: [],

@@ -5,14 +5,14 @@ import Link from "next/link";
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-gradient-to-b from-white to-blue-50 dark:from-zinc-950 dark:to-zinc-900">
+    <div className="min-h-screen bg-[#0A0A0A]">
       {/* Header */}
       <header className="flex items-center justify-between px-6 py-4 max-w-6xl mx-auto">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
             <span className="text-primary-foreground font-bold text-sm">M</span>
           </div>
-          <span className="font-semibold text-lg">Minerva</span>
+          <span className="font-display font-semibold text-lg">Minerva</span>
         </div>
         <div className="flex items-center gap-3">
           <Link
@@ -32,12 +32,12 @@ export default function Home() {
 
       {/* Hero */}
       <section className="max-w-6xl mx-auto px-6 pt-20 pb-16 text-center">
-        <div className="inline-block rounded-full bg-blue-100 dark:bg-blue-900/30 px-3 py-1 text-xs font-medium text-blue-700 dark:text-blue-300 mb-6">
+        <div className="inline-block rounded-full bg-[#A78BFA]/10 border border-[#A78BFA]/20 px-3 py-1 text-xs font-medium text-[#A78BFA] mb-6">
           Built at TreeHacks 2026
         </div>
-        <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight text-foreground max-w-3xl mx-auto leading-tight">
+        <h1 className="font-display text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight text-white max-w-3xl mx-auto leading-tight">
           Every child deserves a{" "}
-          <span className="text-primary">brilliant, patient tutor</span>
+          <span className="text-[#A78BFA]">brilliant, patient tutor</span>
         </h1>
         <p className="mt-6 text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
           Minerva is an AI-powered avatar tutor that teaches any subject through
@@ -63,7 +63,7 @@ export default function Home() {
 
       {/* How It Works */}
       <section id="how-it-works" className="max-w-6xl mx-auto px-6 py-20">
-        <h2 className="text-3xl font-bold text-center mb-12">
+        <h2 className="font-display text-3xl font-bold text-center mb-12">
           How Minerva Works
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -86,9 +86,9 @@ export default function Home() {
       </section>
 
       {/* Value Props */}
-      <section className="bg-white dark:bg-zinc-900/50 border-y border-border">
+      <section className="bg-[#0E0C18] border-y border-[#A78BFA]/10">
         <div className="max-w-6xl mx-auto px-6 py-20">
-          <h2 className="text-3xl font-bold text-center mb-12">
+          <h2 className="font-display text-3xl font-bold text-center mb-12">
             Why Minerva?
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -114,7 +114,7 @@ export default function Home() {
 
       {/* Tech Stack */}
       <section className="max-w-6xl mx-auto px-6 py-20">
-        <h2 className="text-3xl font-bold text-center mb-4">
+        <h2 className="font-display text-3xl font-bold text-center mb-4">
           Powered By
         </h2>
         <p className="text-center text-muted-foreground mb-10 max-w-xl mx-auto">
@@ -134,8 +134,8 @@ export default function Home() {
 
       {/* CTA */}
       <section className="max-w-6xl mx-auto px-6 py-20 text-center">
-        <div className="bg-primary/5 border border-primary/20 rounded-2xl p-12">
-          <h2 className="text-3xl font-bold mb-4">
+        <div className="bg-[#A78BFA]/5 border border-[#A78BFA]/20 rounded-2xl p-12">
+          <h2 className="font-display text-3xl font-bold mb-4">
             Ready to transform learning?
           </h2>
           <p className="text-muted-foreground mb-8 max-w-lg mx-auto">
@@ -179,9 +179,9 @@ function FeatureCard({
   description: string;
 }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-6 text-center">
-      <div className="mx-auto mb-4 w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-        <span className="text-primary font-bold">{step}</span>
+    <div className="rounded-xl border border-[#A78BFA]/10 bg-[#141414] p-6 text-center hover:border-[#A78BFA]/30 transition-colors">
+      <div className="mx-auto mb-4 w-10 h-10 rounded-full bg-[#A78BFA]/10 flex items-center justify-center">
+        <span className="text-[#A78BFA] font-bold">{step}</span>
       </div>
       <h3 className="font-semibold text-lg mb-2">{title}</h3>
       <p className="text-sm text-muted-foreground leading-relaxed">
@@ -210,9 +210,9 @@ function ValueProp({
 
 function TechBadge({ name, detail }: { name: string; detail: string }) {
   return (
-    <div className="flex flex-col items-center gap-1 px-4 py-2 rounded-lg bg-muted/50">
-      <span className="font-medium text-foreground">{name}</span>
-      <span className="text-xs">{detail}</span>
+    <div className="flex flex-col items-center gap-1 px-4 py-2 rounded-lg bg-[#1A1A1A] border border-white/5">
+      <span className="font-medium text-[#A78BFA]">{name}</span>
+      <span className="text-xs text-white/50">{detail}</span>
     </div>
   );
 }
