@@ -63,7 +63,7 @@
 **Major change**: Transformed Minerva from math-only tutor to universal tutor for ANY subject.
 
 ### Phase 1: Bug Fixes (7 issues)
-- [x] **1.1** Wired `contentMode` + `manimVideoUrl` in useTutorBrain (were silently dropped)
+- [x] **1.1** Wired `contentMode` in useTutorBrain (was silently dropped)
 - [x] **1.2** Fixed MathToolPanel tab desync (added `onActiveTool` callback to ToolManager)
 - [x] **1.3** Deleted orphaned components (AvatarPanel.tsx, ChatPanel.tsx, SessionControls.tsx)
 - [x] **1.4** Fixed GeoGebra hardcoded 800x500 (ResizeObserver for dynamic dimensions)
@@ -72,7 +72,7 @@
 - [x] **1.7** Removed dead `respondStream()` from claude/client.ts (104 lines deleted)
 
 ### Phase 2: Sandbox Mode — Universal Visualization
-- [x] Extended `ContentMode` type: `"math" | "sandbox" | "manim"`
+- [x] Extended `ContentMode` type: `"math" | "sandbox"`
 - [x] Added `sandboxHtml` to types, Zustand store, Zod schema
 - [x] Created `SandboxPanel.tsx` — renders Claude HTML in `<iframe sandbox="allow-scripts">`
 - [x] Wired through ContentMode → useSession → useTutorBrain → SessionPage
@@ -142,28 +142,25 @@
 - **Draggable avatar PiP** — floating, draggable avatar overlay using `react-rnd`, minimizable
 - **Bottom control bar** — centered controls (mic, camera, join/leave), timer on left, chat + self-view on right
 - **Slide-out chat** — hidden behind a chat button, uses shadcn Sheet (slides from right)
-- **Extensible content modes** — `ContentMode` union type: "math" (current Desmos/GeoGebra) and "manim" (video player)
-- **Manim video player** — HTML5 video player with loading/error states, auto-play
-- **Self-view in control bar** — Zoom webcam thumbnail shown in bottom-right of control bar (Google Meet style)
+- **Extensible content modes** — `ContentMode` union type: "math" (current Desmos/GeoGebra) and "sandbox" (interactive HTML)
 - **Unread message badge** — red badge on chat button shows unread count when chat is closed
 
 ### New Files
 - `src/components/session/DraggableAvatar.tsx` — draggable avatar PiP (react-rnd, fixed size 280x158)
 - `src/components/session/BottomControlBar.tsx` — Zoom-style control bar with all session controls
 - `src/components/session/ChatSheet.tsx` — slide-out chat panel (shadcn Sheet)
-- `src/components/session/ManimPlayer.tsx` — video player for Manim animations
 - `src/components/session/ContentMode.tsx` — extensible content mode switcher
 
 ### Modified Files
 - `src/app/student/session/page.tsx` — complete rewrite: full-screen layout, no navbar
-- `src/types/session.ts` — added `ContentMode` type, `manimVideoUrl` + `contentMode` to `SessionState` and `TutorBrainResponse`
-- `src/stores/sessionStore.ts` — added `contentMode`, `manimVideoUrl`, `setContentMode`, `setManimVideoUrl`
-- `src/hooks/useSession.ts` — exposes `contentMode`, `manimVideoUrl`, `setContentMode`, `setManimVideoUrl`
-- `src/lib/claude/client.ts` — Zod schema updated with `manimVideoUrl` and `contentMode` fields
+- `src/types/session.ts` — added `ContentMode` type, `contentMode` to `SessionState` and `TutorBrainResponse`
+- `src/stores/sessionStore.ts` — added `contentMode`, `setContentMode`
+- `src/hooks/useSession.ts` — exposes `contentMode`, `setContentMode`
+- `src/lib/claude/client.ts` — Zod schema updated with `contentMode` field
 
 ### Architecture Notes
 - **ContentMode is extensible**: Add new modes by extending the `ContentMode` union type and adding a panel in `ContentMode.tsx`
-- **Claude can now return** `manimVideoUrl` and `contentMode` in its response to trigger video playback or mode switching
+- **Claude can now return** `contentMode` in its response to trigger mode switching
 - **Old components preserved**: `AvatarPanel.tsx`, `ChatPanel.tsx`, `SessionControls.tsx` still exist but are no longer used by the session page (can be removed in cleanup)
 
 ---

@@ -1,6 +1,7 @@
 // Tutor respond API route — the core brain endpoint
 // Accepts TutorBrainRequest, returns TutorBrainResponse with speech + canvasCommands
 // Optionally enriches with Perplexity Sonar for factual grounding (T061)
+// Integrates Manim video generation for math animations
 // See: specs/001-minerva-mvp/contracts/tutor-brain.md
 //
 // Opt 2: Perplexity lookup now runs IN PARALLEL with Claude call.
@@ -9,7 +10,8 @@
 import { NextResponse } from "next/server";
 import { createTutorBrain } from "@/lib/claude/client";
 import { createKnowledgeLookup } from "@/lib/perplexity/client";
-import type { TutorBrainRequest } from "@/types/session";
+import { createManimClient } from "@/lib/manim/client";
+import type { TutorBrainRequest, TutorBrainResponse } from "@/types/session";
 
 // Simple heuristic to detect factual questions that benefit from Perplexity
 const FACTUAL_PATTERNS = [
@@ -25,6 +27,79 @@ const FACTUAL_PATTERNS = [
 
 function looksLikeFactualQuestion(message: string): boolean {
   return FACTUAL_PATTERNS.some((pattern) => pattern.test(message));
+}
+
+// Fetch existing Manim videos and format for Claude context
+async function getManimVideosContext(): Promise<string> {
+  if (!process.env.NEXT_PUBLIC_MANIM_URL) {
+    return "No Manim video service available.";
+  }
+  try {
+    const manim = createManimClient();
+    const existingVideos = await manim.getExistingVideos();
+    if (existingVideos.length === 0) {
+      return "No existing videos available yet.";
+    }
+    return existingVideos
+      .map((v) => `- "${v.prompt}" (file: ${v.filename})`)
+      .join("\n");
+  } catch (err) {
+    console.warn("[api/tutor/respond] Failed to fetch Manim videos:", err);
+    return "Could not fetch existing videos.";
+  }
+}
+
+// If Claude requested a Manim video, find existing or generate new
+async function handleManimGeneration(
+  response: TutorBrainResponse
+): Promise<TutorBrainResponse> {
+  if (!process.env.NEXT_PUBLIC_MANIM_URL) {
+    return response;
+  }
+  
+  // Only handle if video mode requested
+  if (response.contentMode !== "video") {
+    return response;
+  }
+  
+  const manim = createManimClient();
+  
+  try {
+    const existingVideos = await manim.getExistingVideos();
+    
+    // If there's a manimPrompt, check if it matches an existing video first
+    if (response.manimPrompt) {
+      const promptLower = response.manimPrompt.toLowerCase().trim();
+      const matchingVideo = existingVideos.find(
+        (v) => v.prompt.toLowerCase().trim() === promptLower
+      );
+      
+      if (matchingVideo) {
+        const videoUrl = manim.getVideoUrl(matchingVideo.filename);
+        console.log("[api/tutor/respond] Reusing existing video:", videoUrl);
+        return { ...response, videoUrl };
+      }
+      
+      // No match found, generate new video
+      console.log("[api/tutor/respond] No matching video found, generating:", response.manimPrompt);
+      const videoUrl = await manim.generateVideo(response.manimPrompt);
+      console.log("[api/tutor/respond] Manim video generated:", videoUrl);
+      return { ...response, videoUrl };
+    }
+    
+    // No manimPrompt, use first existing video
+    if (existingVideos.length > 0) {
+      const videoUrl = manim.getVideoUrl(existingVideos[0].filename);
+      console.log("[api/tutor/respond] Using first existing video:", videoUrl);
+      return { ...response, videoUrl };
+    }
+    
+    console.log("[api/tutor/respond] No videos available");
+    return response;
+  } catch (err) {
+    console.error("[api/tutor/respond] Manim handling failed:", err);
+    return response;
+  }
 }
 
 export async function POST(request: Request) {
@@ -46,6 +121,12 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+
+    // Fetch existing Manim videos for context (non-blocking on failure)
+    const manimVideosContext = await getManimVideosContext();
+
+    // Inject Manim videos into the student message context
+    body.studentMessage += `\n\n[Available Manim videos for reuse:\n${manimVideosContext}]`;
 
     const needsPerplexity =
       looksLikeFactualQuestion(body.studentMessage) &&
@@ -79,13 +160,23 @@ export async function POST(request: Request) {
       }
 
       // Now call Claude with (possibly enriched) message
-      const response = await brain.respond(body);
+      let response = await brain.respond(body);
+      response = await handleManimGeneration(response);
       return NextResponse.json(response);
     }
 
     // Non-factual questions — straight to Claude
     const brain = createTutorBrain();
-    const response = await brain.respond(body);
+    let response = await brain.respond(body);
+    
+    // Debug logging
+    console.log("[api/tutor/respond] Claude response:", {
+      contentMode: response.contentMode,
+      manimPrompt: response.manimPrompt,
+      hasVideoUrl: !!response.videoUrl,
+    });
+    
+    response = await handleManimGeneration(response);
 
     return NextResponse.json(response);
   } catch (err) {
@@ -99,3 +190,4 @@ export async function POST(request: Request) {
     );
   }
 }
+

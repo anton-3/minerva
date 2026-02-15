@@ -31,18 +31,32 @@ export default function SessionPage() {
     toolManager,
     clearCanvas,
     setActiveTool,
-    // Content mode
+// Content mode
     contentMode,
-    manimVideoUrl,
     sandboxHtml,
+    videoUrl,
     setContentMode,
     // User camera
     userCamera,
   } = useSession();
 
-  const [chatOpen, setChatOpen] = useState(false);
+const [chatOpen, setChatOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [micOpen, setMicOpen] = useState(false);
+  const [avatarCollapsed, setAvatarCollapsed] = useState(false);
+
+  // Collapse avatar when entering video mode, restore when leaving
+  useEffect(() => {
+    if (contentMode === "video") {
+      setAvatarCollapsed(true);
+    }
+  }, [contentMode]);
+
+  // Handle video ended — restore avatar and switch back to math mode
+  const handleVideoEnded = useCallback(() => {
+    setAvatarCollapsed(false);
+    setContentMode("math");
+  }, [setContentMode]);
 
   // Reset unread count when chat opens
   useEffect(() => {
@@ -87,8 +101,8 @@ export default function SessionPage() {
     }
   }, [chatOpen]);
 
-  const handleToggleMode = useCallback(() => {
-    const modes: ContentMode[] = ["math", "sandbox", "manim"];
+const handleToggleMode = useCallback(() => {
+    const modes: ContentMode[] = ["math", "sandbox", "video"];
     const currentIndex = modes.indexOf(contentMode);
     const nextIndex = (currentIndex + 1) % modes.length;
     setContentMode(modes[nextIndex]);
@@ -109,36 +123,34 @@ export default function SessionPage() {
     <div className="relative h-screen w-screen overflow-hidden bg-black">
       {/* Main content area — full screen */}
       <main className="absolute inset-0">
-        <ContentModeView
+<ContentModeView
           mode={contentMode}
           toolManager={toolManager}
-          manimUrl={manimVideoUrl}
           sandboxHtml={sandboxHtml}
+          videoUrl={videoUrl}
           onToolChange={setActiveTool}
-          onManimEnded={() => setContentMode("math")}
+          onVideoEnded={handleVideoEnded}
         />
       </main>
 
-      {/* Floating Zoom-style video overlay */}
+{/* Floating Zoom-style video overlay */}
       <FloatingVideoOverlay
         avatarStatus={avatarStatus}
         onAttachAvatar={attach}
         userCamera={userCamera}
         onScan={handleScan}
         isThinking={isThinking}
+        collapsed={avatarCollapsed}
+        onCollapsedChange={setAvatarCollapsed}
       />
 
       {/* Mode indicator badge */}
       <div className="absolute top-3 left-3 z-10">
         <span className="inline-flex items-center gap-1.5 rounded-full bg-black/60 backdrop-blur-sm px-3 py-1 text-xs font-medium text-white/90">
           <span className={`w-1.5 h-1.5 rounded-full ${
-            contentMode === "math" ? "bg-blue-400" :
-            contentMode === "sandbox" ? "bg-green-400" :
-            "bg-purple-400"
+            contentMode === "math" ? "bg-blue-400" : contentMode === "sandbox" ? "bg-green-400" : "bg-purple-400"
           }`} />
-          {contentMode === "math" ? "Math Canvas" :
-           contentMode === "sandbox" ? "Interactive" :
-           "Video"}
+          {contentMode === "math" ? "Math Canvas" : contentMode === "sandbox" ? "Interactive" : "Video"}
         </span>
       </div>
 

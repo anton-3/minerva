@@ -130,11 +130,11 @@ export function useTutorBrain(options: UseTutorBrainOptions) {
       if (response.contentMode) {
         useSessionStore.getState().setContentMode(response.contentMode);
       }
-      if (response.manimVideoUrl) {
-        useSessionStore.getState().setManimVideoUrl(response.manimVideoUrl);
-      }
-      if (response.sandboxHtml) {
+if (response.sandboxHtml) {
         useSessionStore.getState().setSandboxHtml(response.sandboxHtml);
+      }
+      if (response.videoUrl) {
+        useSessionStore.getState().setVideoUrl(response.videoUrl);
       }
 
       // Execute canvas commands (errors here never break the session)

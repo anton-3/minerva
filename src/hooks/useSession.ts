@@ -19,18 +19,16 @@ import { useTutorBrain } from "./useTutorBrain";
 import { useUserCamera } from "./useUserCamera";
 
 export function useSession() {
-  // Use individual selectors for stable references — avoids infinite re-render loops
+// Use individual selectors for stable references — avoids infinite re-render loops
   const status = useSessionStore((s) => s.status);
   const conversationHistory = useSessionStore((s) => s.conversationHistory);
   const contentMode = useSessionStore((s) => s.contentMode);
-  const manimVideoUrl = useSessionStore((s) => s.manimVideoUrl);
   const sandboxHtml = useSessionStore((s) => s.sandboxHtml);
+  const videoUrl = useSessionStore((s) => s.videoUrl);
   const setStatus = useSessionStore((s) => s.setStatus);
   const setAvatarStatus = useSessionStore((s) => s.setAvatarStatus);
   const setSessionId = useSessionStore((s) => s.setSessionId);
   const setContentMode = useSessionStore((s) => s.setContentMode);
-  const setManimVideoUrl = useSessionStore((s) => s.setManimVideoUrl);
-
   const avatar = useAvatar();
   const zoom = useZoom();
   const canvas = useCanvas();
@@ -172,12 +170,11 @@ export function useSession() {
     toolManager: canvas.toolManager,
     clearCanvas: canvas.clear,
     setActiveTool: canvas.setActiveTool,
-    // Content mode
+// Content mode
     contentMode,
-    manimVideoUrl,
     sandboxHtml,
+    videoUrl,
     setContentMode,
-    setManimVideoUrl,
     // User camera
     userCamera,
     // Zoom controls — kept for potential future use

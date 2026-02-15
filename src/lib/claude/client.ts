@@ -101,9 +101,9 @@ const TutorResponseSchema = z.object({
       velocity: z.enum(["improving", "plateau", "struggling"]).optional(),
     })
     .optional(),
-  manimVideoUrl: z.string().optional(),
-  contentMode: z.enum(["math", "sandbox", "manim"]).optional(),
+  contentMode: z.enum(["math", "sandbox", "video"]).optional(),
   sandboxHtml: z.string().optional(),
+  manimPrompt: z.string().optional(),
 });
 
 const SessionSummarySchema = z.object({
