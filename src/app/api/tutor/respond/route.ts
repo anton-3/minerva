@@ -33,6 +33,9 @@ function looksLikeFactualQuestion(message: string): boolean {
 }
 
 export async function POST(request: Request) {
+  const t0 = Date.now();
+  console.log(`[Latency:server] T0 REQUEST_RECEIVED`);
+
   // Reject oversized payloads (5MB limit for image uploads)
   const contentLength = request.headers.get("content-length");
   if (contentLength && parseInt(contentLength) > 5 * 1024 * 1024) {
@@ -59,18 +62,27 @@ export async function POST(request: Request) {
     );
   }
 
+  console.log(
+    `[Latency:server] BODY_PARSED +${Date.now() - t0}ms | "${body.studentMessage.slice(0, 80)}"`
+  );
+
   // Perplexity enrichment — runs before the stream starts (max 3s)
   const needsPerplexity =
     looksLikeFactualQuestion(body.studentMessage) &&
     !!process.env.PERPLEXITY_API_KEY;
 
   if (needsPerplexity) {
+    console.log(`[Latency:server] PERPLEXITY_START +${Date.now() - t0}ms`);
     try {
       const lookup = createKnowledgeLookup();
       const perplexityResult = await Promise.race([
         lookup.search(body.studentMessage).catch(() => null),
         new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000)),
       ]);
+
+      console.log(
+        `[Latency:server] PERPLEXITY_DONE +${Date.now() - t0}ms | result=${perplexityResult ? "yes" : "null"}`
+      );
 
       if (perplexityResult && perplexityResult.answer) {
         const citationsText =
@@ -80,8 +92,11 @@ export async function POST(request: Request) {
         body.studentMessage += `\n\n[Knowledge from Perplexity Sonar — use this for factual accuracy, but rephrase in your own Socratic teaching style:]\n${perplexityResult.answer}${citationsText}`;
       }
     } catch {
+      console.log(`[Latency:server] PERPLEXITY_FAILED +${Date.now() - t0}ms`);
       // Perplexity failure never blocks the response
     }
+  } else {
+    console.log(`[Latency:server] PERPLEXITY_SKIPPED +${Date.now() - t0}ms`);
   }
 
   // Create an AbortController so we can cancel the Claude stream if the client disconnects
@@ -90,13 +105,28 @@ export async function POST(request: Request) {
   const brain = createTutorBrain();
   const encoder = new TextEncoder();
 
+  console.log(`[Latency:server] STREAM_SETUP +${Date.now() - t0}ms | starting Claude stream`);
+
   const stream = new ReadableStream({
     async start(controller) {
       try {
+        let firstEvent = true;
         for await (const event of brain.respondStream(body, abortController.signal)) {
+          if (firstEvent) {
+            console.log(
+              `[Latency:server] FIRST_SSE_EVENT +${Date.now() - t0}ms | type=${event.type}`
+            );
+            firstEvent = false;
+          }
+          if (event.type === "speech") {
+            console.log(
+              `[Latency:server] SPEECH_SSE_EMIT +${Date.now() - t0}ms | "${(event.speech as string).slice(0, 60)}..."`
+            );
+          }
           const sseData = `data: ${JSON.stringify(event)}\n\n`;
           controller.enqueue(encoder.encode(sseData));
         }
+        console.log(`[Latency:server] STREAM_DONE +${Date.now() - t0}ms`);
         controller.enqueue(encoder.encode('data: {"type":"done"}\n\n'));
       } catch (err) {
         console.error("[api/tutor/respond] Stream error:", err);

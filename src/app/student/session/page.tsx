@@ -24,6 +24,7 @@ export default function SessionPage() {
     attach,
     avatarMute,
     avatarUnmute,
+    avatarFlush,
     startSession,
     endSession,
     handleTextMessage,
@@ -71,7 +72,8 @@ export default function SessionPage() {
 
       e.preventDefault();
       setMicOpen(false);
-      avatarMute();
+      avatarFlush();  // send accumulated text immediately
+      avatarMute();   // then mute mic
     };
 
     window.addEventListener("keydown", handleKeyDown);
@@ -80,7 +82,7 @@ export default function SessionPage() {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [avatarMute, avatarUnmute]);
+  }, [avatarMute, avatarUnmute, avatarFlush]);
 
   const handleNewMessage = useCallback(() => {
     if (!chatOpen) {

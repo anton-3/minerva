@@ -70,6 +70,7 @@ export function useTutorBrain(options: UseTutorBrainOptions) {
     opts: {
       onSpeech: (speech: string) => void;
       timeoutId: ReturnType<typeof setTimeout>;
+      t0?: number; // latency tracking start time
     }
   ): Promise<void> {
     const reader = res.body!.getReader();
@@ -77,12 +78,20 @@ export function useTutorBrain(options: UseTutorBrainOptions) {
     let sseBuffer = "";
     let speechHandled = false;
     let speakPromise: Promise<void> | null = null;
+    let firstChunkLogged = false;
 
     try {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         if (controller.signal.aborted) break;
+
+        if (!firstChunkLogged && opts.t0) {
+          firstChunkLogged = true;
+          console.log(
+            `[Latency] SSE_FIRST_CHUNK +${(performance.now() - opts.t0).toFixed(0)}ms | first bytes from server`
+          );
+        }
 
         sseBuffer += decoder.decode(value, { stream: true });
         const { events, remaining } = parseSSEBuffer(sseBuffer);
@@ -93,10 +102,23 @@ export function useTutorBrain(options: UseTutorBrainOptions) {
           if (event.type === "speech" && !speechHandled) {
             speechHandled = true;
             clearTimeout(opts.timeoutId); // connection alive, speech received
+
+            if (opts.t0) {
+              console.log(
+                `[Latency] SSE_SPEECH_EVENT +${(performance.now() - opts.t0).toFixed(0)}ms | "${(event.speech as string).slice(0, 60)}..."`
+              );
+            }
+
             setIsThinking(false);
 
             const speech = event.speech as string;
             opts.onSpeech(speech);
+
+            if (opts.t0) {
+              console.log(
+                `[Latency] CALLING_SPEAK +${(performance.now() - opts.t0).toFixed(0)}ms | handing to avatar`
+              );
+            }
             // Fire speak — don't await, let result events process while avatar talks
             speakPromise = optionsRef.current.speak(speech);
           }
@@ -177,6 +199,11 @@ export function useTutorBrain(options: UseTutorBrainOptions) {
       message: string,
       imageData?: TutorBrainRequest["imageData"]
     ) => {
+      const t0 = performance.now();
+      console.log(
+        `[Latency] BRAIN_RECEIVED +0ms | "${message.slice(0, 80)}"`
+      );
+
       const store = useSessionStore.getState();
 
       // Abort any in-flight request before starting a new one
@@ -224,6 +251,10 @@ export function useTutorBrain(options: UseTutorBrainOptions) {
           }),
         };
 
+        console.log(
+          `[Latency] FETCH_START +${(performance.now() - t0).toFixed(0)}ms | POST /api/tutor/respond`
+        );
+
         const timeoutId = setTimeout(
           () => controller.abort(),
           API_TIMEOUT_MS
@@ -236,9 +267,14 @@ export function useTutorBrain(options: UseTutorBrainOptions) {
           signal: controller.signal,
         });
 
+        console.log(
+          `[Latency] FETCH_RESPONSE +${(performance.now() - t0).toFixed(0)}ms | status=${res.status}`
+        );
+
         if (controller.signal.aborted) return;
 
         await consumeStream(res, controller, {
+          t0,
           timeoutId,
           onSpeech: (speech) => {
             store.addMessage({ role: "assistant", content: speech });

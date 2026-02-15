@@ -166,6 +166,7 @@ export function useSession() {
     attach: avatar.attach,
     avatarMute: avatar.mute,
     avatarUnmute: avatar.unmute,
+    avatarFlush: avatar.flush,
     startSession,
     endSession,
     handleTextMessage: brain.handleStudentMessage,

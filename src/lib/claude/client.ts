@@ -6,6 +6,11 @@
 // - output_config.format with zodOutputFormat for typed JSON
 // - Response in content[0].text, parsed with JSON.parse
 // - Regex fallback for malformed responses
+//
+// Latency optimizations:
+// - Module-level Anthropic client singleton (reuses HTTP connections, avoids TLS handshake per request)
+// - Prompt caching via cache_control: { type: "ephemeral" } on all system prompts
+//   (after first request, subsequent requests skip re-processing the system prompt — saves ~200-500ms)
 
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
@@ -177,6 +182,10 @@ const MODEL_FAST = "claude-haiku-4-5-20251001";
 const MODEL = "claude-sonnet-4-5-20250929";
 const MAX_HISTORY = 20;
 
+// Module-level singleton — reuses underlying HTTP connections across requests
+// (avoids TLS handshake per request when createTutorBrain() is called repeatedly)
+const client = new Anthropic();
+
 // Helper: build Claude request from TutorBrainRequest (shared by respond + respondStream)
 function buildClaudeRequest(request: TutorBrainRequest): {
   messages: Anthropic.MessageParam[];
@@ -248,8 +257,6 @@ function buildClaudeRequest(request: TutorBrainRequest): {
 }
 
 export function createTutorBrain(): TutorBrain {
-  const client = new Anthropic();
-
   return {
     async respond(request: TutorBrainRequest): Promise<TutorBrainResponse> {
       const { messages, systemPrompt, hasImage } = buildClaudeRequest(request);
@@ -258,7 +265,13 @@ export function createTutorBrain(): TutorBrain {
         const createParams: Anthropic.MessageCreateParams = {
           model: MODEL_FAST,
           max_tokens: 4096,
-          system: systemPrompt,
+          system: [
+            {
+              type: "text" as const,
+              text: systemPrompt,
+              cache_control: { type: "ephemeral" as const },
+            },
+          ],
           messages,
           ...(hasImage
             ? {}
@@ -309,15 +322,28 @@ export function createTutorBrain(): TutorBrain {
       request: TutorBrainRequest,
       signal?: AbortSignal
     ): AsyncGenerator<TutorStreamEvent> {
+      const streamT0 = Date.now();
+      console.log(`[Latency:claude] RESPOND_STREAM_START +0ms`);
+
       const { messages, systemPrompt, hasImage } = buildClaudeRequest(request);
       const SPEECH_REGEX = /"speech"\s*:\s*"((?:[^"\\]|\\.)*)"\s*[,}]/;
+
+      console.log(
+        `[Latency:claude] REQUEST_BUILT +${Date.now() - streamT0}ms | model=${MODEL_FAST} history=${messages.length} msgs`
+      );
 
       try {
         const stream = client.messages.stream(
           {
             model: MODEL_FAST,
             max_tokens: 4096,
-            system: systemPrompt,
+            system: [
+              {
+                type: "text" as const,
+                text: systemPrompt,
+                cache_control: { type: "ephemeral" as const },
+              },
+            ],
             messages,
             ...(hasImage
               ? {}
@@ -331,20 +357,37 @@ export function createTutorBrain(): TutorBrain {
           signal ? { signal } : undefined
         );
 
+        console.log(
+          `[Latency:claude] STREAM_CREATED +${Date.now() - streamT0}ms | waiting for first token...`
+        );
+
         let buffer = "";
         let speechEmitted = false;
+        let firstTokenLogged = false;
+        let tokenCount = 0;
 
         for await (const event of stream) {
           if (
             event.type === "content_block_delta" &&
             event.delta.type === "text_delta"
           ) {
+            tokenCount++;
+            if (!firstTokenLogged) {
+              firstTokenLogged = true;
+              console.log(
+                `[Latency:claude] FIRST_TOKEN +${Date.now() - streamT0}ms | TTFT (time to first token)`
+              );
+            }
+
             buffer += event.delta.text;
 
             if (!speechEmitted) {
               const match = buffer.match(SPEECH_REGEX);
               if (match) {
                 speechEmitted = true;
+                console.log(
+                  `[Latency:claude] SPEECH_EXTRACTED +${Date.now() - streamT0}ms | tokens so far: ${tokenCount}`
+                );
                 // Use JSON.parse for proper unescape of JSON string values
                 let speech: string;
                 try {
@@ -361,6 +404,10 @@ export function createTutorBrain(): TutorBrain {
           }
         }
 
+        console.log(
+          `[Latency:claude] STREAM_COMPLETE +${Date.now() - streamT0}ms | total tokens: ${tokenCount}`
+        );
+
         // Stream finished — parse full response for remaining fields
         const fullResponse = tryParseJson(buffer);
         if (fullResponse) {
@@ -368,6 +415,9 @@ export function createTutorBrain(): TutorBrain {
             yield { type: "speech", speech: fullResponse.speech };
           }
           const { speech: _, ...rest } = fullResponse;
+          console.log(
+            `[Latency:claude] RESULT_YIELDED +${Date.now() - streamT0}ms | keys: ${Object.keys(rest).join(",") || "none"}`
+          );
           yield { type: "result", data: rest };
         } else if (!speechEmitted) {
           yield {
@@ -398,7 +448,13 @@ export function createTutorBrain(): TutorBrain {
       const response = await client.messages.create({
         model: MODEL,
         max_tokens: 1024,
-        system: SUMMARY_SYSTEM_PROMPT,
+        system: [
+          {
+            type: "text" as const,
+            text: SUMMARY_SYSTEM_PROMPT,
+            cache_control: { type: "ephemeral" as const },
+          },
+        ],
         messages: [
           {
             role: "user",
@@ -422,7 +478,13 @@ export function createTutorBrain(): TutorBrain {
       const response = await client.messages.create({
         model: MODEL,
         max_tokens: 1024,
-        system: LEARNING_PLAN_SYSTEM_PROMPT,
+        system: [
+          {
+            type: "text" as const,
+            text: LEARNING_PLAN_SYSTEM_PROMPT,
+            cache_control: { type: "ephemeral" as const },
+          },
+        ],
         messages: [
           {
             role: "user",
