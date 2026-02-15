@@ -1,4 +1,5 @@
 import glob
+import json
 import logging
 import os
 import re
@@ -26,6 +27,8 @@ FLASK_PORT = int(os.environ.get("FLASK_PORT", "5000"))
 
 VIDEOS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "videos")
 os.makedirs(VIDEOS_DIR, exist_ok=True)
+
+DB_PATH = os.path.join(VIDEOS_DIR, "videos.json")
 
 client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
@@ -159,6 +162,26 @@ def _find_video(media_dir: str) -> str | None:
     return None
 
 
+def _load_db() -> list[dict]:
+    """Load the video DB from *DB_PATH*, returning [] on missing/corrupt file."""
+    try:
+        with open(DB_PATH, "r") as f:
+            data = json.load(f)
+        if isinstance(data, list):
+            return data
+    except (FileNotFoundError, json.JSONDecodeError):
+        pass
+    return []
+
+
+def _save_to_db(filename: str, prompt: str) -> None:
+    """Append a {filename, prompt} record to the JSON video DB."""
+    records = _load_db()
+    records.append({"filename": filename, "prompt": prompt})
+    with open(DB_PATH, "w") as f:
+        json.dump(records, f, indent=2)
+
+
 # ---------------------------------------------------------------------------
 # Logging
 # ---------------------------------------------------------------------------
@@ -196,6 +219,13 @@ def serve_video(filename):
     return send_file(video_path, mimetype="video/mp4")
 
 
+@app.get("/exists")
+def exists():
+    """Return all previously generated videos and their prompts."""
+    records = _load_db()
+    return jsonify({"videos": records})
+
+
 @app.post("/generate")
 def generate():
     t_start = time.perf_counter()
@@ -209,112 +239,138 @@ def generate():
     prompt = body["prompt"]
     log.info("Prompt: %s", prompt)
 
-    # -- 1. Call the LLM ---------------------------------------------------
-    log.info("Calling Anthropic model=%s ...", ANTHROPIC_MODEL)
-    t_llm = time.perf_counter()
-    try:
-        message = client.messages.create(
-            model=ANTHROPIC_MODEL,
-            max_tokens=4096,
-            system=SYSTEM_PROMPT,
-            messages=[
-                {"role": "user", "content": USER_PROMPT_TEMPLATE.format(query=prompt)},
-            ],
-        )
-        raw_code = message.content[0].text
-    except Exception as exc:
-        log.error("Anthropic API error after %.2fs: %s", time.perf_counter() - t_llm, exc)
-        return jsonify({"error": f"Anthropic API error: {exc}"}), 502
+    MAX_ATTEMPTS = 4
+    last_error_response = None
 
-    llm_elapsed = time.perf_counter() - t_llm
-    log.info("LLM response received (%.2fs, %d chars)", llm_elapsed, len(raw_code))
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        if attempt > 1:
+            log.info("Retry %d/%d for prompt: %s", attempt, MAX_ATTEMPTS, prompt)
 
-    code = _strip_code_fences(raw_code)
+        # -- 1. Call the LLM -----------------------------------------------
+        log.info("[Attempt %d/%d] Calling Anthropic model=%s ...", attempt, MAX_ATTEMPTS, ANTHROPIC_MODEL)
+        t_llm = time.perf_counter()
+        try:
+            message = client.messages.create(
+                model=ANTHROPIC_MODEL,
+                max_tokens=4096,
+                system=SYSTEM_PROMPT,
+                messages=[
+                    {"role": "user", "content": USER_PROMPT_TEMPLATE.format(query=prompt)},
+                ],
+            )
+            raw_code = message.content[0].text
+        except Exception as exc:
+            llm_elapsed = time.perf_counter() - t_llm
+            log.error("[Attempt %d/%d] Anthropic API error after %.2fs: %s", attempt, MAX_ATTEMPTS, llm_elapsed, exc)
+            last_error_response = (jsonify({"error": f"Anthropic API error: {exc}"}), 502)
+            continue
 
-    scene_name = _extract_scene_name(code)
-    if not scene_name:
-        log.error("No Scene subclass found in generated code")
-        return jsonify({
-            "error": "Could not find a Scene subclass in the generated code",
-            "generated_code": code,
-        }), 500
+        llm_elapsed = time.perf_counter() - t_llm
+        log.info("[Attempt %d/%d] LLM response received (%.2fs, %d chars)", attempt, MAX_ATTEMPTS, llm_elapsed, len(raw_code))
 
-    log.info("Extracted scene class: %s", scene_name)
+        code = _strip_code_fences(raw_code)
 
-    # -- 2. Write to a temp dir & render -----------------------------------
-    tmp_dir = tempfile.mkdtemp(prefix="visimath_")
-    script_path = os.path.join(tmp_dir, "scene.py")
-    log.info("Temp dir: %s", tmp_dir)
-
-    try:
-        with open(script_path, "w") as f:
-            f.write(code)
-        log.info("Wrote generated script to %s (%d lines)", script_path, code.count("\n") + 1)
-
-        manim_cmd = [
-            "manim",
-            "-ql",                          # low quality (fast)
-            "--media_dir", tmp_dir,         # render output here
-            script_path,
-            scene_name,
-        ]
-        log.info("Running: %s", " ".join(manim_cmd))
-
-        t_render = time.perf_counter()
-        result = subprocess.run(
-            manim_cmd,
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
-        render_elapsed = time.perf_counter() - t_render
-
-        if result.returncode != 0:
-            log.error("Manim failed (exit %d, %.2fs). stderr:\n%s",
-                      result.returncode, render_elapsed, result.stderr)
-            return jsonify({
-                "error": "Manim rendering failed",
-                "stderr": result.stderr,
+        scene_name = _extract_scene_name(code)
+        if not scene_name:
+            log.error("[Attempt %d/%d] No Scene subclass found in generated code", attempt, MAX_ATTEMPTS)
+            last_error_response = (jsonify({
+                "error": "Could not find a Scene subclass in the generated code",
                 "generated_code": code,
-            }), 500
+            }), 500)
+            continue
 
-        log.info("Manim rendering succeeded (%.2fs)", render_elapsed)
+        log.info("[Attempt %d/%d] Extracted scene class: %s", attempt, MAX_ATTEMPTS, scene_name)
 
-        video_path = _find_video(tmp_dir)
-        if not video_path:
-            log.error("No .mp4 found in %s after successful render", tmp_dir)
-            return jsonify({
-                "error": "Rendering succeeded but no .mp4 was found",
-                "stdout": result.stdout,
-                "stderr": result.stderr,
-            }), 500
+        # -- 2. Write to a temp dir & render -------------------------------
+        tmp_dir = tempfile.mkdtemp(prefix="visimath_")
+        script_path = os.path.join(tmp_dir, "scene.py")
+        log.info("[Attempt %d/%d] Temp dir: %s", attempt, MAX_ATTEMPTS, tmp_dir)
 
-        video_size_mb = os.path.getsize(video_path) / (1024 * 1024)
-        log.info("Video ready: %s (%.2f MB)", video_path, video_size_mb)
+        try:
+            with open(script_path, "w") as f:
+                f.write(code)
+            log.info("[Attempt %d/%d] Wrote generated script to %s (%d lines)",
+                     attempt, MAX_ATTEMPTS, script_path, code.count("\n") + 1)
 
-        # -- 3. Copy to videos/ and return URL -----------------------------
-        filename = f"{uuid.uuid4().hex}.mp4"
-        dest_path = os.path.join(VIDEOS_DIR, filename)
-        shutil.copy2(video_path, dest_path)
-        shutil.rmtree(tmp_dir, ignore_errors=True)
-        log.info("Saved video to %s", dest_path)
+            manim_cmd = [
+                "manim",
+                "-ql",                          # low quality (fast)
+                "--media_dir", tmp_dir,         # render output here
+                script_path,
+                scene_name,
+            ]
+            log.info("[Attempt %d/%d] Running: %s", attempt, MAX_ATTEMPTS, " ".join(manim_cmd))
 
-        video_url = f"{BASE_URL.rstrip('/')}/videos/{filename}"
-        total_elapsed = time.perf_counter() - t_start
+            t_render = time.perf_counter()
+            result = subprocess.run(
+                manim_cmd,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+            render_elapsed = time.perf_counter() - t_render
 
-        log.info("Responding with URL — total request time: %.2fs (LLM %.2fs + render %.2fs)",
-                 total_elapsed, llm_elapsed, render_elapsed)
-        return jsonify({"url": video_url})
+            if result.returncode != 0:
+                log.error("[Attempt %d/%d] Manim failed (exit %d, %.2fs). stderr:\n%s",
+                          attempt, MAX_ATTEMPTS, result.returncode, render_elapsed, result.stderr)
+                shutil.rmtree(tmp_dir, ignore_errors=True)
+                last_error_response = (jsonify({
+                    "error": "Manim rendering failed",
+                    "stderr": result.stderr,
+                    "generated_code": code,
+                }), 500)
+                continue
 
-    except subprocess.TimeoutExpired:
-        log.error("Manim timed out after 120s")
-        shutil.rmtree(tmp_dir, ignore_errors=True)
-        return jsonify({"error": "Manim rendering timed out (120s limit)"}), 504
+            log.info("[Attempt %d/%d] Manim rendering succeeded (%.2fs)", attempt, MAX_ATTEMPTS, render_elapsed)
 
-    except Exception as exc:
-        log.error("Unexpected error after %.2fs: %s", time.perf_counter() - t_start, exc, exc_info=True)
-        shutil.rmtree(tmp_dir, ignore_errors=True)
-        return jsonify({"error": f"Unexpected error: {exc}"}), 500
+            video_path = _find_video(tmp_dir)
+            if not video_path:
+                log.error("[Attempt %d/%d] No .mp4 found in %s after successful render",
+                          attempt, MAX_ATTEMPTS, tmp_dir)
+                shutil.rmtree(tmp_dir, ignore_errors=True)
+                last_error_response = (jsonify({
+                    "error": "Rendering succeeded but no .mp4 was found",
+                    "stdout": result.stdout,
+                    "stderr": result.stderr,
+                }), 500)
+                continue
+
+            video_size_mb = os.path.getsize(video_path) / (1024 * 1024)
+            log.info("[Attempt %d/%d] Video ready: %s (%.2f MB)", attempt, MAX_ATTEMPTS, video_path, video_size_mb)
+
+            # -- 3. Copy to videos/ and return URL -------------------------
+            filename = f"{uuid.uuid4().hex}.mp4"
+            dest_path = os.path.join(VIDEOS_DIR, filename)
+            shutil.copy2(video_path, dest_path)
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+            log.info("Saved video to %s", dest_path)
+
+            _save_to_db(filename, prompt)
+            log.info("Recorded video in DB: %s", filename)
+
+            video_url = f"{BASE_URL.rstrip('/')}/videos/{filename}"
+            total_elapsed = time.perf_counter() - t_start
+
+            log.info("Responding with URL — total request time: %.2fs (LLM %.2fs + render %.2fs)",
+                     total_elapsed, llm_elapsed, render_elapsed)
+            return jsonify({"url": video_url})
+
+        except subprocess.TimeoutExpired:
+            log.error("[Attempt %d/%d] Manim timed out after 120s", attempt, MAX_ATTEMPTS)
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+            last_error_response = (jsonify({"error": "Manim rendering timed out (120s limit)"}), 504)
+            continue
+
+        except Exception as exc:
+            log.error("[Attempt %d/%d] Unexpected error after %.2fs: %s",
+                      attempt, MAX_ATTEMPTS, time.perf_counter() - t_start, exc, exc_info=True)
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+            last_error_response = (jsonify({"error": f"Unexpected error: {exc}"}), 500)
+            continue
+
+    # All attempts exhausted
+    log.error("All %d attempts failed for prompt: %s", MAX_ATTEMPTS, prompt)
+    return last_error_response
 
 
 # ---------------------------------------------------------------------------

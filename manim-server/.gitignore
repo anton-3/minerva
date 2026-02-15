@@ -166,3 +166,4 @@ media/
 generated_manim_script.py
 
 videos/*.mp4
+videos/videos.json
