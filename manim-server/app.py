@@ -162,22 +162,66 @@ def _find_video(media_dir: str) -> str | None:
     return None
 
 
+def _get_video_duration(filepath: str) -> float | None:
+    """Return the duration in seconds of a video file using ffprobe, or None on failure."""
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe", "-v", "error",
+                "-show_entries", "format=duration",
+                "-of", "default=noprint_wrappers=1:nokey=1",
+                filepath,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return round(float(result.stdout.strip()), 2)
+    except (subprocess.TimeoutExpired, ValueError, OSError):
+        pass
+    return None
+
+
+def _validate_db(records: list[dict]) -> list[dict]:
+    """Validate DB records: remove entries for missing files, ensure lengths are accurate."""
+    validated = []
+    changed = False
+    for rec in records:
+        filepath = os.path.join(VIDEOS_DIR, rec["filename"])
+        if not os.path.isfile(filepath):
+            changed = True
+            log.info("DB cleanup: removing entry for missing file %s", rec["filename"])
+            continue
+        duration = _get_video_duration(filepath)
+        if rec.get("length") != duration:
+            rec["length"] = duration
+            changed = True
+        validated.append(rec)
+    if changed:
+        with open(DB_PATH, "w") as f:
+            json.dump(validated, f, indent=2)
+    return validated
+
+
 def _load_db() -> list[dict]:
-    """Load the video DB from *DB_PATH*, returning [] on missing/corrupt file."""
+    """Load the video DB from *DB_PATH*, validate entries, and return the list."""
     try:
         with open(DB_PATH, "r") as f:
             data = json.load(f)
         if isinstance(data, list):
-            return data
+            return _validate_db(data)
     except (FileNotFoundError, json.JSONDecodeError):
         pass
     return []
 
 
 def _save_to_db(filename: str, prompt: str) -> None:
-    """Append a {filename, prompt} record to the JSON video DB."""
+    """Append a {filename, prompt, length} record to the JSON video DB."""
     records = _load_db()
-    records.append({"filename": filename, "prompt": prompt})
+    filepath = os.path.join(VIDEOS_DIR, filename)
+    duration = _get_video_duration(filepath)
+    records.append({"filename": filename, "prompt": prompt, "length": duration})
     with open(DB_PATH, "w") as f:
         json.dump(records, f, indent=2)
 
