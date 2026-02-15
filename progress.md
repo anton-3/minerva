@@ -2,9 +2,63 @@
 
 > **For AI agents**: Read this file first to understand where the project is. Update it after every meaningful task or group of tasks.
 
-**Last updated**: 2026-02-15 (Session 11 - Merged)
+**Last updated**: 2026-02-15 (Session 12 - Tool Calling Speech Fix)
 **Branch**: `001-minerva-mvp`
-**Overall status**: Phases 1-8 COMPLETE (T001-T067). Session 11 merged two parallel branches: (A) SSE streaming pipeline for faster TTFT, (B) Design system + sandbox token optimization + Manim video integration. TypeScript passes clean (0 errors).
+**Overall status**: Phases 1-8 COMPLETE (T001-T067). Session 12 fixed a critical bug where Claude would call tools without generating speech text, leaving the avatar silent.
+
+---
+
+## Session 12: Tool Calling Speech Fix
+
+**Problem**: When Claude called tools (setContentMode, executeCanvasCommands), it would sometimes generate ONLY tool calls without any speech text. The avatar would remain silent.
+
+**Root Cause**: Two issues:
+1. The prompt didn't explicitly require speech with every response
+2. The code was checking for a non-existent `step-finish` event instead of `text-end`
+
+**Fixes Applied**:
+
+### 1. Fixed stream event handling in `client.ts`
+- Removed check for non-existent `step-finish` event
+- Speech is now emitted when we see a `tool-call` event (before yielding the tool)
+- Added `text-end` handler for text-only responses
+- Fallback still catches edge cases
+
+### 2. Updated system prompt in `prompts.ts`
+- Added **CRITICAL: ALWAYS GENERATE SPEECH TEXT** section
+- Explicitly tells Claude: "Never call tools without also generating speech"
+- Shows example response flow: generate speech FIRST, then call tools
+
+### Files Changed
+| File | Change |
+|------|--------|
+| `src/lib/claude/client.ts` | Fixed multi-step stream handling for tools with `execute()` |
+| `src/lib/claude/prompts.ts` | Added mandatory speech requirement to prompt |
+
+### Multi-Step Tool Execution Flow (NEW)
+When a tool has an `execute()` function (like `getExistingVideos`), the AI SDK handles it automatically:
+
+```
+Step 1:
+  start-step → speechBuffer reset
+  text-delta events → Claude's intro speech
+  text-end → speech emitted
+  tool-call → getExistingVideos
+  tool-result → AI SDK executes, returns result
+
+Step 2 (automatic continuation):
+  start-step → speechBuffer reset
+  text-delta events → Claude's follow-up based on tool result
+  text-end → speech emitted
+
+done
+```
+
+Key changes:
+- Added `start-step` handler to reset `speechBuffer` for each step
+- Removed `speechEmitted` flag - now emit speech per-step, not once
+- `text-end` emits speech immediately (not waiting for tool calls)
+- Safety: also emit speech on `tool-call` if `text-end` didn't fire
 
 ---
 

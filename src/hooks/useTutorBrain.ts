@@ -1,16 +1,17 @@
-// useTutorBrain hook — conversation loop orchestrator
-// Coordinates: student speaks → Claude responds (SSE stream) → avatar speaks + canvas draws
+// useTutorBrain hook — conversation loop orchestrator with AI SDK tool calling
+// Coordinates: student speaks → Claude responds (SSE stream) → avatar speaks + tools execute
 // See: specs/001-minerva-mvp/plan.md (Core Session Flow)
 //
-// SSE streaming pipeline:
-// The API returns an SSE stream. Speech is emitted first (~1s) so the avatar
-// starts talking immediately. Remaining fields (sandboxContent, canvasCommands, etc.)
-// arrive in a second event when the stream finishes.
+// SSE streaming pipeline with tool calling:
+// The API returns an SSE stream with these events:
+// - "speech" — text to speak (emitted early for low latency)
+// - "tool-call" — tool invocation (executeCanvasCommands, showSandbox, setContentMode)
+// - "tool-result" — server-executed tool result (showVideo, updateProgress)
+// - "done" — stream complete
+// - "error" — fallback speech on error
 //
-// Speech audit fixes preserved:
-// - AbortController — cancel in-flight requests on new message
-// - Timeout on API call
-// - Separate greeting method — no fake "hi" in transcript
+// Client-side tools: executeCanvasCommands, showSandbox, setContentMode
+// Server-side tools: showVideo, updateProgress
 
 "use client";
 
@@ -61,9 +62,7 @@ export function useTutorBrain(options: UseTutorBrainOptions) {
   const abortRef = useRef<AbortController | null>(null);
 
   // ─── Shared SSE stream consumer ─────────────────────────────────────────
-  // Used by both handleStudentMessage and sendGreeting.
-  // Reads SSE events from the response body, processes speech immediately,
-  // and handles result/error events.
+  // Handles speech events, tool calls, and tool results from the SSE stream.
   async function consumeStream(
     res: Response,
     controller: AbortController,
@@ -79,6 +78,8 @@ export function useTutorBrain(options: UseTutorBrainOptions) {
     let speechHandled = false;
     let speakPromise: Promise<void> | null = null;
     let firstChunkLogged = false;
+
+    const store = useSessionStore.getState();
 
     try {
       while (true) {
@@ -98,7 +99,7 @@ export function useTutorBrain(options: UseTutorBrainOptions) {
         sseBuffer = remaining;
 
         for (const event of events) {
-          // ── Speech event: emitted early, start avatar speaking immediately ──
+          // ── Speech event: start avatar speaking immediately ──
           if (event.type === "speech" && !speechHandled) {
             speechHandled = true;
             clearTimeout(opts.timeoutId); // connection alive, speech received
@@ -119,84 +120,102 @@ export function useTutorBrain(options: UseTutorBrainOptions) {
                 `[Latency] CALLING_SPEAK +${(performance.now() - opts.t0).toFixed(0)}ms | handing to avatar`
               );
             }
-            // Fire speak — don't await, let result events process while avatar talks
+            // Fire speak — don't await, let tool events process while avatar talks
             speakPromise = optionsRef.current.speak(speech);
           }
 
-          // ── Result event: remaining fields (sandbox, canvas, progress, video, etc.) ──
-          if (event.type === "result") {
-            const data = event.data as Record<string, unknown>;
-            const store = useSessionStore.getState();
+          // ── Tool call events: execute client-side tools ──
+          if (event.type === "tool-call") {
+            const toolName = event.toolName as string;
+            const input = event.input as Record<string, unknown>;
 
-            // Process content mode switching with validation
-            const hasCanvas = data.canvasCommands && Array.isArray(data.canvasCommands) && (data.canvasCommands as unknown[]).length > 0;
-            const hasSandbox = !!data.sandboxContent;
-            const hasVideo = !!data.videoUrl;
-            const currentMode = store.contentMode;
-
-            // Store sandbox/video content FIRST (before switching modes)
-            if (data.sandboxContent) {
-              store.setSandboxContent(data.sandboxContent as string, data.sandboxAccent as string | undefined);
-            }
-            if (data.videoUrl) {
-              store.setVideoUrl(data.videoUrl as string);
+            if (opts.t0) {
+              console.log(
+                `[Latency] TOOL_CALL +${(performance.now() - opts.t0).toFixed(0)}ms | ${toolName}`
+              );
             }
 
-            // Process content mode switch from Claude
-            // RULE: Never switch to sandbox unless sandboxContent is present.
-            // Never switch to video unless videoUrl is present.
-            // Never switch to math unless canvasCommands are present.
-            if (data.contentMode) {
-              const modeValid =
-                (data.contentMode === "sandbox" && hasSandbox) ||
-                (data.contentMode === "math" && hasCanvas) ||
-                (data.contentMode === "video" && hasVideo) ||
-                data.contentMode === "welcome";
-              if (modeValid) {
-                store.setContentMode(data.contentMode as ContentMode);
+            switch (toolName) {
+              case "executeCanvasCommands": {
+                const commands = input.commands as CanvasCommand[];
+                if (commands && commands.length > 0) {
+                  // Switch to math mode if not already
+                  if (store.contentMode !== "math") {
+                    store.setContentMode("math");
+                  }
+                  optionsRef.current
+                    .executeSequence(commands)
+                    .catch((err) =>
+                      console.error("[useTutorBrain] Canvas error:", err)
+                    );
+                }
+                break;
               }
-            } else if (currentMode === "welcome") {
-              // Auto-exit welcome: only switch if we actually have content to show
-              if (hasSandbox) {
-                store.setContentMode("sandbox");
-              } else if (hasCanvas) {
-                store.setContentMode("math");
-              } else if (hasVideo) {
-                store.setContentMode("video");
+
+              case "showSandbox": {
+                const content = input.content as string;
+                const accent = input.accent as string;
+                if (content) {
+                  store.setSandboxContent(content, accent);
+                  store.setContentMode("sandbox");
+                }
+                break;
               }
-              // If no content, stay on welcome — just a speech-only response
+
+              case "setContentMode": {
+                const mode = input.mode as ContentMode;
+                if (mode) {
+                  store.setContentMode(mode);
+                }
+                break;
+              }
+
+              // Client doesn't handle showVideo or updateProgress — server executes those
+              default:
+                console.log(`[useTutorBrain] Unhandled tool call: ${toolName}`);
+            }
+          }
+
+          // ── Tool result events: handle server-executed tool results ──
+          if (event.type === "tool-result") {
+            const toolName = event.toolName as string;
+            const output = event.output as Record<string, unknown>;
+
+            if (opts.t0) {
+              console.log(
+                `[Latency] TOOL_RESULT +${(performance.now() - opts.t0).toFixed(0)}ms | ${toolName}`
+              );
             }
 
-            // Execute canvas commands
-            if (hasCanvas) {
-              optionsRef.current
-                .executeSequence(data.canvasCommands as CanvasCommand[])
-                .catch((err) =>
-                  console.error("[useTutorBrain] Canvas error:", err)
-                );
-            }
-
-            // Save progress update to Supabase (non-blocking)
-            if (data.progressUpdate) {
-              const progress = data.progressUpdate as {
-                topic: string;
-                score: number;
-              };
-              const { learningPlan, sessionId } = store;
-              if (learningPlan) {
-                fetch("/api/progress", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    child_id: sessionId,
-                    subject: learningPlan.subject,
-                    topic: progress.topic,
-                    score: progress.score,
-                  }),
-                }).catch((err) =>
-                  console.error("[useTutorBrain] Progress save error:", err)
-                );
+            switch (toolName) {
+              case "showVideo": {
+                const videoUrl = output.videoUrl as string | undefined;
+                if (videoUrl) {
+                  store.setVideoUrl(videoUrl);
+                  store.setContentMode("video");
+                } else if (output.error) {
+                  console.error("[useTutorBrain] Video error:", output.error);
+                }
+                break;
               }
+
+              case "updateProgress": {
+                // Progress was saved server-side, nothing to do client-side
+                console.log("[useTutorBrain] Progress updated:", output);
+                break;
+              }
+
+              default:
+                console.log(`[useTutorBrain] Unhandled tool result: ${toolName}`);
+            }
+          }
+
+          // ── Done event: stream complete ──
+          if (event.type === "done") {
+            if (opts.t0) {
+              console.log(
+                `[Latency] SSE_DONE +${(performance.now() - opts.t0).toFixed(0)}ms | stream complete`
+              );
             }
           }
 
@@ -263,7 +282,7 @@ export function useTutorBrain(options: UseTutorBrainOptions) {
         const canvasState =
           snapshot === "Canvas is empty." ? "" : snapshot;
 
-        const request: TutorBrainRequest = {
+        const request: TutorBrainRequest & { sessionId?: string; learningPlanSubject?: string } = {
           studentMessage: message,
           conversationHistory: store.conversationHistory,
           learningPlan: store.learningPlan,
@@ -277,6 +296,9 @@ export function useTutorBrain(options: UseTutorBrainOptions) {
           ...(store.masteryScores.length > 0 && {
             masteryScores: store.masteryScores,
           }),
+          // Pass session context for server-side tool execution
+          sessionId: store.sessionId ?? undefined,
+          learningPlanSubject: store.learningPlan?.subject,
         };
 
         console.log(
