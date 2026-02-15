@@ -5,6 +5,7 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         texlive \
         texlive-latex-extra \
+        dvisvgm \
         ffmpeg \
         libcairo2-dev \
         libpango1.0-dev \
