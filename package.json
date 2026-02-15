@@ -12,7 +12,6 @@
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.44",
-    "@anthropic-ai/sdk": "^0.74.0",
     "@heygen/liveavatar-web-sdk": "^0.0.10",
     "@heygen/streaming-avatar": "^2.1.0",
     "@types/jsonwebtoken": "^9.0.10",
@@ -31,7 +30,6 @@
     "react-dom": "19.2.3",
     "react-geogebra": "^1.2.5",
     "react-is": "^19.2.3",
-    "react-resizable-panels": "^4.6.4",
     "react-rnd": "^10.5.2",
     "recharts": "^3.7.0",
     "tailwind-merge": "^3.4.0",

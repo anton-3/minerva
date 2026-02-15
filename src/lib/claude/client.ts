@@ -1,23 +1,21 @@
-// Claude tutor brain — Anthropic SDK wrapper
-// Wraps @anthropic-ai/sdk. No Anthropic types leak outside.
+// Claude tutor brain — AI SDK wrapper with Tool Calling
+// Uses Vercel AI SDK (@ai-sdk/anthropic) for Claude integration.
 // See: specs/001-minerva-mvp/contracts/tutor-brain.md
 //
-// Uses structured outputs (GA since SDK v0.72.0):
-// - output_config.format with zodOutputFormat for typed JSON
-// - Response in content[0].text, parsed with JSON.parse
-// - Regex fallback for malformed responses
+// Architecture:
+// - Speech is generated as text (streamed for early extraction)
+// - Actions are tool calls: executeCanvasCommands, showSandbox, showVideo, updateProgress, setContentMode
+// - generateObject() for non-streaming structured outputs (summaries, learning plans)
 //
 // Latency optimizations:
-// - Module-level Anthropic client singleton (reuses HTTP connections, avoids TLS handshake per request)
-// - Prompt caching via cache_control: { type: "ephemeral" } on all system prompts
-//   (after first request, subsequent requests skip re-processing the system prompt — saves ~200-500ms)
+// - Prompt caching via providerOptions.anthropic.cacheControl: { type: "ephemeral" }
+// - Text streams first for early speech → avatar speaks while tools execute
 
-import Anthropic from "@anthropic-ai/sdk";
-import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import { anthropic } from "@ai-sdk/anthropic";
+import { generateObject, streamText, tool, stepCountIs, type ModelMessage } from "ai";
 import { z } from "zod";
 import type {
   TutorBrainRequest,
-  TutorBrainResponse,
   SessionSummary,
   LearningPlan,
 } from "@/types/session";
@@ -26,9 +24,9 @@ import {
   SUMMARY_SYSTEM_PROMPT,
   LEARNING_PLAN_SYSTEM_PROMPT,
 } from "./prompts";
+import { createManimClient } from "../manim/client";
 
 export interface TutorBrain {
-  respond(request: TutorBrainRequest): Promise<TutorBrainResponse>;
   respondStream(
     request: TutorBrainRequest,
     signal?: AbortSignal
@@ -42,17 +40,18 @@ export interface TutorBrain {
 // SSE stream events emitted by respondStream()
 export type TutorStreamEvent =
   | { type: "speech"; speech: string }
-  | { type: "result"; data: Omit<TutorBrainResponse, "speech"> };
+  | { type: "tool-call"; toolName: string; toolCallId: string; input: unknown }
+  | { type: "tool-result"; toolName: string; toolCallId: string; output: unknown }
+  | { type: "done" };
 
-// Zod schemas for structured output
-// Multi-tool canvas commands: Desmos, Desmos 3D, GeoGebra
+// Zod schemas for tool inputs
 const MathToolSchema = z.enum(["desmos", "desmos3d", "geogebra"]);
 
 const CanvasCommandSchema = z.discriminatedUnion("action", [
   // Meta commands
   z.object({ action: z.literal("clear") }),
   z.object({ action: z.literal("setTool"), tool: MathToolSchema }),
-  
+
   // Desmos 2D commands
   z.object({
     action: z.literal("desmos.setExpression"),
@@ -73,7 +72,7 @@ const CanvasCommandSchema = z.discriminatedUnion("action", [
     bottom: z.number(),
   }),
   z.object({ action: z.literal("desmos.clear") }),
-  
+
   // Desmos 3D commands
   z.object({
     action: z.literal("desmos3d.setExpression"),
@@ -86,7 +85,7 @@ const CanvasCommandSchema = z.discriminatedUnion("action", [
     id: z.string(),
   }),
   z.object({ action: z.literal("desmos3d.clear") }),
-  
+
   // GeoGebra commands
   z.object({
     action: z.literal("geogebra.evalCommand"),
@@ -105,23 +104,7 @@ const CanvasCommandSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("geogebra.clear") }),
 ]);
 
-const TutorResponseSchema = z.object({
-  speech: z.string(),
-  canvasCommands: z.array(CanvasCommandSchema).optional(),
-  progressUpdate: z
-    .object({
-      topic: z.string(),
-      score: z.number(),
-      velocity: z.enum(["improving", "plateau", "struggling"]).optional(),
-    })
-    .optional(),
-  contentMode: z.enum(["welcome", "math", "sandbox", "video"]).optional(),
-  sandboxContent: z.string().optional(),
-  sandboxAccent: z.string().optional(),
-  manimVideoFile: z.string().optional(),
-  manimPrompt: z.string().optional(),
-});
-
+// Schemas for generateObject (summaries, learning plans)
 const SessionSummarySchema = z.object({
   summary: z.string(),
   topicsCovered: z.array(z.string()),
@@ -143,40 +126,80 @@ const LearningPlanSchema = z.object({
   currentTopic: z.string(),
 });
 
-// Try to parse JSON from text that might have extra content around it
-function tryParseJson(text: string): TutorBrainResponse | null {
-  // Direct parse first
-  try {
-    const obj = JSON.parse(text);
-    if (obj && typeof obj.speech === "string") return obj as TutorBrainResponse;
-  } catch {
-    // fall through
-  }
+// Define tutor tools for AI SDK
+// NOTE: Tools without execute() are client-side (frontend handles them)
+// Tools with execute() run server-side
+const tutorTools = {
+  executeCanvasCommands: tool({
+    description:
+      "Execute math visualization commands on Desmos (2D graphing), Desmos 3D (3D graphing), or GeoGebra (geometry). Use for pure math problems like graphing functions, plotting points, constructing geometric figures.",
+    inputSchema: z.object({
+      commands: z.array(CanvasCommandSchema).describe("Array of canvas commands to execute"),
+    }),
+    // No execute - client handles DOM operations
+  }),
 
-  // Try extracting JSON object from text (Claude sometimes wraps with text)
-  const jsonMatch = text.match(/\{[\s\S]*"speech"\s*:[\s\S]*\}/);
-  if (jsonMatch) {
-    try {
-      const obj = JSON.parse(jsonMatch[0]);
-      if (obj && typeof obj.speech === "string") return obj as TutorBrainResponse;
-    } catch {
-      // fall through
-    }
-  }
+  showSandbox: tool({
+    description:
+      "Display interactive HTML content for non-math subjects: physics, chemistry, biology, history, geography, etc. The content will be rendered in a sandboxed iframe. Include all CSS inline. No external resources.",
+    inputSchema: z.object({
+      content: z.string().describe("HTML content body (will be wrapped with dark theme template)"),
+      accent: z
+        .string()
+        .describe("Subject for accent color: physics, chemistry, biology, history, literature, geography, economics"),
+    }),
+    // No execute - client handles DOM rendering
+  }),
 
-  // Extract speech field via regex as last structured attempt
-  const speechMatch = text.match(/"speech"\s*:\s*"([^"]*(?:\\.[^"]*)*)"/);
-  if (speechMatch) {
-    return { speech: speechMatch[1].replace(/\\"/g, '"') };
-  }
+  showVideo: tool({
+    description:
+      "Display or generate a 3Blue1Brown-style Manim math animation video. Prefer reusing existing videos when available. Only generate new videos when student explicitly requests an animation.",
+    inputSchema: z.object({
+      existingFile: z.string().optional().describe("Filename of existing video to reuse (e.g., 'abc123.mp4')"),
+      generatePrompt: z
+        .string()
+        .optional()
+        .describe("Prompt to generate NEW video (30-120s generation time). End with 'Make a video no longer than 30 seconds.'"),
+    }),
+    // Has execute - server calls Manim API (handled in route.ts)
+  }),
 
-  return null;
-}
+  updateProgress: tool({
+    description: "Record student mastery progress on a topic. Call this after the student demonstrates understanding or struggles with a concept.",
+    inputSchema: z.object({
+      topic: z.string().describe("The topic being assessed"),
+      score: z.number().min(0).max(1).describe("Mastery score from 0.0 to 1.0"),
+      velocity: z
+        .enum(["improving", "plateau", "struggling"])
+        .optional()
+        .describe("Learning velocity trend"),
+    }),
+    // Has execute - server writes to DB (handled in route.ts)
+  }),
 
-// Extract speech from malformed responses via regex
-function extractSpeechFallback(text: string): TutorBrainResponse {
-  return tryParseJson(text) ?? { speech: text.slice(0, 500) || "I'm having trouble right now. Can you try again?" };
-}
+  setContentMode: tool({
+    description:
+      "Switch the main content panel display mode. Use 'math' for Desmos/GeoGebra, 'sandbox' for HTML content, 'video' for Manim animations, 'welcome' for initial greeting state.",
+    inputSchema: z.object({
+      mode: z.enum(["welcome", "math", "sandbox", "video"]).describe("Content mode to switch to"),
+    }),
+    // No execute - client handles UI state
+  }),
+
+  getExistingVideos: tool({
+    description: "Get a list of existing Manim videos.",
+    inputSchema: z.object({}),
+    execute: async () => {
+      const manim = createManimClient();
+      const videos = await manim.getExistingVideos();
+      console.log("Existing videos:", videos);
+      return videos;
+    },
+  }),
+};
+
+// Type for tool inputs (used by route.ts)
+export type TutorTools = typeof tutorTools;
 
 // Haiku for real-time tutoring (fast TTFT ~300ms vs Sonnet's ~1.5s)
 // Sonnet for non-latency-critical tasks (summaries, learning plans)
@@ -184,13 +207,9 @@ const MODEL_FAST = "claude-haiku-4-5-20251001";
 const MODEL = "claude-sonnet-4-5-20250929";
 const MAX_HISTORY = 20;
 
-// Module-level singleton — reuses underlying HTTP connections across requests
-// (avoids TLS handshake per request when createTutorBrain() is called repeatedly)
-const client = new Anthropic();
-
-// Helper: build Claude request from TutorBrainRequest (shared by respond + respondStream)
-function buildClaudeRequest(request: TutorBrainRequest): {
-  messages: Anthropic.MessageParam[];
+// Helper: build AI SDK messages from TutorBrainRequest
+function buildAIMessages(request: TutorBrainRequest): {
+  messages: ModelMessage[];
   systemPrompt: string;
   hasImage: boolean;
 } {
@@ -204,7 +223,7 @@ function buildClaudeRequest(request: TutorBrainRequest): {
   if (request.learningPlan) {
     const lp = request.learningPlan;
     contextParts.push(
-      `Learning Plan: ${lp.subject} — Current topic: "${lp.currentTopic}". Goals: ${lp.goals.join(", ")}`
+      `Learning Plan: ${lp.subject} - Current topic: "${lp.currentTopic}". Goals: ${lp.goals.join(", ")}`
     );
   }
   if (request.canvasState) {
@@ -225,102 +244,36 @@ function buildClaudeRequest(request: TutorBrainRequest): {
   const userText = `${request.studentMessage}${contextBlock}`;
   const hasImage = !!request.imageData;
 
-  const userContent: Anthropic.ContentBlockParam[] = request.imageData
+  // Build user content with optional image
+  const userContent = request.imageData
     ? [
         {
           type: "image" as const,
-          source: {
-            type: "base64" as const,
-            media_type: request.imageData.mediaType,
-            data: request.imageData.base64,
-          },
+          image: `data:${request.imageData.mediaType};base64,${request.imageData.base64}`,
         },
         { type: "text" as const, text: userText },
       ]
-    : [{ type: "text" as const, text: userText }];
+    : userText;
 
-  const messages: Anthropic.MessageParam[] = [
-    ...recentHistory.map((m) => ({
-      role: m.role as "user" | "assistant",
-      content: m.content,
-    })),
+  // Convert conversation history to AI SDK format
+  const historyMessages: ModelMessage[] = recentHistory.map((m) => ({
+    role: m.role as "user" | "assistant",
+    content: m.content,
+  }));
+
+  const messages: ModelMessage[] = [
+    ...historyMessages,
     {
       role: "user" as const,
       content: userContent,
     },
   ];
 
-  const systemPrompt = hasImage
-    ? TUTOR_SYSTEM_PROMPT +
-      `\n\nRESPONSE FORMAT: You MUST respond with a valid JSON object. Example: {"speech": "your spoken response here", "contentMode": "sandbox", "sandboxContent": "<div>...</div>", "sandboxAccent": "physics"}\nOnly output the JSON object, nothing else.`
-    : TUTOR_SYSTEM_PROMPT;
-
-  return { messages, systemPrompt, hasImage };
+  return { messages, systemPrompt: TUTOR_SYSTEM_PROMPT, hasImage };
 }
 
 export function createTutorBrain(): TutorBrain {
   return {
-    async respond(request: TutorBrainRequest): Promise<TutorBrainResponse> {
-      const { messages, systemPrompt, hasImage } = buildClaudeRequest(request);
-
-      try {
-        const createParams: Anthropic.MessageCreateParams = {
-          model: MODEL_FAST,
-          max_tokens: 4096,
-          temperature: 0.4,
-          system: [
-            {
-              type: "text" as const,
-              text: systemPrompt,
-              cache_control: { type: "ephemeral" as const },
-            },
-          ],
-          messages,
-          ...(hasImage
-            ? {}
-            : {
-                output_config: {
-                  format: zodOutputFormat(TutorResponseSchema),
-                },
-                thinking: {
-                  type: "disabled" as const,
-                },
-              }),
-        };
-
-        const response = await client.messages.create(createParams);
-
-        const text =
-          response.content[0].type === "text" ? response.content[0].text : "";
-
-        // Try robust parsing (handles extra text, partial JSON, etc.)
-        const robust = tryParseJson(text);
-        if (robust) {
-          const parsed = TutorResponseSchema.safeParse(robust);
-          return (parsed.success ? parsed.data : robust) as TutorBrainResponse;
-        }
-
-        // Direct Zod parse as fallback
-        const parsed = TutorResponseSchema.safeParse(JSON.parse(text));
-        if (parsed.success) {
-          return parsed.data as TutorBrainResponse;
-        }
-
-        console.warn("[tutor] Zod validation failed, using raw parse");
-        return JSON.parse(text) as TutorBrainResponse;
-      } catch (err) {
-        console.error("[tutor] Error calling Claude:", err);
-        // Regex fallback for malformed responses
-        if (err instanceof SyntaxError) {
-          return extractSpeechFallback(String(err));
-        }
-        return {
-          speech:
-            "I'm having a little trouble right now. Can you repeat what you said?",
-        };
-      }
-    },
-
     async *respondStream(
       request: TutorBrainRequest,
       signal?: AbortSignal
@@ -328,52 +281,55 @@ export function createTutorBrain(): TutorBrain {
       const streamT0 = Date.now();
       console.log(`[Latency:claude] RESPOND_STREAM_START +0ms`);
 
-      const { messages, systemPrompt, hasImage } = buildClaudeRequest(request);
-      const SPEECH_REGEX = /"speech"\s*:\s*"((?:[^"\\]|\\.)*)"\s*[,}]/;
+      const { messages, systemPrompt } = buildAIMessages(request);
 
       console.log(
         `[Latency:claude] REQUEST_BUILT +${Date.now() - streamT0}ms | model=${MODEL_FAST} history=${messages.length} msgs`
       );
 
       try {
-        const stream = client.messages.stream(
-          {
-            model: MODEL_FAST,
-            max_tokens: 4096,
-            system: [
-              {
-                type: "text" as const,
-                text: systemPrompt,
-                cache_control: { type: "ephemeral" as const },
-              },
-            ],
-            messages,
-            ...(hasImage
-              ? {}
-              : {
-                  output_config: {
-                    format: zodOutputFormat(TutorResponseSchema),
-                  },
-                  thinking: { type: "disabled" as const },
-                }),
+        // Use streamText with tools for hybrid text + tool calling
+        const result = streamText({
+          model: anthropic(MODEL),
+          maxOutputTokens: 4096,
+          temperature: 0.5,
+          abortSignal: signal,
+          system: systemPrompt,
+          messages,
+          tools: tutorTools,
+          stopWhen: stepCountIs(8), // Allow multi-step tool use
+          providerOptions: {
+            anthropic: {
+              cacheControl: { type: "ephemeral" },
+              thinkingConfig: { type: "disabled" },
+            },
           },
-          signal ? { signal } : undefined
-        );
+        });
 
         console.log(
           `[Latency:claude] STREAM_CREATED +${Date.now() - streamT0}ms | waiting for first token...`
         );
 
-        let buffer = "";
-        let speechEmitted = false;
+        let speechBuffer = "";
         let firstTokenLogged = false;
         let tokenCount = 0;
+        let stepNumber = 0;
 
-        for await (const event of stream) {
-          if (
-            event.type === "content_block_delta" &&
-            event.delta.type === "text_delta"
-          ) {
+        // Process the full stream for text and tool events
+        // AI SDK fullStream events: start-step, text-start, text-delta, text-end, tool-call, tool-result, finish-step
+        // Multi-step flow: After tool with execute() runs, a NEW step starts with Claude's follow-up response
+        for await (const chunk of result.fullStream) {
+          // Handle start of new step (resets for multi-step tool execution)
+          if (chunk.type === "start-step") {
+            stepNumber++;
+            speechBuffer = ""; // Reset buffer for new step
+            console.log(
+              `[Latency:claude] START_STEP ${stepNumber} +${Date.now() - streamT0}ms`
+            );
+          }
+
+          // Handle text deltas (speech)
+          if (chunk.type === "text-delta") {
             tokenCount++;
             if (!firstTokenLogged) {
               firstTokenLogged = true;
@@ -381,55 +337,70 @@ export function createTutorBrain(): TutorBrain {
                 `[Latency:claude] FIRST_TOKEN +${Date.now() - streamT0}ms | TTFT (time to first token)`
               );
             }
+            speechBuffer += chunk.text;
+          }
 
-            buffer += event.delta.text;
-
-            if (!speechEmitted) {
-              const match = buffer.match(SPEECH_REGEX);
-              if (match) {
-                speechEmitted = true;
-                console.log(
-                  `[Latency:claude] SPEECH_EXTRACTED +${Date.now() - streamT0}ms | tokens so far: ${tokenCount}`
-                );
-                // Use JSON.parse for proper unescape of JSON string values
-                let speech: string;
-                try {
-                  speech = JSON.parse(`"${match[1]}"`);
-                } catch {
-                  speech = match[1]
-                    .replace(/\\"/g, '"')
-                    .replace(/\\n/g, "\n")
-                    .replace(/\\\\/g, "\\");
-                }
-                yield { type: "speech", speech };
-              }
+          // Handle text-end - emit speech for this step
+          // This fires when text generation for a step completes (before tool calls execute)
+          if (chunk.type === "text-end") {
+            if (speechBuffer.trim()) {
+              console.log(
+                `[Latency:claude] SPEECH_COMPLETE (step ${stepNumber}) +${Date.now() - streamT0}ms | "${speechBuffer.slice(0, 60)}..."`
+              );
+              yield { type: "speech", speech: speechBuffer.trim() };
+              speechBuffer = ""; // Clear after emitting
             }
           }
+
+          // Handle tool calls - emit for frontend/route to process
+          if (chunk.type === "tool-call") {
+            // Safety: emit any accumulated speech before tool call (in case text-end didn't fire)
+            if (speechBuffer.trim()) {
+              console.log(
+                `[Latency:claude] SPEECH_COMPLETE (before tool) +${Date.now() - streamT0}ms | "${speechBuffer.slice(0, 60)}..."`
+              );
+              yield { type: "speech", speech: speechBuffer.trim() };
+              speechBuffer = "";
+            }
+
+            console.log(
+              `[Latency:claude] TOOL_CALL +${Date.now() - streamT0}ms | ${chunk.toolName}`
+            );
+            yield {
+              type: "tool-call",
+              toolName: chunk.toolName,
+              toolCallId: chunk.toolCallId,
+              input: chunk.input,
+            };
+          }
+
+          // Handle tool results (from server-executed tools with execute())
+          if (chunk.type === "tool-result") {
+            console.log(
+              `[Latency:claude] TOOL_RESULT +${Date.now() - streamT0}ms | ${chunk.toolName}`
+            );
+            yield {
+              type: "tool-result",
+              toolName: chunk.toolName,
+              toolCallId: chunk.toolCallId,
+              output: chunk.output,
+            };
+          }
+        }
+
+        // Fallback: emit any remaining speech (shouldn't normally hit this)
+        if (speechBuffer.trim()) {
+          console.log(
+            `[Latency:claude] SPEECH_COMPLETE (fallback) +${Date.now() - streamT0}ms | "${speechBuffer.slice(0, 60)}..."`
+          );
+          yield { type: "speech", speech: speechBuffer.trim() };
         }
 
         console.log(
           `[Latency:claude] STREAM_COMPLETE +${Date.now() - streamT0}ms | total tokens: ${tokenCount}`
         );
 
-        // Stream finished — parse full response for remaining fields
-        const fullResponse = tryParseJson(buffer);
-        if (fullResponse) {
-          if (!speechEmitted) {
-            yield { type: "speech", speech: fullResponse.speech };
-          }
-          const { speech: _, ...rest } = fullResponse;
-          console.log(
-            `[Latency:claude] RESULT_YIELDED +${Date.now() - streamT0}ms | keys: ${Object.keys(rest).join(",") || "none"}`
-          );
-          yield { type: "result", data: rest };
-        } else if (!speechEmitted) {
-          yield {
-            type: "speech",
-            speech:
-              buffer.slice(0, 500) ||
-              "I'm having trouble right now. Can you try again?",
-          };
-        }
+        yield { type: "done" };
       } catch (err) {
         if (signal?.aborted) return;
         console.error("[tutor] Stream error:", err);
@@ -438,6 +409,7 @@ export function createTutorBrain(): TutorBrain {
           speech:
             "I'm having a little trouble right now. Can you repeat what you said?",
         };
+        yield { type: "done" };
       }
     },
 
@@ -448,60 +420,46 @@ export function createTutorBrain(): TutorBrain {
         .map((t) => `${t.speaker}: ${t.text}`)
         .join("\n");
 
-      const response = await client.messages.create({
-        model: MODEL,
-        max_tokens: 1024,
-        system: [
-          {
-            type: "text" as const,
-            text: SUMMARY_SYSTEM_PROMPT,
-            cache_control: { type: "ephemeral" as const },
-          },
-        ],
+      const { object } = await generateObject({
+        model: anthropic(MODEL),
+        schema: SessionSummarySchema,
+        maxOutputTokens: 1024,
+        system: SUMMARY_SYSTEM_PROMPT,
         messages: [
           {
             role: "user",
             content: `Generate a summary for this tutoring session transcript:\n\n${transcriptText}`,
           },
         ],
-        output_config: {
-          format: zodOutputFormat(SessionSummarySchema),
+        providerOptions: {
+          anthropic: { cacheControl: { type: "ephemeral" } },
         },
       });
 
-      const text =
-        response.content[0].type === "text" ? response.content[0].text : "{}";
-      return JSON.parse(text) as SessionSummary;
+      return object as SessionSummary;
     },
 
     async generateLearningPlan(
       goals: string[],
       subject: string
     ): Promise<LearningPlan> {
-      const response = await client.messages.create({
-        model: MODEL,
-        max_tokens: 1024,
-        system: [
-          {
-            type: "text" as const,
-            text: LEARNING_PLAN_SYSTEM_PROMPT,
-            cache_control: { type: "ephemeral" as const },
-          },
-        ],
+      const { object } = await generateObject({
+        model: anthropic(MODEL),
+        schema: LearningPlanSchema,
+        maxOutputTokens: 1024,
+        system: LEARNING_PLAN_SYSTEM_PROMPT,
         messages: [
           {
             role: "user",
             content: `Subject: ${subject}\nGoals:\n${goals.map((g) => `- ${g}`).join("\n")}\n\nGenerate a structured learning plan.`,
           },
         ],
-        output_config: {
-          format: zodOutputFormat(LearningPlanSchema),
+        providerOptions: {
+          anthropic: { cacheControl: { type: "ephemeral" } },
         },
       });
 
-      const text =
-        response.content[0].type === "text" ? response.content[0].text : "{}";
-      return JSON.parse(text) as LearningPlan;
+      return object as LearningPlan;
     },
   };
 }

@@ -138,3 +138,56 @@ export interface SessionSummary {
   engagementScore: number;
   comprehensionScore: number;
 }
+
+// ─── Tool Call Types ─────────────────────────────────────────────────────────
+// AI SDK tool calling events for streaming responses
+
+export type TutorToolName =
+  | "executeCanvasCommands"
+  | "showSandbox"
+  | "showVideo"
+  | "updateProgress"
+  | "setContentMode";
+
+// Tool input types
+export interface ExecuteCanvasCommandsInput {
+  commands: CanvasCommand[];
+}
+
+export interface ShowSandboxInput {
+  content: string;
+  accent: string;
+}
+
+export interface ShowVideoInput {
+  existingFile?: string;
+  generatePrompt?: string;
+}
+
+export interface UpdateProgressInput {
+  topic: string;
+  score: number;
+  velocity?: "improving" | "plateau" | "struggling";
+}
+
+export interface SetContentModeInput {
+  mode: ContentMode;
+}
+
+// Tool result types
+export interface ShowVideoResult {
+  videoUrl?: string;
+  error?: string;
+}
+
+export interface UpdateProgressResult {
+  success: boolean;
+}
+
+// Union type for all tool inputs
+export type TutorToolInput =
+  | { toolName: "executeCanvasCommands"; input: ExecuteCanvasCommandsInput }
+  | { toolName: "showSandbox"; input: ShowSandboxInput }
+  | { toolName: "showVideo"; input: ShowVideoInput }
+  | { toolName: "updateProgress"; input: UpdateProgressInput }
+  | { toolName: "setContentMode"; input: SetContentModeInput };

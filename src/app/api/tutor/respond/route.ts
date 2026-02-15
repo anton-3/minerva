@@ -1,22 +1,26 @@
 // Tutor respond API route — the core brain endpoint
-// Accepts TutorBrainRequest, returns SSE stream: speech first, then remaining fields.
+// Accepts TutorBrainRequest, returns SSE stream with tool calling.
 // Optionally enriches with Perplexity Sonar for factual grounding (T061)
-// Integrates Manim video generation for math animations
 // See: specs/001-minerva-mvp/contracts/tutor-brain.md
 //
 // SSE events:
-//   data: {"type":"speech","speech":"..."}       — emitted as soon as speech field is extracted
-//   data: {"type":"result","data":{...}}         — remaining fields (canvasCommands, sandboxContent, videoUrl, etc.)
-//   data: {"type":"done"}                        — stream complete
-//   data: {"type":"error","speech":"..."}        — fallback speech on error
+//   data: {"type":"speech","speech":"..."}                    — text speech from Claude
+//   data: {"type":"tool-call","toolName":"...","input":{...}} — tool invocation
+//   data: {"type":"tool-result","toolName":"...","output":{}} — server-executed tool result
+//   data: {"type":"done"}                                     — stream complete
+//   data: {"type":"error","speech":"..."}                     — fallback speech on error
+//
+// Tool execution:
+//   - showVideo: Server-side (calls Manim API)
+//   - updateProgress: Server-side (writes to DB)
+//   - executeCanvasCommands, showSandbox, setContentMode: Client-side (streamed to frontend)
 //
 // Perplexity enrichment runs BEFORE the stream starts (max 3s race timeout).
 
 import { NextResponse } from "next/server";
 import { createTutorBrain, TutorStreamEvent } from "@/lib/claude/client";
-import { createKnowledgeLookup } from "@/lib/perplexity/client";
 import { createManimClient } from "@/lib/manim/client";
-import type { TutorBrainRequest, TutorBrainResponse } from "@/types/session";
+import type { TutorBrainRequest } from "@/types/session";
 
 // Allow long-running requests for Manim video generation (up to 5 minutes)
 export const maxDuration = 300;
@@ -37,57 +41,74 @@ function looksLikeFactualQuestion(message: string): boolean {
   return FACTUAL_PATTERNS.some((pattern) => pattern.test(message));
 }
 
-// If Claude requested a Manim video, resolve the URL
-async function handleManimGeneration(
-  data: Omit<TutorBrainResponse, "speech">
-): Promise<Omit<TutorBrainResponse, "speech">> {
+// Handle showVideo tool calls (server-side Manim API)
+async function handleShowVideoTool(
+  input: { existingFile?: string; generatePrompt?: string }
+): Promise<{ videoUrl?: string; error?: string }> {
   if (!process.env.NEXT_PUBLIC_MANIM_URL) {
-    return data;
+    return { error: "Manim API not configured" };
   }
-  
-  // Auto-correct: if Claude provided video content but wrong mode, fix it
-  const hasVideoContent = !!(data.manimVideoFile || data.manimPrompt);
-  if (hasVideoContent && data.contentMode !== "video") {
-    console.log("[api/tutor/respond] Auto-correcting contentMode to 'video' (Claude provided video content)");
-    data = { ...data, contentMode: "video" };
-  }
-  
-  // Only handle if video mode requested
-  if (data.contentMode !== "video") {
-    return data;
-  }
-  
+
   const manim = createManimClient();
-  
+
   try {
     // Case 1: Claude specified an existing video file to reuse
-    if (data.manimVideoFile) {
-      const videoUrl = manim.getVideoUrl(data.manimVideoFile);
+    if (input.existingFile) {
+      const videoUrl = manim.getVideoUrl(input.existingFile);
       console.log("[api/tutor/respond] Reusing existing video:", videoUrl);
-      return { ...data, videoUrl };
+      return { videoUrl };
     }
-    
+
     // Case 2: Claude wants to generate a new video
-    if (data.manimPrompt) {
-      console.log("[api/tutor/respond] Generating new video:", data.manimPrompt);
-      const videoUrl = await manim.generateVideo(data.manimPrompt);
+    if (input.generatePrompt) {
+      console.log("[api/tutor/respond] Generating new video:", input.generatePrompt);
+      const videoUrl = await manim.generateVideo(input.generatePrompt);
       console.log("[api/tutor/respond] Manim video generated:", videoUrl);
-      return { ...data, videoUrl };
+      return { videoUrl };
     }
-    
+
     // Case 3: No video specified, try to use first available
     const existingVideos = await manim.getExistingVideos();
     if (existingVideos.length > 0) {
       const videoUrl = manim.getVideoUrl(existingVideos[0].filename);
       console.log("[api/tutor/respond] Fallback to first existing video:", videoUrl);
-      return { ...data, videoUrl };
+      return { videoUrl };
     }
-    
-    console.log("[api/tutor/respond] No videos available");
-    return data;
+
+    return { error: "No video specified and no existing videos available" };
   } catch (err) {
     console.error("[api/tutor/respond] Manim handling failed:", err);
-    return data;
+    return { error: "Video generation failed" };
+  }
+}
+
+// Handle updateProgress tool calls (server-side DB write)
+async function handleUpdateProgressTool(
+  input: { topic: string; score: number; velocity?: string },
+  sessionId: string | null,
+  learningPlanSubject: string | null
+): Promise<{ success: boolean }> {
+  if (!sessionId || !learningPlanSubject) {
+    console.log("[api/tutor/respond] Skipping progress update - no session context");
+    return { success: false };
+  }
+
+  try {
+    await fetch(`${process.env.NEXT_PUBLIC_URL || "http://localhost:3000"}/api/progress`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        child_id: sessionId,
+        subject: learningPlanSubject,
+        topic: input.topic,
+        score: input.score,
+      }),
+    });
+    console.log("[api/tutor/respond] Progress saved:", input.topic, input.score);
+    return { success: true };
+  } catch (err) {
+    console.error("[api/tutor/respond] Progress save failed:", err);
+    return { success: false };
   }
 }
 
@@ -104,9 +125,9 @@ export async function POST(request: Request) {
     );
   }
 
-  let body: TutorBrainRequest;
+  let body: TutorBrainRequest & { sessionId?: string; learningPlanSubject?: string };
   try {
-    body = (await request.json()) as TutorBrainRequest;
+    body = await request.json();
   } catch {
     return NextResponse.json(
       { error: "Invalid JSON body" },
@@ -124,42 +145,6 @@ export async function POST(request: Request) {
   console.log(
     `[Latency:server] BODY_PARSED +${Date.now() - t0}ms | "${body.studentMessage.slice(0, 80)}"`
   );
-
-  // NOTE: Removed blocking getManimVideosContext() call here — was adding ~800ms latency
-  // Claude can still generate new videos on demand via manimPrompt
-
-  // Perplexity enrichment — runs before the stream starts (max 3s)
-  const needsPerplexity =
-    looksLikeFactualQuestion(body.studentMessage) &&
-    !!process.env.PERPLEXITY_API_KEY;
-
-  if (needsPerplexity) {
-    console.log(`[Latency:server] PERPLEXITY_START +${Date.now() - t0}ms`);
-    try {
-      const lookup = createKnowledgeLookup();
-      const perplexityResult = await Promise.race([
-        lookup.search(body.studentMessage).catch(() => null),
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000)),
-      ]);
-
-      console.log(
-        `[Latency:server] PERPLEXITY_DONE +${Date.now() - t0}ms | result=${perplexityResult ? "yes" : "null"}`
-      );
-
-      if (perplexityResult && perplexityResult.answer) {
-        const citationsText =
-          perplexityResult.citations.length > 0
-            ? `\nSources: ${perplexityResult.citations.slice(0, 3).join(", ")}`
-            : "";
-        body.studentMessage += `\n\n[Knowledge from Perplexity Sonar — use this for factual accuracy, but rephrase in your own Socratic teaching style:]\n${perplexityResult.answer}${citationsText}`;
-      }
-    } catch {
-      console.log(`[Latency:server] PERPLEXITY_FAILED +${Date.now() - t0}ms`);
-      // Perplexity failure never blocks the response
-    }
-  } else {
-    console.log(`[Latency:server] PERPLEXITY_SKIPPED +${Date.now() - t0}ms`);
-  }
 
   // Create an AbortController so we can cancel the Claude stream if the client disconnects
   const abortController = new AbortController();
@@ -180,29 +165,61 @@ export async function POST(request: Request) {
             );
             firstEvent = false;
           }
-          
+
           if (event.type === "speech") {
             console.log(
-              `[Latency:server] SPEECH_SSE_EMIT +${Date.now() - t0}ms | "${(event.speech as string).slice(0, 60)}..."`
+              `[Latency:server] SPEECH_SSE_EMIT +${Date.now() - t0}ms | "${event.speech.slice(0, 60)}..."`
             );
             const sseData = `data: ${JSON.stringify(event)}\n\n`;
             controller.enqueue(encoder.encode(sseData));
-          } else if (event.type === "result") {
-            // Process Manim video generation for result events
-            let data = event.data as Omit<TutorBrainResponse, "speech">;
-            data = await handleManimGeneration(data);
-            
+          } else if (event.type === "tool-call") {
+            // Handle server-side tool execution
+            if (event.toolName === "showVideo") {
+              console.log(`[Latency:server] EXECUTING_TOOL +${Date.now() - t0}ms | showVideo`);
+              const result = await handleShowVideoTool(
+                event.input as { existingFile?: string; generatePrompt?: string }
+              );
+              // Emit the tool result
+              const resultEvent: TutorStreamEvent = {
+                type: "tool-result",
+                toolName: "showVideo",
+                toolCallId: event.toolCallId,
+                output: result,
+              };
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify(resultEvent)}\n\n`));
+            } else if (event.toolName === "updateProgress") {
+              console.log(`[Latency:server] EXECUTING_TOOL +${Date.now() - t0}ms | updateProgress`);
+              const result = await handleUpdateProgressTool(
+                event.input as { topic: string; score: number; velocity?: string },
+                body.sessionId ?? null,
+                body.learningPlan?.subject ?? null
+              );
+              // Emit the tool result (non-blocking)
+              const resultEvent: TutorStreamEvent = {
+                type: "tool-result",
+                toolName: "updateProgress",
+                toolCallId: event.toolCallId,
+                output: result,
+              };
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify(resultEvent)}\n\n`));
+            } else {
+              // Client-side tools: forward the tool-call event to frontend
+              console.log(
+                `[Latency:server] TOOL_CALL_SSE_EMIT +${Date.now() - t0}ms | ${event.toolName}`
+              );
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+            }
+          } else if (event.type === "tool-result") {
+            // Forward tool results (from AI SDK auto-execution if any)
             console.log(
-              `[Latency:server] RESULT_SSE_EMIT +${Date.now() - t0}ms | contentMode=${data.contentMode}, hasVideo=${!!data.videoUrl}`
+              `[Latency:server] TOOL_RESULT_SSE_EMIT +${Date.now() - t0}ms | ${event.toolName}`
             );
-            
-            const resultEvent: TutorStreamEvent = { type: "result", data };
-            const sseData = `data: ${JSON.stringify(resultEvent)}\n\n`;
-            controller.enqueue(encoder.encode(sseData));
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+          } else if (event.type === "done") {
+            console.log(`[Latency:server] STREAM_DONE +${Date.now() - t0}ms`);
+            controller.enqueue(encoder.encode('data: {"type":"done"}\n\n'));
           }
         }
-        console.log(`[Latency:server] STREAM_DONE +${Date.now() - t0}ms`);
-        controller.enqueue(encoder.encode('data: {"type":"done"}\n\n'));
       } catch (err) {
         console.error("[api/tutor/respond] Stream error:", err);
         const errorEvent = `data: ${JSON.stringify({
