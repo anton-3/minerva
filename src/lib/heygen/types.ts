@@ -14,7 +14,9 @@ export interface AvatarClient {
   mute(): Promise<void>;
   /** Unmute the microphone (for push-to-talk) */
   unmute(): Promise<void>;
-  /** Fires when HeyGen ASR transcribes student speech (debounced) */
+  /** Immediately flush accumulated transcription text (call on push-to-talk release) */
+  flush(): void;
+  /** Fires when HeyGen ASR transcribes student speech */
   onUserMessage(callback: (text: string) => void): void;
   onStatusChange(callback: (status: AvatarStatus) => void): void;
 }

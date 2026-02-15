@@ -19,18 +19,17 @@ import { useTutorBrain } from "./useTutorBrain";
 import { useUserCamera } from "./useUserCamera";
 
 export function useSession() {
-  // Use individual selectors for stable references — avoids infinite re-render loops
+// Use individual selectors for stable references — avoids infinite re-render loops
   const status = useSessionStore((s) => s.status);
   const conversationHistory = useSessionStore((s) => s.conversationHistory);
   const contentMode = useSessionStore((s) => s.contentMode);
-  const manimVideoUrl = useSessionStore((s) => s.manimVideoUrl);
-  const sandboxHtml = useSessionStore((s) => s.sandboxHtml);
+  const sandboxContent = useSessionStore((s) => s.sandboxContent);
+  const sandboxAccent = useSessionStore((s) => s.sandboxAccent);
+  const videoUrl = useSessionStore((s) => s.videoUrl);
   const setStatus = useSessionStore((s) => s.setStatus);
   const setAvatarStatus = useSessionStore((s) => s.setAvatarStatus);
   const setSessionId = useSessionStore((s) => s.setSessionId);
   const setContentMode = useSessionStore((s) => s.setContentMode);
-  const setManimVideoUrl = useSessionStore((s) => s.setManimVideoUrl);
-
   const avatar = useAvatar();
   const zoom = useZoom();
   const canvas = useCanvas();
@@ -88,7 +87,7 @@ export function useSession() {
       console.error("[useSession] Failed to start session:", err);
       setStatus("error");
     }
-  }, [avatar, zoom, setStatus, setSessionId]);
+  }, [avatar, zoom, setStatus, setSessionId, brain]);
 
   const endSession = useCallback(async () => {
     try {
@@ -165,6 +164,7 @@ export function useSession() {
     attach: avatar.attach,
     avatarMute: avatar.mute,
     avatarUnmute: avatar.unmute,
+    avatarFlush: avatar.flush,
     startSession,
     endSession,
     handleTextMessage: brain.handleStudentMessage,
@@ -174,10 +174,10 @@ export function useSession() {
     setActiveTool: canvas.setActiveTool,
     // Content mode
     contentMode,
-    manimVideoUrl,
-    sandboxHtml,
+    sandboxContent,
+    sandboxAccent,
+    videoUrl,
     setContentMode,
-    setManimVideoUrl,
     // User camera
     userCamera,
     // Zoom controls — kept for potential future use

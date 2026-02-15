@@ -9,7 +9,7 @@
 // Layer 2: Echo detection via n-gram matching against recent avatar speech
 // Layer 3: Backchannel classification (don't interrupt for "yeah", "uh-huh")
 // Layer 4: Noise-only filter (pure filler with no content)
-// Layer 5: Adaptive debounce (longer wait when student might be thinking)
+// Layer 5: Push-to-talk flush — immediate send on Space release
 
 import {
   LiveAvatarSession,
@@ -128,8 +128,7 @@ function isPureNoise(text: string): boolean {
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
-const DEBOUNCE_MS = 600; // Base debounce for normal speech
-const THINKING_DEBOUNCE_MS = 1200; // Longer debounce after filler words (student thinking)
+const FALLBACK_DEBOUNCE_MS = 200; // Short fallback to catch trailing ASR fragments after mute
 const ECHO_COOLDOWN_MS = 300; // Cooldown after AVATAR_SPEAK_ENDED
 const ASR_IGNORE_MS = 1500; // Ignore initial ASR burst
 const SESSION_START_TIMEOUT_MS = 15000; // Timeout for session.start()
@@ -143,15 +142,15 @@ export function createAvatarClient(): AvatarClient {
   let pendingElement: HTMLMediaElement | null = null;
   let streamReady = false;
 
-  // Debounce ASR: accumulate fragments and fire after a pause
+  // Debounce ASR: accumulate fragments, flush on push-to-talk release
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   let pendingText = "";
-  let currentDebounceMs = DEBOUNCE_MS;
 
   // Speech state
   let avatarIsSpeaking = false;
   let echoCooldownActive = false;
   let asrEnabled = false;
+  let pushToTalkActive = false;
 
   // speak() promise resolution
   let speakResolve: (() => void) | null = null;
@@ -169,10 +168,12 @@ export function createAvatarClient(): AvatarClient {
     }
   }
 
+  // Latency tracking — shared timestamp for the current speech-to-response cycle
+  let cycleStartMs = 0;
+
   function flushTranscription() {
     const text = pendingText.trim();
     pendingText = "";
-    currentDebounceMs = DEBOUNCE_MS; // reset to default
 
     if (text.length < 2) return;
 
@@ -181,6 +182,12 @@ export function createAvatarClient(): AvatarClient {
       console.log("[AvatarClient] Filtered pure noise:", text);
       return;
     }
+
+    // Start latency cycle — this is T0 for the whole pipeline
+    cycleStartMs = performance.now();
+    console.log(
+      `[Latency] T0 FLUSH_TRANSCRIPTION +0ms | "${text.slice(0, 80)}"`
+    );
 
     userMessageCallbacks.forEach((cb) => cb(text));
   }
@@ -224,7 +231,8 @@ export function createAvatarClient(): AvatarClient {
 
       // ── Avatar speaking state ──────────────────────────────────
       session.on(AgentEventsEnum.AVATAR_SPEAK_STARTED, () => {
-        console.log("[AvatarClient] AVATAR_SPEAK_STARTED");
+        const elapsed = cycleStartMs ? (performance.now() - cycleStartMs).toFixed(0) : "?";
+        console.log(`[Latency] AVATAR_SPEAK_STARTED +${elapsed}ms | avatar mouth moving`);
         avatarIsSpeaking = true;
 
         // Flush any accumulated user speech BEFORE clearing
@@ -240,7 +248,8 @@ export function createAvatarClient(): AvatarClient {
       });
 
       session.on(AgentEventsEnum.AVATAR_SPEAK_ENDED, () => {
-        console.log("[AvatarClient] AVATAR_SPEAK_ENDED");
+        const elapsed = cycleStartMs ? (performance.now() - cycleStartMs).toFixed(0) : "?";
+        console.log(`[Latency] AVATAR_SPEAK_ENDED +${elapsed}ms`);
         avatarIsSpeaking = false;
 
         // Echo cooldown — browser AEC may miss tail-end audio
@@ -321,20 +330,15 @@ export function createAvatarClient(): AvatarClient {
           notifyStatus("listening");
         }
 
-        // ── Accumulate and debounce ──────────────────────────────
+        // ── Accumulate transcription ─────────────────────────────
         pendingText += (pendingText ? " " : "") + text;
 
-        // Layer 5: adaptive debounce — if user said filler words, they might
-        // be thinking. Use longer debounce to avoid cutting them off.
-        // (Inspired by ElevenLabs' turn-taking model and OpenAI's semantic_vad)
-        const lastWord = text.toLowerCase().trim().split(/\s+/).pop() ?? "";
-        if (PURE_NOISE.has(lastWord) || lastWord === "like" || lastWord === "so") {
-          currentDebounceMs = THINKING_DEBOUNCE_MS;
-          console.log("[AvatarClient] Thinking pause detected, debounce:", currentDebounceMs);
-        }
+        // Push-to-talk: while Space is held, just accumulate — flush on release
+        if (pushToTalkActive) return;
 
+        // Fallback debounce for trailing ASR fragments after mute
         if (debounceTimer) clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(flushTranscription, currentDebounceMs);
+        debounceTimer = setTimeout(flushTranscription, FALLBACK_DEBOUNCE_MS);
       });
 
       // Timeout on session.start()
@@ -361,6 +365,7 @@ export function createAvatarClient(): AvatarClient {
       if (debounceTimer) clearTimeout(debounceTimer);
       pendingText = "";
       asrEnabled = false;
+      pushToTalkActive = false;
       if (session) {
         await session.stop();
         session = null;
@@ -378,6 +383,11 @@ export function createAvatarClient(): AvatarClient {
     // Interrupts current speech if still playing
     async speak(text: string) {
       if (!session) return;
+      const speakEntryMs = performance.now();
+      const elapsed = cycleStartMs ? (speakEntryMs - cycleStartMs).toFixed(0) : "?";
+      console.log(
+        `[Latency] AVATAR_SPEAK_CALLED +${elapsed}ms | "${text.slice(0, 60)}..."`
+      );
 
       // Interrupt current speech before starting new one
       if (avatarIsSpeaking) {
@@ -396,6 +406,9 @@ export function createAvatarClient(): AvatarClient {
       // Fire-and-forget repeat(), wrapped in Promise for caller
       return new Promise<void>((resolve) => {
         speakResolve = resolve;
+        const repeatMs = performance.now();
+        const repeatElapsed = cycleStartMs ? (repeatMs - cycleStartMs).toFixed(0) : "?";
+        console.log(`[Latency] HEYGEN_REPEAT_CALLED +${repeatElapsed}ms | sent to HeyGen TTS`);
         session!.repeat(text);
 
         // Safety timeout if AVATAR_SPEAK_ENDED never fires
@@ -434,7 +447,22 @@ export function createAvatarClient(): AvatarClient {
       userMessageCallbacks.push(callback);
     },
 
+    flush() {
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+        debounceTimer = null;
+      }
+      pushToTalkActive = false;
+      if (pendingText.trim().length >= 2) {
+        console.log("[AvatarClient] flush() — sending immediately:", pendingText.trim());
+        flushTranscription();
+      } else {
+        pendingText = "";
+      }
+    },
+
     async mute() {
+      pushToTalkActive = false;
       if (session) {
         try {
           await session.voiceChat.mute();
@@ -445,6 +473,7 @@ export function createAvatarClient(): AvatarClient {
     },
 
     async unmute() {
+      pushToTalkActive = true;
       if (session) {
         try {
           await session.voiceChat.unmute();

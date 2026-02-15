@@ -54,6 +54,10 @@ export function useAvatar() {
     if (clientRef.current) await clientRef.current.unmute();
   }, []);
 
+  const flush = useCallback(() => {
+    if (clientRef.current) clientRef.current.flush();
+  }, []);
+
   const onUserMessage = useCallback((cb: (text: string) => void) => {
     userMsgCbsRef.current.push(cb);
   }, []);
@@ -64,5 +68,5 @@ export function useAvatar() {
     };
   }, []);
 
-  return { status, startSession, endSession, speak, interrupt, attach, mute, unmute, onUserMessage };
+  return { status, startSession, endSession, speak, interrupt, attach, mute, unmute, flush, onUserMessage };
 }

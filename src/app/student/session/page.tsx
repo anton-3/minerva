@@ -25,6 +25,7 @@ export default function SessionPage() {
     attach,
     avatarMute,
     avatarUnmute,
+    avatarFlush,
     startSession,
     endSession,
     handleTextMessage,
@@ -34,8 +35,9 @@ export default function SessionPage() {
     setActiveTool,
     // Content mode
     contentMode,
-    manimVideoUrl,
-    sandboxHtml,
+    sandboxContent,
+    sandboxAccent,
+    videoUrl,
     setContentMode,
     // User camera
     userCamera,
@@ -44,6 +46,20 @@ export default function SessionPage() {
   const [chatOpen, setChatOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [micOpen, setMicOpen] = useState(false);
+  const [avatarCollapsed, setAvatarCollapsed] = useState(false);
+
+  // Collapse avatar when entering video mode, restore when leaving
+  useEffect(() => {
+    if (contentMode === "video") {
+      setAvatarCollapsed(true);
+    }
+  }, [contentMode]);
+
+  // Handle video ended — restore avatar and switch back to math mode
+  const handleVideoEnded = useCallback(() => {
+    setAvatarCollapsed(false);
+    setContentMode("math");
+  }, [setContentMode]);
 
   // Reset unread count when chat opens
   useEffect(() => {
@@ -62,7 +78,8 @@ export default function SessionPage() {
     };
     const pttUp = () => {
       setMicOpen(false);
-      avatarMute();
+      avatarFlush();  // send accumulated text immediately
+      avatarMute();   // then mute mic
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -96,7 +113,7 @@ export default function SessionPage() {
       window.removeEventListener("keyup", handleKeyUp);
       window.removeEventListener("message", handleMessage);
     };
-  }, [avatarMute, avatarUnmute]);
+  }, [avatarMute, avatarUnmute, avatarFlush]);
 
   const handleNewMessage = useCallback(() => {
     if (!chatOpen) {
@@ -105,7 +122,7 @@ export default function SessionPage() {
   }, [chatOpen]);
 
   const handleToggleMode = useCallback(() => {
-    const modes: ContentMode[] = ["math", "sandbox", "manim"];
+    const modes: ContentMode[] = ["welcome", "math", "sandbox", "video"];
     const currentIndex = modes.indexOf(contentMode);
     const nextIndex = (currentIndex + 1) % modes.length;
     setContentMode(modes[nextIndex]);
@@ -134,11 +151,11 @@ export default function SessionPage() {
         <ContentModeView
           mode={contentMode}
           toolManager={toolManager}
-          manimUrl={manimVideoUrl}
-          sandboxHtml={sandboxHtml}
-          isThinking={isThinking}
+          sandboxContent={sandboxContent}
+          sandboxAccent={sandboxAccent}
+          videoUrl={videoUrl}
           onToolChange={setActiveTool}
-          onManimEnded={() => setContentMode("math")}
+          onVideoEnded={handleVideoEnded}
         />
       </main>
 
@@ -149,6 +166,8 @@ export default function SessionPage() {
         userCamera={userCamera}
         onScan={handleScan}
         isThinking={isThinking}
+        collapsed={avatarCollapsed}
+        onCollapsedChange={setAvatarCollapsed}
       />
 
       {/* Bottom control bar */}

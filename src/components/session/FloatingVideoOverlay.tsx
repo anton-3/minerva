@@ -26,6 +26,8 @@ interface FloatingVideoOverlayProps {
   userCamera: UseUserCamera;
   onScan?: (result: { base64: string; mediaType: "image/jpeg" }) => void;
   isThinking?: boolean;
+  collapsed?: boolean;
+  onCollapsedChange?: (collapsed: boolean) => void;
 }
 
 // ─── Dimensions per mode ───
@@ -257,6 +259,8 @@ export function FloatingVideoOverlay({
   userCamera,
   onScan,
   isThinking = false,
+  collapsed = false,
+  onCollapsedChange,
 }: FloatingVideoOverlayProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("speaker");
   const [minimized, setMinimized] = useState(false);
@@ -266,6 +270,17 @@ export function FloatingVideoOverlay({
   const [scanFlash, setScanFlash] = useState(false);
   const [showPulse, setShowPulse] = useState(false);
   const rndRef = useRef<Rnd>(null);
+
+  // Sync collapsed prop with minimized state
+  useEffect(() => {
+    setMinimized(collapsed);
+  }, [collapsed]);
+
+  // Notify parent when minimized changes
+  const handleMinimizedChange = useCallback((newMinimized: boolean) => {
+    setMinimized(newMinimized);
+    onCollapsedChange?.(newMinimized);
+  }, [onCollapsedChange]);
 
   // Pulse when thinking OR when avatar is speaking (includes greeting)
   const shouldPulse = isThinking || avatarStatus === "speaking";
@@ -379,11 +394,11 @@ export function FloatingVideoOverlay({
         aria-hidden
       />
 
-      {/* ─── Minimized pill ─── */}
+{/* ─── Minimized pill ─── */}
       {minimized && (
         <div className="fixed top-3 right-3 z-50">
           <button
-            onClick={() => setMinimized(false)}
+            onClick={() => handleMinimizedChange(false)}
             className="flex items-center gap-2 bg-black/80 backdrop-blur-sm text-white text-xs px-3 py-2 rounded-full shadow-lg hover:bg-black/90 transition-colors border border-white/10"
           >
             <span className={`w-2 h-2 rounded-full ${avatarActive ? statusColors[avatarStatus] : "bg-gray-500"}`} />
@@ -458,14 +473,14 @@ export function FloatingVideoOverlay({
                     </>
                   )}
                 </div>
-                <button
-                  onClick={(e) => { e.stopPropagation(); setMinimized(true); }}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity text-white/50 hover:text-white p-1"
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <line x1="5" y1="12" x2="19" y2="12" />
-                  </svg>
-                </button>
+<button
+                    onClick={(e) => { e.stopPropagation(); handleMinimizedChange(true); }}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity text-white/50 hover:text-white p-1"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
+                  </button>
               </div>
             )}
 
@@ -482,8 +497,8 @@ export function FloatingVideoOverlay({
                 {/* Hover controls — top bar */}
                 <div className="overlay-drag-handle absolute inset-x-0 top-0 h-10 bg-gradient-to-b from-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-between px-2 cursor-grab active:cursor-grabbing z-20">
                   <ViewSwitcher mode={viewMode} onChange={setViewMode} />
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setMinimized(true); }}
+<button
+                    onClick={(e) => { e.stopPropagation(); handleMinimizedChange(true); }}
                     className="text-white/60 hover:text-white p-1 transition-colors"
                   >
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -527,8 +542,8 @@ export function FloatingVideoOverlay({
                 {/* Hover controls — top */}
                 <div className="overlay-drag-handle absolute inset-x-0 top-0 z-20 h-8 bg-gradient-to-b from-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-between px-2 cursor-grab active:cursor-grabbing">
                   <ViewSwitcher mode={viewMode} onChange={setViewMode} />
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setMinimized(true); }}
+<button
+                    onClick={(e) => { e.stopPropagation(); handleMinimizedChange(true); }}
                     className="text-white/60 hover:text-white p-1 transition-colors"
                   >
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

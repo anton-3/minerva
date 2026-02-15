@@ -9,7 +9,7 @@ export type MathTool = "desmos" | "desmos3d" | "geogebra";
 // ─── Content Modes ───────────────────────────────────────────────────────────
 // Extensible: add new modes here and implement a corresponding panel component
 
-export type ContentMode = "welcome" | "math" | "sandbox" | "manim";
+export type ContentMode = "welcome" | "math" | "sandbox" | "video";
 
 // ─── Canvas Commands ────────────────────────────────────────────────────────
 // Multi-tool canvas system supporting Desmos 2D, Desmos 3D, and GeoGebra
@@ -68,9 +68,12 @@ export interface TutorBrainResponse {
   canvasCommands?: CanvasCommand[];
   progressUpdate?: { topic: string; score: number; velocity?: "improving" | "plateau" | "struggling" };
   internalNotes?: string;
-  manimVideoUrl?: string;
   contentMode?: ContentMode;
-  sandboxHtml?: string;
+  sandboxContent?: string;  // HTML content body (frontend wraps with Twind template)
+  sandboxAccent?: string;   // Subject for accent color: physics, chemistry, biology, history, etc.
+  manimVideoFile?: string;  // Reuse existing video by filename (e.g., "abc123.mp4")
+  manimPrompt?: string;     // Generate NEW video with this prompt (takes 30-120s)
+  videoUrl?: string;        // Full URL to the video (added by server)
 }
 
 export interface ConversationMessage {
@@ -119,8 +122,9 @@ export interface SessionState {
   studentProfile: StudentProfile | null;
   learningPlan: LearningPlanContext | null;
   contentMode: ContentMode;
-  manimVideoUrl: string | null;
-  sandboxHtml: string | null;
+  sandboxContent: string | null;  // HTML content body for sandbox
+  sandboxAccent: string | null;   // Subject accent color
+  videoUrl: string | null;
   masteryScores: MasteryScore[];
 }
 
