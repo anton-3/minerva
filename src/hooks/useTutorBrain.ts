@@ -292,6 +292,7 @@ export function useTutorBrain(options: UseTutorBrainOptions) {
             grade: 7,
           },
           canvasState,
+          modelId: store.selectedModel,
           ...(imageData && { imageData }),
           ...(store.masteryScores.length > 0 && {
             masteryScores: store.masteryScores,
@@ -379,6 +380,7 @@ export function useTutorBrain(options: UseTutorBrainOptions) {
           grade: 7,
         },
         canvasState: "",
+        modelId: store.selectedModel,
       };
 
       const timeoutId = setTimeout(

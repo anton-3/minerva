@@ -1,5 +1,5 @@
 // Claude tutor brain — AI SDK wrapper with Tool Calling
-// Uses Vercel AI SDK (@ai-sdk/anthropic) for Claude integration.
+// Uses Vercel AI SDK (@ai-sdk/anthropic, @ai-sdk/google) for multi-model support.
 // See: specs/001-minerva-mvp/contracts/tutor-brain.md
 //
 // Architecture:
@@ -10,15 +10,22 @@
 // Latency optimizations:
 // - Prompt caching via providerOptions.anthropic.cacheControl: { type: "ephemeral" }
 // - Text streams first for early speech → avatar speaks while tools execute
+//
+// Multi-model support:
+// - Anthropic: Claude Sonnet 4.5, Claude Haiku 4.5
+// - Google: Gemini 3 Pro, Gemini 3 Flash
 
 import { anthropic } from "@ai-sdk/anthropic";
-import { generateObject, streamText, tool, stepCountIs, type ModelMessage } from "ai";
+import { google } from "@ai-sdk/google";
+import { generateObject, streamText, tool, stepCountIs, type ModelMessage, type LanguageModel } from "ai";
 import { z } from "zod";
 import type {
   TutorBrainRequest,
   SessionSummary,
   LearningPlan,
+  AIModelId,
 } from "@/types/session";
+import { DEFAULT_MODEL } from "@/types/session";
 import {
   TUTOR_SYSTEM_PROMPT,
   SUMMARY_SYSTEM_PROMPT,
@@ -201,10 +208,35 @@ const tutorTools = {
 // Type for tool inputs (used by route.ts)
 export type TutorTools = typeof tutorTools;
 
-// Haiku for real-time tutoring (fast TTFT ~300ms vs Sonnet's ~1.5s)
-// Sonnet for non-latency-critical tasks (summaries, learning plans)
-const MODEL_FAST = "claude-haiku-4-5-20251001";
-const MODEL = "claude-sonnet-4-5-20250929";
+// Model selection helper — returns the correct provider instance for the given model ID
+function getModel(modelId: AIModelId = DEFAULT_MODEL): LanguageModel {
+  // Anthropic models
+  if (modelId.startsWith("claude-")) {
+    return anthropic(modelId);
+  }
+  // Google Gemini models
+  if (modelId.startsWith("gemini-")) {
+    return google(modelId);
+  }
+  // Fallback to default
+  console.warn(`[tutor] Unknown model ID: ${modelId}, falling back to default`);
+  return anthropic(DEFAULT_MODEL);
+}
+
+// Get provider-specific options for the model
+function getProviderOptions(modelId: AIModelId = DEFAULT_MODEL) {
+  if (modelId.startsWith("claude-")) {
+    return {
+      anthropic: {
+        cacheControl: { type: "ephemeral" as const },
+        thinkingConfig: { type: "disabled" as const },
+      },
+    };
+  }
+  // Google models don't need special options - return undefined instead of empty object
+  return undefined;
+}
+
 const MAX_HISTORY = 20;
 
 // Helper: build AI SDK messages from TutorBrainRequest
@@ -282,15 +314,17 @@ export function createTutorBrain(): TutorBrain {
       console.log(`[Latency:claude] RESPOND_STREAM_START +0ms`);
 
       const { messages, systemPrompt } = buildAIMessages(request);
+      const modelId = request.modelId || DEFAULT_MODEL;
+      const model = getModel(modelId);
 
       console.log(
-        `[Latency:claude] REQUEST_BUILT +${Date.now() - streamT0}ms | model=${MODEL_FAST} history=${messages.length} msgs`
+        `[Latency:claude] REQUEST_BUILT +${Date.now() - streamT0}ms | model=${modelId} history=${messages.length} msgs`
       );
 
       try {
         // Use streamText with tools for hybrid text + tool calling
         const result = streamText({
-          model: anthropic(MODEL),
+          model,
           maxOutputTokens: 4096,
           temperature: 0.5,
           abortSignal: signal,
@@ -298,12 +332,7 @@ export function createTutorBrain(): TutorBrain {
           messages,
           tools: tutorTools,
           stopWhen: stepCountIs(8), // Allow multi-step tool use
-          providerOptions: {
-            anthropic: {
-              cacheControl: { type: "ephemeral" },
-              thinkingConfig: { type: "disabled" },
-            },
-          },
+          providerOptions: getProviderOptions(modelId),
         });
 
         console.log(
@@ -420,8 +449,9 @@ export function createTutorBrain(): TutorBrain {
         .map((t) => `${t.speaker}: ${t.text}`)
         .join("\n");
 
+      // Use default model for summaries (non-latency-critical)
       const { object } = await generateObject({
-        model: anthropic(MODEL),
+        model: getModel(DEFAULT_MODEL),
         schema: SessionSummarySchema,
         maxOutputTokens: 1024,
         system: SUMMARY_SYSTEM_PROMPT,
@@ -431,9 +461,7 @@ export function createTutorBrain(): TutorBrain {
             content: `Generate a summary for this tutoring session transcript:\n\n${transcriptText}`,
           },
         ],
-        providerOptions: {
-          anthropic: { cacheControl: { type: "ephemeral" } },
-        },
+        providerOptions: getProviderOptions(DEFAULT_MODEL),
       });
 
       return object as SessionSummary;
@@ -443,8 +471,9 @@ export function createTutorBrain(): TutorBrain {
       goals: string[],
       subject: string
     ): Promise<LearningPlan> {
+      // Use default model for learning plans (non-latency-critical)
       const { object } = await generateObject({
-        model: anthropic(MODEL),
+        model: getModel(DEFAULT_MODEL),
         schema: LearningPlanSchema,
         maxOutputTokens: 1024,
         system: LEARNING_PLAN_SYSTEM_PROMPT,
@@ -454,9 +483,7 @@ export function createTutorBrain(): TutorBrain {
             content: `Subject: ${subject}\nGoals:\n${goals.map((g) => `- ${g}`).join("\n")}\n\nGenerate a structured learning plan.`,
           },
         ],
-        providerOptions: {
-          anthropic: { cacheControl: { type: "ephemeral" } },
-        },
+        providerOptions: getProviderOptions(DEFAULT_MODEL),
       });
 
       return object as LearningPlan;

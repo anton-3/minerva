@@ -18,7 +18,7 @@
 // Perplexity enrichment runs BEFORE the stream starts (max 3s race timeout).
 
 import { NextResponse } from "next/server";
-import { createTutorBrain, TutorStreamEvent } from "@/lib/claude/client";
+import { createTutorBrain, TutorStreamEvent } from "@/lib/ai/client";
 import { createManimClient } from "@/lib/manim/client";
 import type { TutorBrainRequest } from "@/types/session";
 
@@ -143,7 +143,7 @@ export async function POST(request: Request) {
   }
 
   console.log(
-    `[Latency:server] BODY_PARSED +${Date.now() - t0}ms | "${body.studentMessage.slice(0, 80)}"`
+    `[Latency:server] BODY_PARSED +${Date.now() - t0}ms | model=${body.modelId ?? "default"} "${body.studentMessage.slice(0, 80)}"`
   );
 
   // Create an AbortController so we can cancel the Claude stream if the client disconnects

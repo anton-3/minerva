@@ -12,6 +12,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { ModelPicker } from "./ModelPicker";
 
 interface ImageData {
   base64: string;
@@ -98,7 +99,10 @@ export function ChatSheet({
         className="w-[360px] sm:max-w-[360px] flex flex-col p-0"
       >
         <SheetHeader className="px-4 py-3 border-b border-border shrink-0">
-          <SheetTitle className="text-sm">Chat</SheetTitle>
+          <div className="flex items-center justify-between pr-8">
+            <SheetTitle className="text-sm">Chat</SheetTitle>
+            <ModelPicker className="w-[150px]" />
+          </div>
         </SheetHeader>
 
         {/* Messages */}

@@ -2,6 +2,32 @@
 // These are the "primitives" that flow through the entire system.
 // See: specs/001-minerva-mvp/plan.md (Black Box Module Contracts)
 
+// ─── AI Models ──────────────────────────────────────────────────────────────
+// Supported AI models for the tutor brain
+
+export type AIModelId =
+  | "claude-sonnet-4-5-20250929"
+  | "claude-haiku-4-5-20251001"
+  | "gemini-3-pro-preview"
+  | "gemini-3-flash-preview";
+
+export type AIProvider = "anthropic" | "google";
+
+export interface AIModelConfig {
+  id: AIModelId;
+  provider: AIProvider;
+  displayName: string;
+}
+
+export const AI_MODELS: AIModelConfig[] = [
+  { id: "claude-sonnet-4-5-20250929", provider: "anthropic", displayName: "Claude Sonnet 4.5" },
+  { id: "claude-haiku-4-5-20251001", provider: "anthropic", displayName: "Claude Haiku 4.5" },
+  { id: "gemini-3-pro-preview", provider: "google", displayName: "Gemini 3 Pro" },
+  { id: "gemini-3-flash-preview", provider: "google", displayName: "Gemini 3 Flash" },
+];
+
+export const DEFAULT_MODEL: AIModelId = "claude-sonnet-4-5-20250929";
+
 // ─── Math Tools ─────────────────────────────────────────────────────────────
 
 export type MathTool = "desmos" | "desmos3d" | "geogebra";
@@ -61,6 +87,7 @@ export interface TutorBrainRequest {
     mediaType: "image/jpeg" | "image/png" | "image/gif" | "image/webp";
   };
   masteryScores?: MasteryScore[];
+  modelId?: AIModelId;
 }
 
 export interface TutorBrainResponse {

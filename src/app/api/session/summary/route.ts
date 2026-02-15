@@ -6,7 +6,7 @@
 import { NextResponse } from "next/server";
 import { db, sessionSummaries, transcriptEntries } from "@/db";
 import { eq, asc } from "drizzle-orm";
-import { createTutorBrain } from "@/lib/claude/client";
+import { createTutorBrain } from "@/lib/ai/client";
 
 export async function POST(request: Request) {
   const body = await request.json();

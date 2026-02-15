@@ -2,6 +2,7 @@
 // See: specs/001-minerva-mvp/plan.md
 
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 import type {
   SessionState,
   SessionStatus,
@@ -12,7 +13,9 @@ import type {
   LearningPlanContext,
   ContentMode,
   MasteryScore,
+  AIModelId,
 } from "@/types/session";
+import { DEFAULT_MODEL } from "@/types/session";
 
 interface SessionActions {
   setStatus: (status: SessionStatus) => void;
@@ -26,10 +29,16 @@ interface SessionActions {
   setSandboxContent: (content: string | null, accent?: string | null) => void;
   setVideoUrl: (url: string | null) => void;
   setMasteryScores: (scores: MasteryScore[]) => void;
+  setSelectedModel: (model: AIModelId) => void;
   reset: () => void;
 }
 
-const initialState: SessionState = {
+// Extended SessionState with selectedModel
+interface ExtendedSessionState extends SessionState {
+  selectedModel: AIModelId;
+}
+
+const initialState: ExtendedSessionState = {
   sessionId: null,
   status: "idle",
   avatarStatus: "disconnected",
@@ -42,31 +51,42 @@ const initialState: SessionState = {
   sandboxAccent: null,
   videoUrl: null,
   masteryScores: [],
+  selectedModel: DEFAULT_MODEL,
 };
 
-export const useSessionStore = create<SessionState & SessionActions>((set) => ({
-  ...initialState,
+export const useSessionStore = create<ExtendedSessionState & SessionActions>()(
+  persist(
+    (set) => ({
+      ...initialState,
 
-  setStatus: (status) => set({ status }),
-  setAvatarStatus: (avatarStatus) => set({ avatarStatus }),
-  setSessionId: (sessionId) => set({ sessionId }),
-  setStudentProfile: (studentProfile) => set({ studentProfile }),
-  setLearningPlan: (learningPlan) => set({ learningPlan }),
+      setStatus: (status) => set({ status }),
+      setAvatarStatus: (avatarStatus) => set({ avatarStatus }),
+      setSessionId: (sessionId) => set({ sessionId }),
+      setStudentProfile: (studentProfile) => set({ studentProfile }),
+      setLearningPlan: (learningPlan) => set({ learningPlan }),
 
-  addMessage: (message) =>
-    set((state) => ({
-      conversationHistory: [...state.conversationHistory, message],
-    })),
+      addMessage: (message) =>
+        set((state) => ({
+          conversationHistory: [...state.conversationHistory, message],
+        })),
 
-  addTranscriptEntry: (entry) =>
-    set((state) => ({
-      transcript: [...state.transcript, entry],
-    })),
+      addTranscriptEntry: (entry) =>
+        set((state) => ({
+          transcript: [...state.transcript, entry],
+        })),
 
-  setContentMode: (contentMode) => set({ contentMode }),
-  setSandboxContent: (sandboxContent, sandboxAccent) => set({ sandboxContent, sandboxAccent: sandboxAccent ?? null }),
-  setVideoUrl: (videoUrl) => set({ videoUrl }),
-  setMasteryScores: (masteryScores) => set({ masteryScores }),
+      setContentMode: (contentMode) => set({ contentMode }),
+      setSandboxContent: (sandboxContent, sandboxAccent) => set({ sandboxContent, sandboxAccent: sandboxAccent ?? null }),
+      setVideoUrl: (videoUrl) => set({ videoUrl }),
+      setMasteryScores: (masteryScores) => set({ masteryScores }),
+      setSelectedModel: (selectedModel) => set({ selectedModel }),
 
-  reset: () => set(initialState),
-}));
+      reset: () => set({ ...initialState, selectedModel: initialState.selectedModel }),
+    }),
+    {
+      name: "minerva-session",
+      // Only persist the model selection, not the full session state
+      partialize: (state) => ({ selectedModel: state.selectedModel }),
+    }
+  )
+);

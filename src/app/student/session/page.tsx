@@ -11,6 +11,7 @@ import { ContentModeView } from "@/components/session/ContentMode";
 import { FloatingVideoOverlay } from "@/components/session/FloatingVideoOverlay";
 import { BottomControlBar } from "@/components/session/BottomControlBar";
 import { ChatSheet } from "@/components/session/ChatSheet";
+import { ModelPicker } from "@/components/session/ModelPicker";
 import type { ContentMode } from "@/types/session";
 import { ParticlesBackground } from "@/components/session/ParticlesBackground";
 
@@ -133,6 +134,11 @@ export default function SessionPage() {
       <ParticlesBackground />
       {/* Light overlay so particles stay subtle behind content */}
       <div className="absolute inset-0 bg-white/30" />
+
+      {/* Model picker — top right corner */}
+      <div className="absolute top-4 right-4 z-50">
+        <ModelPicker className="w-[170px] bg-white/80 backdrop-blur-sm" />
+      </div>
 
       {/* Main content area — full screen */}
       <main className="absolute inset-0">
