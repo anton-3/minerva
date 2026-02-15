@@ -10,24 +10,27 @@ import { GeoGebraWrapper, createGeoGebraWrapper } from "./geogebra";
 export interface ToolManager {
   /** Currently active tool */
   activeTool: MathTool;
-  
+
   /** Set the active tool */
   setActiveTool(tool: MathTool): void;
-  
+
+  /** Subscribe to active tool changes (returns unsubscribe fn) */
+  onActiveTool(cb: (tool: MathTool) => void): () => void;
+
   /** Get a tool wrapper by name */
   getTool(name: MathTool): ToolWrapper | undefined;
-  
+
   /** Execute a command (dispatches to appropriate tool) */
   execute(command: CanvasCommand): void;
-  
+
   /** Clear all tools or just the active one */
   clearAll(): void;
   clearActive(): void;
-  
+
   /** Get combined snapshot of all tools or just active */
   getSnapshot(): string;
   getActiveSnapshot(): string;
-  
+
   /** Tool wrapper references for setting instances */
   desmos: DesmosWrapper;
   desmos3d: Desmos3DWrapper;
@@ -45,6 +48,11 @@ export function createToolManager(): ToolManager {
   tools.set("geogebra", geogebra);
 
   let activeTool: MathTool = "desmos";
+  const toolChangeCallbacks: ((tool: MathTool) => void)[] = [];
+
+  function notifyToolChange(tool: MathTool) {
+    for (const cb of toolChangeCallbacks) cb(tool);
+  }
 
   return {
     get activeTool() {
@@ -53,6 +61,15 @@ export function createToolManager(): ToolManager {
 
     setActiveTool(tool: MathTool) {
       activeTool = tool;
+      notifyToolChange(tool);
+    },
+
+    onActiveTool(cb: (tool: MathTool) => void): () => void {
+      toolChangeCallbacks.push(cb);
+      return () => {
+        const idx = toolChangeCallbacks.indexOf(cb);
+        if (idx >= 0) toolChangeCallbacks.splice(idx, 1);
+      };
     },
 
     getTool(name: MathTool) {
@@ -64,6 +81,7 @@ export function createToolManager(): ToolManager {
         // Handle meta commands
         if (command.action === "setTool") {
           activeTool = command.tool;
+          notifyToolChange(command.tool);
           return;
         }
 

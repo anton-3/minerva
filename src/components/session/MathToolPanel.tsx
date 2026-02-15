@@ -4,7 +4,7 @@
 
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { DesmosPanel } from "./DesmosPanel";
 import { Desmos3DPanel } from "./Desmos3DPanel";
 import { GeoGebraPanel } from "./GeoGebraPanel";
@@ -29,6 +29,13 @@ export function MathToolPanel({ toolManager, onToolChange }: MathToolPanelProps)
     desmos3d: false,
     geogebra: false,
   });
+
+  // Subscribe to external tool changes (e.g. Claude sends "setTool" command)
+  useEffect(() => {
+    return toolManager.onActiveTool((tool) => {
+      setActiveTool(tool);
+    });
+  }, [toolManager]);
 
   const handleToolChange = useCallback(
     (tool: MathTool) => {

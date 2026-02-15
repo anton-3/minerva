@@ -2,9 +2,84 @@
 
 > **For AI agents**: Read this file first to understand where the project is. Update it after every meaningful task or group of tasks.
 
-**Last updated**: 2026-02-14 (Session 8)
+**Last updated**: 2026-02-14 (Session 9)
 **Branch**: `001-minerva-mvp`
-**Overall status**: Phases 1-8 COMPLETE (T001-T067). **NEW**: Video-call UI redesign — Zoom-style layout with draggable avatar PiP, bottom control bar, slide-out chat, extensible content modes (Math + Manim). TypeScript passes clean.
+**Overall status**: Phases 1-8 COMPLETE (T001-T067). **NEW**: Universal Tutor upgrade — Sandbox mode (Claude generates interactive HTML), file upload with Claude Vision, adaptive learning with mastery tracking, professional educator persona with age-adaptive language, UI polish with smooth transitions. TypeScript passes clean (0 errors).
+
+---
+
+## Session 9: Universal Tutor — 6-Phase Upgrade
+
+**Major change**: Transformed Minerva from math-only tutor to universal tutor for ANY subject.
+
+### Phase 1: Bug Fixes (7 issues)
+- [x] **1.1** Wired `contentMode` + `manimVideoUrl` in useTutorBrain (were silently dropped)
+- [x] **1.2** Fixed MathToolPanel tab desync (added `onActiveTool` callback to ToolManager)
+- [x] **1.3** Deleted orphaned components (AvatarPanel.tsx, ChatPanel.tsx, SessionControls.tsx)
+- [x] **1.4** Fixed GeoGebra hardcoded 800x500 (ResizeObserver for dynamic dimensions)
+- [x] **1.5** Fixed stale tldraw references (page.tsx badge, commands.ts comment)
+- [x] **1.6** Fixed Desmos duplicate script race condition (shared `desmos-loader.ts`)
+- [x] **1.7** Removed dead `respondStream()` from claude/client.ts (104 lines deleted)
+
+### Phase 2: Sandbox Mode — Universal Visualization
+- [x] Extended `ContentMode` type: `"math" | "sandbox" | "manim"`
+- [x] Added `sandboxHtml` to types, Zustand store, Zod schema
+- [x] Created `SandboxPanel.tsx` — renders Claude HTML in `<iframe sandbox="allow-scripts">`
+- [x] Wired through ContentMode → useSession → useTutorBrain → SessionPage
+- [x] Updated mode toggle to cycle through all 3 modes
+- [x] Rewrote system prompt for universal tutoring + sandbox generation
+
+### Phase 3: File Upload with Claude Vision
+- [x] Added `imageData` to `TutorBrainRequest` (base64 + mediaType)
+- [x] Updated Claude client to build multimodal content blocks
+- [x] Added upload button + image preview to ChatSheet (paperclip icon, 5MB limit)
+- [x] Wired image through hooks (useTutorBrain accepts optional imageData)
+- [x] Added 5MB body size check to API route
+- [x] Added IMAGE ANALYSIS section to system prompt
+
+### Phase 4: Adaptive Learning
+- [x] Added `MasteryScore` type and `masteryScores` to request/store
+- [x] Inject mastery context into Claude (formatted as "Subject/Topic: X%")
+- [x] Added `velocity` field to progressUpdate ("improving"/"plateau"/"struggling")
+- [x] Updated Zod schema for velocity tracking
+- [x] Added ADAPTIVE DIFFICULTY section to prompt (3 tiers)
+
+### Phase 5: Professional Educator Persona
+- [x] Rewrote persona: "15 years experience, genuinely loves helping students discover"
+- [x] Added AGE-ADAPTIVE LANGUAGE (4 brackets: 6-9, 10-12, 13-15, 16-18)
+- [x] Expanded subject coverage: ANY topic the student is curious about
+
+### Phase 6: UI Polish
+- [x] Smooth mode transitions (opacity + scale CSS transitions, 300ms)
+- [x] Mode indicator badge (top-left, color-coded: blue/green/purple)
+- [x] Updated landing page for universal tutor (description, feature cards, value props)
+
+### Files Created
+- `src/lib/canvas/desmos-loader.ts` — shared Desmos API script loader
+- `src/components/session/SandboxPanel.tsx` — sandboxed iframe for interactive HTML
+
+### Files Modified (key)
+- `src/types/session.ts` — ContentMode, sandboxHtml, imageData, MasteryScore, velocity
+- `src/stores/sessionStore.ts` — sandboxHtml, masteryScores state + actions
+- `src/lib/claude/client.ts` — Zod schema, vision support, mastery context, removed respondStream
+- `src/lib/claude/prompts.ts` — complete rewrite: universal tutor, sandbox, vision, adaptive
+- `src/hooks/useTutorBrain.ts` — sandboxHtml, imageData, masteryScores wiring
+- `src/hooks/useSession.ts` — sandboxHtml selector exposed
+- `src/components/session/ContentMode.tsx` — SandboxPanel, smooth transitions
+- `src/components/session/ChatSheet.tsx` — file upload UI
+- `src/components/session/DesmosPanel.tsx` — shared script loader
+- `src/components/session/Desmos3DPanel.tsx` — shared script loader
+- `src/components/session/GeoGebraPanel.tsx` — ResizeObserver
+- `src/lib/canvas/tools/manager.ts` — onActiveTool callback
+- `src/components/session/MathToolPanel.tsx` — subscribe to tool changes
+- `src/app/student/session/page.tsx` — mode badge, sandbox wiring, 3-mode toggle
+- `src/app/page.tsx` — universal tutor copy
+- `src/app/api/tutor/respond/route.ts` — 5MB size check
+
+### Files Deleted
+- `src/components/session/AvatarPanel.tsx` (orphaned)
+- `src/components/session/ChatPanel.tsx` (orphaned)
+- `src/components/session/SessionControls.tsx` (orphaned)
 
 ---
 
