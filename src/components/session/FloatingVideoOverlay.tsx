@@ -133,38 +133,28 @@ function ViewSwitcher({
   );
 }
 
-// ─── Resize Handle Components ───
+// ─── Resize Grip Indicators ───
+// Visual-only indicators inside the overlay at bottom-left and bottom-right corners.
+// pointer-events-none — actual resize is handled by react-rnd's default hit areas.
 
-function BottomHandle() {
+function ResizeGrips() {
   return (
-    <div className="w-full h-3 flex items-center justify-center cursor-s-resize group/handle">
-      <div className="flex gap-[3px]">
-        <div className="w-5 h-[2px] rounded-full bg-white/20 group-hover/handle:bg-white/50 transition-colors" />
-        <div className="w-5 h-[2px] rounded-full bg-white/20 group-hover/handle:bg-white/50 transition-colors" />
+    <>
+      {/* Bottom-left grip */}
+      <div className="absolute bottom-1 left-1 z-30 pointer-events-none">
+        <svg width="10" height="10" viewBox="0 0 10 10" className="text-white/40">
+          <line x1="1" y1="1" x2="9" y2="9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          <line x1="1" y1="5" x2="5" y2="9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        </svg>
       </div>
-    </div>
-  );
-}
-
-function RightHandle() {
-  return (
-    <div className="h-full w-3 flex items-center justify-center cursor-e-resize group/handle">
-      <div className="flex flex-col gap-[3px]">
-        <div className="h-5 w-[2px] rounded-full bg-white/20 group-hover/handle:bg-white/50 transition-colors" />
-        <div className="h-5 w-[2px] rounded-full bg-white/20 group-hover/handle:bg-white/50 transition-colors" />
+      {/* Bottom-right grip */}
+      <div className="absolute bottom-1 right-1 z-30 pointer-events-none">
+        <svg width="10" height="10" viewBox="0 0 10 10" className="text-white/40">
+          <line x1="9" y1="1" x2="1" y2="9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          <line x1="9" y1="5" x2="5" y2="9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        </svg>
       </div>
-    </div>
-  );
-}
-
-function CornerHandle() {
-  return (
-    <div className="w-4 h-4 flex items-end justify-end cursor-se-resize group/handle p-[2px]">
-      <svg width="8" height="8" viewBox="0 0 8 8" className="text-white/20 group-hover/handle:text-white/50 transition-colors">
-        <line x1="7" y1="1" x2="1" y2="7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-        <line x1="7" y1="4" x2="4" y2="7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-      </svg>
-    </div>
+    </>
   );
 }
 
@@ -404,19 +394,18 @@ export function FloatingVideoOverlay({
           maxWidth={600}
           maxHeight={600}
           enableResizing={canResize ? {
-            bottom: true,
-            right: true,
+            bottomLeft: true,
             bottomRight: true,
             top: false,
+            right: false,
+            bottom: false,
             left: false,
             topLeft: false,
             topRight: false,
-            bottomLeft: false,
           } : false}
-          resizeHandleComponent={canResize ? {
-            bottom: <BottomHandle />,
-            right: <RightHandle />,
-            bottomRight: <CornerHandle />,
+          resizeHandleStyles={canResize ? {
+            bottomLeft: { width: 20, height: 20, bottom: 0, left: 0, cursor: "sw-resize" },
+            bottomRight: { width: 20, height: 20, bottom: 0, right: 0, cursor: "se-resize" },
           } : undefined}
           lockAspectRatio={viewMode === "speaker"}
           bounds="window"
@@ -424,6 +413,9 @@ export function FloatingVideoOverlay({
           className="z-50"
         >
           <div className="w-full h-full rounded-xl overflow-hidden shadow-2xl border border-white/10 bg-zinc-900 group relative">
+
+            {/* Resize grip indicators (inside, bottom corners) */}
+            {canResize && <ResizeGrips />}
 
             {/* ─── Strip Mode ─── */}
             {viewMode === "strip" && (
