@@ -1,10 +1,23 @@
 // Goals page — set learning goals per child per subject
-// Owner: Person D (Dashboard + Design)
-// See: specs/001-minerva-mvp/tasks.md (T041)
-
 "use client";
 
 import { useState, useEffect } from "react";
+import { Target, BookOpen, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { GoalForm } from "@/components/parent/GoalForm";
 import type { Child, LearningPlan, GoalEntry } from "@/db/types";
 
@@ -14,6 +27,7 @@ export default function GoalsPage() {
   const [selectedChild, setSelectedChild] = useState<string>("");
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -43,8 +57,6 @@ export default function GoalsPage() {
     fetchData();
   }, []);
 
-  const [generating, setGenerating] = useState(false);
-
   const handleSave = async (data: {
     child_id: string;
     subject: string;
@@ -52,7 +64,6 @@ export default function GoalsPage() {
   }) => {
     setGenerating(true);
     try {
-      // Call Claude to generate a structured learning plan + curriculum
       const res = await fetch("/api/tutor/plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -70,7 +81,6 @@ export default function GoalsPage() {
       }
 
       setShowForm(false);
-      // Refresh plans
       const plansRes = await fetch(`/api/tutor/plan?child_id=${selectedChild}`);
       if (plansRes.ok) {
         setPlans(await plansRes.json());
@@ -86,121 +96,141 @@ export default function GoalsPage() {
   const selectedChildName = children.find((c) => c.id === selectedChild)?.name;
 
   if (loading) {
-    return <p className="text-muted-foreground">Loading...</p>;
+    return <p className="text-text-secondary">Loading...</p>;
   }
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Learning Goals</h1>
-        <p className="text-muted-foreground">
+        <h1 className="font-display text-2xl font-bold text-text-primary">
+          Learning Goals
+        </h1>
+        <p className="text-text-secondary text-sm mt-1">
           Set goals for each child to personalize their learning.
         </p>
       </div>
 
       {children.length === 0 ? (
-        <p className="text-muted-foreground">
-          Add a child first before setting goals.
-        </p>
+        <Card className="border-dashed">
+          <CardContent className="py-8 text-center">
+            <p className="text-text-secondary text-sm">
+              Add a child first before setting goals.
+            </p>
+          </CardContent>
+        </Card>
       ) : (
         <>
-          {/* Child selector */}
           <div className="flex items-center gap-3">
-            <label className="text-sm font-medium">Child:</label>
-            <select
-              value={selectedChild}
-              onChange={(e) => setSelectedChild(e.target.value)}
-              className="rounded-lg border border-input bg-background px-3 py-2 text-sm"
-            >
-              {children.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-            <button
+            <label className="text-sm font-medium text-text-primary">
+              Child:
+            </label>
+            <Select value={selectedChild} onValueChange={setSelectedChild}>
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="Select a child" />
+              </SelectTrigger>
+              <SelectContent>
+                {children.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              variant={showForm ? "outline" : "default"}
               onClick={() => setShowForm(!showForm)}
-              className="ml-auto rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+              className="ml-auto"
             >
+              <Target className="h-4 w-4 mr-1.5" />
               {showForm ? "Cancel" : "Add Goals"}
-            </button>
+            </Button>
           </div>
 
           {showForm && (
-            <div className="rounded-lg border border-border bg-card p-4">
-              {generating ? (
-                <div className="flex items-center gap-2 py-4 justify-center">
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                  <span className="text-sm text-muted-foreground">
-                    Generating learning plan with AI...
-                  </span>
-                </div>
-              ) : (
-                <GoalForm childId={selectedChild} onSave={handleSave} />
-              )}
-            </div>
+            <Card>
+              <CardContent className="py-4">
+                {generating ? (
+                  <div className="flex items-center gap-2 py-6 justify-center">
+                    <Loader2 className="h-4 w-4 animate-spin text-brand-primary" />
+                    <span className="text-sm text-text-secondary">
+                      Generating learning plan with AI...
+                    </span>
+                  </div>
+                ) : (
+                  <GoalForm childId={selectedChild} onSave={handleSave} />
+                )}
+              </CardContent>
+            </Card>
           )}
 
-          {/* Existing plans */}
           {selectedPlans.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-border p-8 text-center">
-              <p className="text-muted-foreground">
-                No goals set for {selectedChildName} yet.
-              </p>
-            </div>
+            <Card className="border-dashed">
+              <CardContent className="py-12 text-center">
+                <Target className="h-8 w-8 text-text-secondary/40 mx-auto mb-3" />
+                <p className="text-text-secondary text-sm">
+                  No goals set for {selectedChildName} yet.
+                </p>
+              </CardContent>
+            </Card>
           ) : (
             <div className="space-y-3">
               {selectedPlans.map((plan) => (
-                <div
-                  key={plan.id}
-                  className="rounded-lg border border-border bg-card p-4 space-y-2"
-                >
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-semibold">{plan.subject}</h3>
-                    {plan.currentTopic && (
-                      <span className="text-xs bg-muted rounded-full px-2 py-0.5">
-                        Current: {plan.currentTopic}
-                      </span>
-                    )}
-                  </div>
-                  <ul className="space-y-1">
-                    {plan.goals.map((goal, i) => (
-                      <li key={i} className="flex items-center gap-2 text-sm">
-                        <span
-                          className={`w-2 h-2 rounded-full ${
-                            goal.status === "completed"
-                              ? "bg-green-500"
-                              : goal.status === "paused"
-                              ? "bg-yellow-500"
-                              : "bg-blue-500"
-                          }`}
-                        />
-                        {goal.description}
-                      </li>
-                    ))}
-                  </ul>
-                  {plan.curriculum && plan.curriculum.length > 0 && (
-                    <div className="mt-2 pt-2 border-t border-border">
-                      <p className="text-xs font-medium text-muted-foreground mb-1">
-                        AI-generated curriculum:
-                      </p>
-                      <div className="flex flex-wrap gap-1">
-                        {plan.curriculum.map((topic, i) => (
-                          <span
-                            key={i}
-                            className={`text-xs px-2 py-0.5 rounded-full ${
-                              topic.name === plan.currentTopic
-                                ? "bg-primary text-primary-foreground"
-                                : "bg-muted text-muted-foreground"
-                            }`}
-                          >
-                            {topic.name}
-                          </span>
-                        ))}
-                      </div>
+                <Card key={plan.id}>
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="font-display text-base flex items-center gap-2">
+                        <Target className="h-4 w-4 text-brand-primary" />
+                        {plan.subject}
+                      </CardTitle>
+                      {plan.currentTopic && (
+                        <Badge variant="secondary" className="text-xs">
+                          Current: {plan.currentTopic}
+                        </Badge>
+                      )}
                     </div>
-                  )}
-                </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <ul className="space-y-1.5">
+                      {plan.goals.map((goal, i) => (
+                        <li key={i} className="flex items-center gap-2 text-sm">
+                          <span
+                            className={`w-2 h-2 rounded-full shrink-0 ${
+                              goal.status === "completed"
+                                ? "bg-green-500"
+                                : goal.status === "paused"
+                                ? "bg-yellow-500"
+                                : "bg-brand-primary"
+                            }`}
+                          />
+                          <span className="text-text-primary">{goal.description}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    {plan.curriculum && plan.curriculum.length > 0 && (
+                      <div className="pt-2 border-t border-border-light">
+                        <p className="text-xs font-medium text-text-secondary mb-2 flex items-center gap-1.5">
+                          <BookOpen className="h-3.5 w-3.5" />
+                          AI-generated curriculum
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {plan.curriculum.map((topic, i) => (
+                            <Badge
+                              key={i}
+                              variant={
+                                topic.name === plan.currentTopic
+                                  ? "default"
+                                  : "secondary"
+                              }
+                              className="text-xs"
+                            >
+                              {topic.name}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               ))}
             </div>
           )}
