@@ -45,11 +45,9 @@ export function BottomControlBar({
   chatOpen,
   onToggleChat,
   unreadCount,
-  onToggleMode,
   currentMode,
   cameraActive,
   onToggleCamera,
-  onScan,
 }: BottomControlBarProps) {
   const [elapsed, setElapsed] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -57,6 +55,7 @@ export function BottomControlBar({
   // Session timer
   useEffect(() => {
     if (status === "active") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setElapsed(0);
       timerRef.current = setInterval(() => {
         setElapsed((prev) => prev + 1);
