@@ -263,6 +263,29 @@ def serve_video(filename):
     return send_file(video_path, mimetype="video/mp4")
 
 
+@app.delete("/videos/<filename>")
+def delete_video(filename):
+    """Delete a previously generated video from disk and the DB."""
+    if "/" in filename or "\\" in filename or ".." in filename:
+        return jsonify({"error": "Invalid filename"}), 400
+
+    video_path = os.path.join(VIDEOS_DIR, filename)
+    if not os.path.isfile(video_path):
+        return jsonify({"error": "Video not found"}), 404
+
+    os.remove(video_path)
+    log.info("Deleted video file: %s", video_path)
+
+    # Remove the corresponding DB entry
+    records = _load_db()
+    records = [r for r in records if r["filename"] != filename]
+    with open(DB_PATH, "w") as f:
+        json.dump(records, f, indent=2)
+    log.info("Removed DB entry for %s", filename)
+
+    return jsonify({"deleted": filename})
+
+
 @app.get("/exists")
 def exists():
     """Return all previously generated videos and their prompts."""
