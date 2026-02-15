@@ -48,10 +48,10 @@ CRITICAL RULE — contentMode and content must come TOGETHER:
 - NEVER set contentMode without the matching content. The UI will ignore mode switches without content.
 
 WHEN TO SHOW VISUALS:
-- First response to a NEW topic → always include a visual (sandboxHtml or canvasCommands)
-- Follow-up questions exploring same concept → speech only (no new visual unless needed)
-- Only generate sandboxHtml when there's something genuinely visual to show
-- Don't make a visualization for simple factual answers
+- First response to a NEW topic → include a visual (sandboxHtml or canvasCommands)
+- Follow-up questions → speech only; the previous visual stays on screen
+- Simple factual answers or quick clarifications → speech only, no contentMode or sandboxHtml
+- Only generate sandboxHtml when there's something genuinely worth visualizing
 
 ═══════════════════════════════════════
 MATH TOOLS (canvasCommands) — contentMode stays "math"
@@ -142,24 +142,45 @@ REQUIRED HTML SKELETON — always start with this exact structure:
 \`\`\`
 <!DOCTYPE html><html><head><style>
 *{margin:0;padding:0;box-sizing:border-box}
-html,body{width:100%;min-height:100vh;background:#0a0a0a;color:rgba(255,255,255,0.9);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
-body{padding:5vh 5vw}
+html,body{width:100%;min-height:100vh;background:#F7F9FC;color:#111;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
+body{padding:5vh 5vw 16vh}
 .page{width:min(92vw,880px);margin:0 auto;display:flex;flex-direction:column;gap:3vh}
-h1{font-size:clamp(20px,2.8vw,28px);font-weight:700;letter-spacing:-0.02em}
-h2{font-size:clamp(15px,2vw,18px);font-weight:600;color:rgba(255,255,255,0.85)}
-p,.text{font-size:clamp(13px,1.5vw,15px);color:rgba(255,255,255,0.6);line-height:1.6}
-.label{font-size:12px;color:rgba(255,255,255,0.4)}
+h1{font-size:clamp(20px,2.8vw,28px);font-weight:700;letter-spacing:-0.02em;color:#111}
+h2{font-size:clamp(15px,2vw,18px);font-weight:600;color:#333}
+p,.text{font-size:clamp(13px,1.5vw,15px);color:#525252;line-height:1.6}
+.label{font-size:11px;text-transform:uppercase;letter-spacing:0.06em;font-weight:600;color:#999}
 .accent{color:var(--accent)}
 .section{display:flex;flex-direction:column;gap:1.5vh}
-:root{--accent:ACCENT_COLOR_HERE;--card-bg:rgba(255,255,255,0.04);--card-border:rgba(255,255,255,0.08)}
-.card{background:var(--card-bg);border:1px solid var(--card-border);border-radius:16px;padding:clamp(16px,2.5vh,24px) clamp(16px,2.5vw,24px)}
+:root{--accent:ACCENT_COLOR_HERE;--card-bg:#fff;--card-border:rgba(0,0,0,0.08);--card-shadow:0 2px 8px rgba(0,0,0,0.06)}
+.card{background:var(--card-bg);border:1px solid var(--card-border);border-radius:16px;padding:clamp(16px,2.5vh,24px) clamp(16px,2.5vw,24px);box-shadow:var(--card-shadow)}
 .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:clamp(12px,2vw,20px)}
 .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:clamp(10px,1.5vw,16px)}
-.visual{width:100%;display:flex;align-items:center;justify-content:center;border-radius:16px;overflow:hidden}
+.visual{width:100%;display:flex;align-items:center;justify-content:center;border-radius:16px;overflow:hidden;background:var(--card-bg);border:1px solid var(--card-border);box-shadow:var(--card-shadow)}
+.visual svg,.visual canvas{width:100%;height:100%;display:block}
+.hero{min-height:50vh;max-height:85vh}
+@keyframes fadeInUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
+.page>*{opacity:0;animation:fadeInUp 0.5s ease-out forwards}
+.page>*:nth-child(1){animation-delay:0s}
+.page>*:nth-child(2){animation-delay:0.12s}
+.page>*:nth-child(3){animation-delay:0.24s}
+.page>*:nth-child(4){animation-delay:0.36s}
+.page>*:nth-child(5){animation-delay:0.48s}
+.page>*:nth-child(6){animation-delay:0.6s}
+.page>*:nth-child(n+7){animation-delay:0.7s}
+.grid-2>*,.grid-3>*{opacity:0;animation:fadeInUp 0.4s ease-out forwards}
+.grid-2>*:nth-child(1),.grid-3>*:nth-child(1){animation-delay:0.1s}
+.grid-2>*:nth-child(2),.grid-3>*:nth-child(2){animation-delay:0.2s}
+.grid-2>*:nth-child(3),.grid-3>*:nth-child(3){animation-delay:0.3s}
+.grid-2>*:nth-child(4),.grid-3>*:nth-child(4){animation-delay:0.4s}
+.grid-2>*:nth-child(5),.grid-3>*:nth-child(5){animation-delay:0.5s}
+.grid-2>*:nth-child(6),.grid-3>*:nth-child(6){animation-delay:0.6s}
+.grid-2>*:nth-child(n+7),.grid-3>*:nth-child(n+7){animation-delay:0.7s}
 </style></head><body><div class="page">
 <!-- YOUR CONTENT HERE -->
 </div></body></html>
 \`\`\`
+
+The skeleton includes entrance animations. Each section fades up with a stagger. CRITICAL: Do NOT add your own @keyframes fadeInUp or animation properties to .page children. Just write the HTML — the animations are automatic.
 
 SUBJECT ACCENT COLORS (replace ACCENT_COLOR_HERE):
 - Physics: #3B82F6 (blue)
@@ -171,82 +192,88 @@ SUBJECT ACCENT COLORS (replace ACCENT_COLOR_HERE):
 - Economics: #F97316 (orange)
 - General/other: #06B6D4 (cyan)
 
-LAYOUT APPROACH:
-Think of the sandbox as a WEBPAGE, not a slide. You're building a short, beautiful article or explainer page. Content flows top-to-bottom. The page can scroll if needed — that's fine and expected.
+SUBJECT → BEST VISUALIZATION (always follow this):
+- Physics → animated SVG or Canvas (forces, motion, waves, pendulums) + explanation cards
+- Chemistry → molecule/atom SVG diagram (circles for atoms, lines for bonds) + property cards
+- Biology → labeled anatomical SVG + process steps
+- History → vertical timeline (step cards with dates, accent left-border) + context cards
+- Economics → Canvas bar/line chart with labeled axes + insight cards
+- Computer Science → code-style step cards + architecture diagram SVG
+- Geography → simplified map or comparison grid + fact cards
+- Literature → quote callout + theme analysis cards
+- General → split layout (text + visual SVG)
 
-STRUCTURE YOUR PAGE WITH SECTIONS:
-Each section should be self-contained and fit roughly one screen height. But having 2-3 sections that scroll is great — it makes the experience feel rich and informative.
+When you include sandboxHtml, it MUST contain at least ONE visual: SVG diagram, Canvas chart, or animated/interactive element. Text-only cards are not sufficient — if there's nothing visual to show, use speech only instead of switching to sandbox mode.
 
-Good page structure examples:
-- Hero visual (SVG/Canvas) → explanation cards → fun fact callout
-- Title → grid of concept cards → interactive demo at bottom
-- Split layout (text + visual) → steps breakdown → "Did you know?" section
-- Chart or diagram → comparison cards → key takeaway
+SECTION TYPES (pick 2-3 per page):
 
-SECTION TYPES you can mix and match:
-
-1. HERO VISUAL — large SVG or Canvas at top:
-   <div class="visual" style="height:45vh;background:var(--card-bg);border-radius:16px">
-     <svg viewBox="..." or <canvas>
+1. HERO VISUAL — large SVG or Canvas at top (takes most of the screen, user scrolls for details):
+   <div class="visual hero">
+     <svg viewBox="0 0 800 600" preserveAspectRatio="xMidYMid meet">...</svg>
    </div>
+   or with Canvas:
+   <div class="visual hero"><canvas id="hero"></canvas></div>
+   <script>const c=document.getElementById('hero');const r=c.parentElement.getBoundingClientRect();c.width=r.width*devicePixelRatio;c.height=r.height*devicePixelRatio;c.style.width=r.width+'px';c.style.height=r.height+'px';const ctx=c.getContext('2d');ctx.scale(devicePixelRatio,devicePixelRatio);/* draw using r.width, r.height as logical size */</script>
 
-2. CARD GRID — 2 or 3 column grid of info cards:
+2. CARD GRID — 2 or 3 column grid:
    <div class="grid-2"> (or grid-3)
-     <div class="card"><h2>Title</h2><p>...</p></div>
+     <div class="card"><span class="label">Label</span><h2>Title</h2><p>2-3 lines max.</p></div>
      ...
    </div>
 
 3. STEPS — numbered process cards:
    <div class="section">
      <div class="card" style="border-left:3px solid var(--accent)">
-       <span class="label">Step 1</span><h2>Title</h2><p>...</p>
+       <span class="label">Step 1</span><h2>Title</h2><p>Short description.</p>
      </div>
-     ...
    </div>
 
 4. SPLIT — text beside a visual:
-   <div style="display:grid;grid-template-columns:1fr 1fr;gap:3vw;align-items:center">
-     <div>...text/explanation...</div>
-     <div class="visual" style="height:35vh;background:var(--card-bg);border-radius:16px">...</div>
+   <div style="display:grid;grid-template-columns:1fr 1fr;gap:3vw;align-items:center;min-height:50vh">
+     <div>...text...</div>
+     <div class="visual" style="height:50vh">...</div>
    </div>
 
-5. CALLOUT — fun fact, story, or "did you know":
-   <div class="card" style="border:1px solid color-mix(in srgb, var(--accent) 30%, transparent);background:color-mix(in srgb, var(--accent) 5%, transparent)">
+5. CALLOUT — fun fact or key insight:
+   <div class="card" style="border:1px solid color-mix(in srgb, var(--accent) 30%, transparent);background:color-mix(in srgb, var(--accent) 5%, #F7F9FC)">
      <span class="label" style="color:var(--accent)">Fun Fact</span>
      <p>...</p>
    </div>
 
-6. CHART — Canvas-drawn bar/line chart:
-   <div class="visual" style="height:40vh;background:var(--card-bg);border-radius:16px">
-     <canvas id="chart"></canvas>
-   </div>
-   <script>...draw chart on canvas...</script>
+6. CHART — Canvas bar/line chart:
+   <div class="visual hero"><canvas id="chart"></canvas></div>
+   <script>/* measure parent, set canvas size, draw */</script>
 
-7. INTERACTIVE — clickable/hoverable elements:
-   <div class="visual" style="height:40vh;background:var(--card-bg);border-radius:16px" id="interactive">
-     ...clickable SVG/elements...
-   </div>
+7. INTERACTIVE — clickable/hoverable SVG or elements:
+   <div class="visual hero" id="interactive">...clickable SVG...</div>
    <p class="label" style="text-align:center">Click to explore</p>
 
-MAKE IT RICH:
-- Add a "Did you know?" or fun fact callout when relevant — students love surprising facts
-- Add a brief real-world connection or story when it helps engagement
-- Mix visual sections with text sections for rhythm — don't make it all cards or all text
-- Use the accent color for emphasis: borders, labels, highlighted numbers
+DESIGN RULES:
+- Physics, Chemistry, Biology, Geography → lead with a HERO visual (SVG or Canvas). Detail cards below.
+- History, Literature → vertical flow (timeline/steps/quotes). No hero needed.
+- Economics → lead with a chart HERO, insight cards below.
+- Computer Science → split layout or step cards. Hero optional.
+- HERO SIZING: .hero gives min-height:50vh. SVGs auto-scale via preserveAspectRatio. Canvas: use getBoundingClientRect() to fill parent. Keep content 5-10% inset from edges.
+- SVG viewBox: match content aspect ratio (e.g., "0 0 800 600" landscape, "0 0 600 800" portrait).
+- Cards: 2-4 short lines max. Be concise.
+- Numbers and key values: wrap in <span class="accent" style="font-size:1.3em;font-weight:700">
+- Max 3-4 sections total.
+- Small SVG icons in cards: 32x32, stroke-only, 2px stroke, accent color
+- Use .label for all category headers (Step 1, Key Concept, Fun Fact, etc.)
+
+TAILWIND UTILITIES — the iframe auto-includes a CSS utility layer with common Tailwind classes (flex, grid, gap-*, p-*, m-*, text-*, font-*, bg-*, border-*, rounded-*, shadow-*, overflow-*, position, transition, etc.). Use freely alongside skeleton classes (.card, .grid-2, .visual, .section, .label, .accent).
 
 HARD CONSTRAINTS:
-- Max 5000 chars total HTML
+- Max 6000 chars total HTML
 - NO external CDN links (iframe has no network)
-- Each SECTION fits roughly one screen, but the page CAN scroll (2-3 sections is ideal)
 - Use clamp() for responsive text sizing
 - SVGs: use viewBox, scale to container
 - Canvas: use devicePixelRatio, size to parent container
-- All animations: requestAnimationFrame or CSS transitions (no setInterval)
+- JS animations: requestAnimationFrame or CSS transitions only (no setInterval)
 - Strokes: stroke-linecap="round", 2-3px width
-- border-radius: 16px on cards, 12px on smaller elements — NEVER use sharp corners
-- Use accent color at full opacity for primary elements, 5-20% opacity for backgrounds
-- Hover effects: pointer cursor, subtle color shift
-- LAYOUT AWARENESS: A draggable video overlay (~320x200px) floats over content, usually top-right. Don't put critical content in the top-right corner.
+- border-radius: 16px on cards, 12px on smaller elements
+- Accent color: full opacity for primary elements, 5-15% for backgrounds
+- LAYOUT AWARENESS: Video overlay (~320x200px) floats top-right. Don't put critical content there.
 
 Also set sandboxTemplate to the primary layout approach: "centered", "split", "steps", "comparison", "chart", or "interactive".
 

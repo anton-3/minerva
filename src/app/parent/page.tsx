@@ -41,17 +41,17 @@ export default async function ParentDashboard() {
 
       {/* Quick stats */}
       <div className="grid grid-cols-3 gap-4">
-        <div className="rounded-lg border border-[#A78BFA]/10 bg-card p-4">
-          <p className="text-sm text-muted-foreground">Children</p>
-          <p className="text-2xl font-bold text-[#A78BFA]">{childrenList.length}</p>
+        <div className="rounded-lg border border-border-light bg-neutral-surface p-4">
+          <p className="text-sm text-text-secondary">Children</p>
+          <p className="text-2xl font-bold text-text-primary">{childrenList.length}</p>
         </div>
-        <div className="rounded-lg border border-[#67E8F9]/10 bg-card p-4">
-          <p className="text-sm text-muted-foreground">Total Sessions</p>
-          <p className="text-2xl font-bold text-[#67E8F9]">{recentSessions.length}</p>
+        <div className="rounded-lg border border-brand-primary/15 bg-neutral-surface p-4">
+          <p className="text-sm text-text-secondary">Total Sessions</p>
+          <p className="text-2xl font-bold text-brand-primary">{recentSessions.length}</p>
         </div>
-        <div className="rounded-lg border border-[#A78BFA]/10 bg-card p-4">
-          <p className="text-sm text-muted-foreground">This Week</p>
-          <p className="text-2xl font-bold text-[#A78BFA]">
+        <div className="rounded-lg border border-brand-secondary/15 bg-neutral-surface p-4">
+          <p className="text-sm text-text-secondary">This Week</p>
+          <p className="text-2xl font-bold text-brand-secondary">
             {recentSessions.filter((s) => {
               if (!s.startedAt) return false;
               const diff = Date.now() - new Date(s.startedAt).getTime();
@@ -133,8 +133,8 @@ export default async function ParentDashboard() {
                 <span
                   className={`text-xs px-2 py-0.5 rounded-full ${
                     session.status === "completed"
-                      ? "bg-[#A78BFA]/10 text-[#A78BFA]"
-                      : "bg-white/5 text-white/40"
+                      ? "bg-brand-primary/10 text-brand-primary"
+                      : "bg-neutral-background text-text-secondary/60"
                   }`}
                 >
                   {session.status}

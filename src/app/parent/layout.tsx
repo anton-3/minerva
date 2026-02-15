@@ -20,8 +20,8 @@ export default function ParentLayout({
   return (
     <div className="flex min-h-screen">
       {/* Sidebar */}
-      <aside className="w-56 border-r border-[#A78BFA]/10 bg-[#0E0C18] p-4 flex flex-col gap-1">
-        <Link href="/parent" className="font-display text-lg font-bold mb-6 px-3 text-[#A78BFA]">
+      <aside className="w-56 border-r border-border-light bg-neutral-surface p-4 flex flex-col gap-1">
+        <Link href="/parent" className="font-display text-lg font-bold mb-6 px-3 text-brand-primary">
           Minerva
         </Link>
         <nav className="flex flex-col gap-1">
@@ -29,13 +29,13 @@ export default function ParentLayout({
             <Link
               key={item.href}
               href={item.href}
-              className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-[#A78BFA]/10 hover:text-foreground transition-colors"
+              className="rounded-md px-3 py-2 text-sm font-medium text-text-secondary hover:bg-brand-primary/10 hover:text-brand-primary transition-colors"
             >
               {item.label}
             </Link>
           ))}
         </nav>
-        <div className="mt-auto px-3 py-2 text-xs text-muted-foreground">
+        <div className="mt-auto px-3 py-2 text-xs text-text-secondary/60">
           Demo Mode
         </div>
       </aside>

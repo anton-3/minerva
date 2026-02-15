@@ -71,6 +71,7 @@ export interface TutorBrainResponse {
   manimVideoUrl?: string;
   contentMode?: ContentMode;
   sandboxHtml?: string;
+  sandboxTemplate?: "centered" | "split" | "steps" | "comparison" | "chart" | "interactive";
 }
 
 export interface ConversationMessage {

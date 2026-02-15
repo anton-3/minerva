@@ -54,9 +54,9 @@ const statusLabels: Record<AvatarStatus, string> = {
 
 const statusColors: Record<AvatarStatus, string> = {
   connecting: "bg-yellow-500",
-  connected: "bg-[#A78BFA]",
-  speaking: "bg-[#A78BFA] animate-pulse",
-  listening: "bg-green-500",
+  connected: "bg-[#92A0E1]",
+  speaking: "bg-[#C2A0E1] animate-pulse",
+  listening: "bg-[#92A0E1]",
   disconnected: "bg-gray-500",
 };
 
@@ -65,7 +65,7 @@ const statusColors: Record<AvatarStatus, string> = {
 function StripIcon({ active }: { active: boolean }) {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-      <rect x="2" y="7" width="12" height="2" rx="1" fill={active ? "#A78BFA" : "currentColor"} />
+      <rect x="2" y="7" width="12" height="2" rx="1" fill={active ? "#92A0E1" : "currentColor"} />
     </svg>
   );
 }
@@ -73,7 +73,7 @@ function StripIcon({ active }: { active: boolean }) {
 function SpeakerIcon({ active }: { active: boolean }) {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-      <rect x="3" y="3" width="10" height="10" rx="2" fill="none" stroke={active ? "#A78BFA" : "currentColor"} strokeWidth="1.5" />
+      <rect x="3" y="3" width="10" height="10" rx="2" fill="none" stroke={active ? "#92A0E1" : "currentColor"} strokeWidth="1.5" />
     </svg>
   );
 }
@@ -90,7 +90,7 @@ function GalleryIcon({ active }: { active: boolean }) {
             width="2.5"
             height="2.5"
             rx="0.5"
-            fill={active ? "#A78BFA" : "currentColor"}
+            fill={active ? "#92A0E1" : "currentColor"}
           />
         ))
       )}
@@ -433,7 +433,7 @@ export function FloatingVideoOverlay({
         >
           <div className={`w-full h-full rounded-xl overflow-hidden shadow-2xl bg-zinc-900 group relative transition-all duration-700 ${
             showPulse
-              ? "border-2 border-[#A78BFA]/60 thinking-pulse"
+              ? "border-2 border-brand-primary/50 thinking-pulse"
               : "border border-white/10"
           }`}>
 
@@ -607,8 +607,8 @@ export function FloatingVideoOverlay({
       <style>{`
         @keyframes flash { 0% { opacity: 0.8; } 100% { opacity: 0; } }
         @keyframes thinking-glow {
-          0%, 100% { box-shadow: 0 0 8px 2px rgba(167, 139, 250, 0.3); }
-          50% { box-shadow: 0 0 20px 6px rgba(167, 139, 250, 0.5); }
+          0%, 100% { box-shadow: 0 0 8px 2px rgba(146, 160, 225, 0.2); }
+          50% { box-shadow: 0 0 20px 6px rgba(146, 160, 225, 0.4); }
         }
         .thinking-pulse { animation: thinking-glow 2s ease-in-out infinite; }
       `}</style>

@@ -86,8 +86,8 @@ export function BottomControlBar({
       <div className="fixed bottom-4 left-4 z-40">
         {isActive && (
           <div
-            className={`flex items-center gap-2 px-3 py-2 rounded-full bg-black/60 backdrop-blur-md text-sm font-mono ${
-              isNearLimit ? "text-red-400" : "text-[#A78BFA]/80"
+            className={`flex items-center gap-2 px-3 py-2 rounded-full bg-white/80 backdrop-blur-md border border-gray-200 shadow-sm text-sm font-mono ${
+              isNearLimit ? "text-red-500" : "text-gray-600"
             }`}
             style={{ WebkitBackdropFilter: "blur(12px)" }}
           >
@@ -98,14 +98,14 @@ export function BottomControlBar({
             />
             {formatTime(elapsed)}
             {isNearLimit && (
-              <span className="text-xs text-red-400/80">
+              <span className="text-xs text-red-500/80">
                 (limit approaching)
               </span>
             )}
           </div>
         )}
         {!isActive && (
-          <span className="px-3 py-2 rounded-full bg-black/60 backdrop-blur-md text-white/40 text-sm">
+          <span className="px-3 py-2 rounded-full bg-white/80 backdrop-blur-md border border-gray-200 shadow-sm text-gray-400 text-sm">
             Minerva
           </span>
         )}
@@ -117,7 +117,7 @@ export function BottomControlBar({
         {isIdle ? (
           <button
             onClick={onStart}
-            className="flex items-center gap-2 px-6 py-3 rounded-full bg-[#A78BFA] text-[#0C0A14] font-medium hover:bg-[#B89CFF] shadow-lg shadow-[#A78BFA]/30 transition-colors"
+            className="flex items-center gap-2 px-6 py-3 rounded-full bg-brand-primary text-white font-medium hover:bg-brand-primary/90 shadow-soft transition-colors"
           >
             <Phone size={18} />
             Join Session
@@ -125,7 +125,7 @@ export function BottomControlBar({
         ) : isConnecting ? (
           <button
             disabled
-            className="flex items-center gap-2 px-6 py-3 rounded-full bg-yellow-600/50 text-white/70 font-medium cursor-not-allowed backdrop-blur-md"
+            className="flex items-center gap-2 px-6 py-3 rounded-full bg-brand-primary/20 text-brand-primary/70 font-medium cursor-not-allowed backdrop-blur-md border border-border-light"
           >
             <Phone size={18} className="animate-pulse" />
             Connecting...
@@ -136,11 +136,12 @@ export function BottomControlBar({
             {onToggleCamera && (
               <button
                 onClick={onToggleCamera}
-                className={`p-3 rounded-full backdrop-blur-md transition-colors ${
+                className={`p-3 rounded-full backdrop-blur-md border transition-colors ${
                   cameraActive
-                    ? "bg-white/10 text-white hover:bg-white/15"
-                    : "bg-white/5 text-white/40 hover:bg-white/10"
+                    ? "bg-brand-primary/10 text-brand-primary border-brand-primary/20 hover:bg-brand-primary/15"
+                    : "bg-white/80 text-text-secondary/40 border-border-light hover:bg-white"
                 }`}
+                style={{ WebkitBackdropFilter: "blur(12px)" }}
                 title={cameraActive ? "Turn off camera" : "Turn on camera"}
               >
                 {cameraActive ? <Video size={18} /> : <VideoOff size={18} />}
@@ -151,7 +152,8 @@ export function BottomControlBar({
             {cameraActive && onScan && (
               <button
                 onClick={onScan}
-                className="p-3 rounded-full bg-white/10 backdrop-blur-md text-white hover:bg-white/15 transition-colors"
+                className="p-3 rounded-full bg-white/80 backdrop-blur-md border border-border-light text-text-secondary hover:bg-white transition-colors"
+                style={{ WebkitBackdropFilter: "blur(12px)" }}
                 title="Scan document"
               >
                 <ScanLine size={18} />
@@ -162,7 +164,8 @@ export function BottomControlBar({
             {currentMode === "math" && (
               <button
                 onClick={onClearCanvas}
-                className="p-3 rounded-full bg-white/10 backdrop-blur-md text-white hover:bg-white/15 transition-colors"
+                className="p-3 rounded-full bg-white/80 backdrop-blur-md border border-border-light text-text-secondary hover:bg-white transition-colors"
+                style={{ WebkitBackdropFilter: "blur(12px)" }}
                 title="Clear canvas"
               >
                 <Eraser size={18} />
@@ -172,7 +175,7 @@ export function BottomControlBar({
             {/* Leave button */}
             <button
               onClick={onEnd}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-red-600 text-white text-sm font-medium hover:bg-red-500 shadow-lg shadow-red-600/30 transition-colors ml-1"
+              className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-red-500 text-white text-sm font-medium hover:bg-red-600 shadow-sm transition-colors ml-1"
             >
               <PhoneOff size={16} />
               Leave
@@ -185,11 +188,12 @@ export function BottomControlBar({
       <div className="fixed bottom-4 right-4 z-40 flex items-center gap-3">
         <button
           onClick={onToggleChat}
-          className={`relative p-3 rounded-full backdrop-blur-md transition-colors ${
+          className={`relative p-3 rounded-full backdrop-blur-md border transition-colors ${
             chatOpen
-              ? "bg-[#A78BFA]/20 text-[#A78BFA]"
-              : "bg-black/60 text-white hover:bg-black/80"
+              ? "bg-brand-primary/10 text-brand-primary border-brand-primary/20"
+              : "bg-white/80 text-text-secondary border-border-light hover:bg-white"
           }`}
+          style={{ WebkitBackdropFilter: "blur(12px)" }}
           title="Toggle Chat"
         >
           <MessageSquare size={20} />

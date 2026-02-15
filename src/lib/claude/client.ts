@@ -105,6 +105,7 @@ const TutorResponseSchema = z.object({
   contentMode: z.enum(["math", "sandbox", "manim"]).optional(),
   sandboxHtml: z.string().optional(),
   sandboxTemplate: z.enum(["centered", "split", "steps", "comparison", "chart", "interactive"]).optional(),
+  internalNotes: z.string().optional(),
 });
 
 const SessionSummarySchema = z.object({
@@ -239,7 +240,7 @@ export function createTutorBrain(): TutorBrain {
         // Vision requests: skip output_config (structured outputs can be unreliable with images on Haiku)
         // Instead, append JSON instruction to system prompt and parse manually
         const systemPrompt = hasImage
-          ? TUTOR_SYSTEM_PROMPT + `\n\nRESPONSE FORMAT: You MUST respond with a valid JSON object. Example: {"speech": "your spoken response here", "contentMode": "sandbox", "sandboxHtml": "<html>...</html>"}\nOnly output the JSON object, nothing else.`
+          ? TUTOR_SYSTEM_PROMPT + `\n\nRESPONSE FORMAT: Respond with ONLY a JSON object — no markdown fences, no wrapping text.\nRequired field: "speech" (string).\nOptional: "contentMode" ("math"|"sandbox"|"manim"), "canvasCommands" (array), "sandboxHtml" (string), "progressUpdate" ({"topic":"string","score":0.0-1.0}).\nExample: {"speech": "I can see your work here — let's look at this together. What do you notice about this problem?"}`
           : TUTOR_SYSTEM_PROMPT;
 
         const createParams: Anthropic.MessageCreateParams = {

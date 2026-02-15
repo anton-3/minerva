@@ -118,8 +118,8 @@ export function ChatSheet({
               <div
                 className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
                   msg.role === "user"
-                    ? "bg-[#A78BFA] text-[#0C0A14] rounded-br-md"
-                    : "bg-violet-400/5 border border-violet-400/10 rounded-bl-md"
+                    ? "bg-brand-primary text-white rounded-br-md"
+                    : "bg-neutral-background border border-border-light rounded-bl-md text-text-primary"
                 }`}
               >
                 <p className="whitespace-pre-wrap break-words">{msg.content}</p>
@@ -128,11 +128,11 @@ export function ChatSheet({
           ))}
           {isProcessing && (
             <div className="flex justify-start">
-              <div className="bg-violet-400/5 border border-violet-400/10 rounded-2xl rounded-bl-md px-4 py-3">
+              <div className="bg-neutral-background border border-border-light rounded-2xl rounded-bl-md px-4 py-3">
                 <div className="flex gap-1">
-                  <span className="w-2 h-2 rounded-full bg-[#A78BFA]/60 animate-bounce" style={{ animationDelay: "0ms" }} />
-                  <span className="w-2 h-2 rounded-full bg-[#A78BFA]/60 animate-bounce" style={{ animationDelay: "150ms" }} />
-                  <span className="w-2 h-2 rounded-full bg-[#A78BFA]/60 animate-bounce" style={{ animationDelay: "300ms" }} />
+                  <span className="w-2 h-2 rounded-full bg-brand-primary/60 animate-bounce" style={{ animationDelay: "0ms" }} />
+                  <span className="w-2 h-2 rounded-full bg-brand-primary/60 animate-bounce" style={{ animationDelay: "150ms" }} />
+                  <span className="w-2 h-2 rounded-full bg-brand-primary/60 animate-bounce" style={{ animationDelay: "300ms" }} />
                 </div>
               </div>
             </div>
@@ -186,7 +186,7 @@ export function ChatSheet({
               onChange={(e) => setInput(e.target.value)}
               placeholder={pendingImage ? "Ask about this image..." : "Type a message..."}
               disabled={isProcessing}
-              className="flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#A78BFA] disabled:opacity-50"
+              className="flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary disabled:opacity-50"
             />
             <button
               type="submit"

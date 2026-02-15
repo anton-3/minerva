@@ -38,7 +38,15 @@ export async function POST(request: Request) {
       );
     }
 
-    const body = (await request.json()) as TutorBrainRequest;
+    const raw = await request.json();
+    const body: TutorBrainRequest = {
+      ...raw,
+      studentMessage: raw.studentMessage ?? "",
+      conversationHistory: raw.conversationHistory ?? [],
+      learningPlan: raw.learningPlan ?? null,
+      studentProfile: raw.studentProfile ?? { name: "Student", age: 12, grade: 7 },
+      canvasState: raw.canvasState ?? "",
+    };
 
     if (!body.studentMessage) {
       return NextResponse.json(
