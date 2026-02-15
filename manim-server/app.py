@@ -6,10 +6,11 @@ import shutil
 import subprocess
 import tempfile
 import time
+import uuid
 
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request, send_file
-from openai import OpenAI
+import anthropic
 
 load_dotenv()
 
@@ -17,13 +18,16 @@ load_dotenv()
 # Configuration
 # ---------------------------------------------------------------------------
 
-OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
-OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4.1-nano")
-OPENAI_BASE_URL = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
+ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
+ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")
+BASE_URL = os.environ.get("BASE_URL", "http://localhost:5000")
 FLASK_HOST = os.environ.get("FLASK_HOST", "0.0.0.0")
 FLASK_PORT = int(os.environ.get("FLASK_PORT", "5000"))
 
-client = OpenAI(api_key=OPENAI_API_KEY, base_url=OPENAI_BASE_URL)
+VIDEOS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "videos")
+os.makedirs(VIDEOS_DIR, exist_ok=True)
+
+client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
 # ---------------------------------------------------------------------------
 # System prompt
@@ -178,6 +182,20 @@ def health():
     return jsonify({"status": "ok"})
 
 
+@app.get("/videos/<filename>")
+def serve_video(filename):
+    """Serve a previously generated video from the videos/ folder."""
+    # Sanitise: only allow simple filenames (no path traversal)
+    if "/" in filename or "\\" in filename or ".." in filename:
+        return jsonify({"error": "Invalid filename"}), 400
+
+    video_path = os.path.join(VIDEOS_DIR, filename)
+    if not os.path.isfile(video_path):
+        return jsonify({"error": "Video not found"}), 404
+
+    return send_file(video_path, mimetype="video/mp4")
+
+
 @app.post("/generate")
 def generate():
     t_start = time.perf_counter()
@@ -192,20 +210,21 @@ def generate():
     log.info("Prompt: %s", prompt)
 
     # -- 1. Call the LLM ---------------------------------------------------
-    log.info("Calling OpenAI model=%s ...", OPENAI_MODEL)
+    log.info("Calling Anthropic model=%s ...", ANTHROPIC_MODEL)
     t_llm = time.perf_counter()
     try:
-        completion = client.chat.completions.create(
-            model=OPENAI_MODEL,
+        message = client.messages.create(
+            model=ANTHROPIC_MODEL,
+            max_tokens=4096,
+            system=SYSTEM_PROMPT,
             messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": USER_PROMPT_TEMPLATE.format(query=prompt)},
             ],
         )
-        raw_code = completion.choices[0].message.content
+        raw_code = message.content[0].text
     except Exception as exc:
-        log.error("OpenAI API error after %.2fs: %s", time.perf_counter() - t_llm, exc)
-        return jsonify({"error": f"OpenAI API error: {exc}"}), 502
+        log.error("Anthropic API error after %.2fs: %s", time.perf_counter() - t_llm, exc)
+        return jsonify({"error": f"Anthropic API error: {exc}"}), 502
 
     llm_elapsed = time.perf_counter() - t_llm
     log.info("LLM response received (%.2fs, %d chars)", llm_elapsed, len(raw_code))
@@ -273,25 +292,19 @@ def generate():
         video_size_mb = os.path.getsize(video_path) / (1024 * 1024)
         log.info("Video ready: %s (%.2f MB)", video_path, video_size_mb)
 
-        # -- 3. Return the video -------------------------------------------
-        response = send_file(
-            video_path,
-            mimetype="video/mp4",
-            as_attachment=True,
-            download_name=f"{scene_name}.mp4",
-        )
+        # -- 3. Copy to videos/ and return URL -----------------------------
+        filename = f"{uuid.uuid4().hex}.mp4"
+        dest_path = os.path.join(VIDEOS_DIR, filename)
+        shutil.copy2(video_path, dest_path)
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        log.info("Saved video to %s", dest_path)
 
+        video_url = f"{BASE_URL.rstrip('/')}/videos/{filename}"
         total_elapsed = time.perf_counter() - t_start
 
-        # Schedule cleanup after the response is sent
-        @response.call_on_close
-        def _cleanup():
-            shutil.rmtree(tmp_dir, ignore_errors=True)
-            log.info("Cleaned up %s", tmp_dir)
-
-        log.info("Sending video response — total request time: %.2fs (LLM %.2fs + render %.2fs)",
+        log.info("Responding with URL — total request time: %.2fs (LLM %.2fs + render %.2fs)",
                  total_elapsed, llm_elapsed, render_elapsed)
-        return response
+        return jsonify({"url": video_url})
 
     except subprocess.TimeoutExpired:
         log.error("Manim timed out after 120s")

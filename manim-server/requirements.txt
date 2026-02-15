@@ -1,4 +1,4 @@
 flask
-openai
+anthropic
 manim
 python-dotenv
