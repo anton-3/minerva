@@ -87,7 +87,7 @@ export function useSession() {
       console.error("[useSession] Failed to start session:", err);
       setStatus("error");
     }
-  }, [avatar, zoom, setStatus, setSessionId]);
+  }, [avatar, zoom, setStatus, setSessionId, brain]);
 
   const endSession = useCallback(async () => {
     try {
@@ -164,6 +164,7 @@ export function useSession() {
     attach: avatar.attach,
     avatarMute: avatar.mute,
     avatarUnmute: avatar.unmute,
+    avatarFlush: avatar.flush,
     startSession,
     endSession,
     handleTextMessage: brain.handleStudentMessage,
@@ -171,7 +172,7 @@ export function useSession() {
     toolManager: canvas.toolManager,
     clearCanvas: canvas.clear,
     setActiveTool: canvas.setActiveTool,
-// Content mode
+    // Content mode
     contentMode,
     sandboxContent,
     sandboxAccent,

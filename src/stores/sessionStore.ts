@@ -63,7 +63,7 @@ export const useSessionStore = create<SessionState & SessionActions>((set) => ({
       transcript: [...state.transcript, entry],
     })),
 
-setContentMode: (contentMode) => set({ contentMode }),
+  setContentMode: (contentMode) => set({ contentMode }),
   setSandboxContent: (sandboxContent, sandboxAccent) => set({ sandboxContent, sandboxAccent: sandboxAccent ?? null }),
   setVideoUrl: (videoUrl) => set({ videoUrl }),
   setMasteryScores: (masteryScores) => set({ masteryScores }),

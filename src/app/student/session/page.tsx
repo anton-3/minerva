@@ -24,6 +24,7 @@ export default function SessionPage() {
     attach,
     avatarMute,
     avatarUnmute,
+    avatarFlush,
     startSession,
     endSession,
     handleTextMessage,
@@ -31,7 +32,7 @@ export default function SessionPage() {
     toolManager,
     clearCanvas,
     setActiveTool,
-// Content mode
+    // Content mode
     contentMode,
     sandboxContent,
     sandboxAccent,
@@ -41,7 +42,7 @@ export default function SessionPage() {
     userCamera,
   } = useSession();
 
-const [chatOpen, setChatOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [micOpen, setMicOpen] = useState(false);
   const [avatarCollapsed, setAvatarCollapsed] = useState(false);
@@ -85,7 +86,8 @@ const [chatOpen, setChatOpen] = useState(false);
 
       e.preventDefault();
       setMicOpen(false);
-      avatarMute();
+      avatarFlush();  // send accumulated text immediately
+      avatarMute();   // then mute mic
     };
 
     window.addEventListener("keydown", handleKeyDown);
@@ -94,7 +96,7 @@ const [chatOpen, setChatOpen] = useState(false);
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [avatarMute, avatarUnmute]);
+  }, [avatarMute, avatarUnmute, avatarFlush]);
 
   const handleNewMessage = useCallback(() => {
     if (!chatOpen) {
@@ -102,7 +104,7 @@ const [chatOpen, setChatOpen] = useState(false);
     }
   }, [chatOpen]);
 
-const handleToggleMode = useCallback(() => {
+  const handleToggleMode = useCallback(() => {
     const modes: ContentMode[] = ["welcome", "math", "sandbox", "video"];
     const currentIndex = modes.indexOf(contentMode);
     const nextIndex = (currentIndex + 1) % modes.length;
@@ -124,7 +126,7 @@ const handleToggleMode = useCallback(() => {
     <div className="relative h-screen w-screen overflow-hidden bg-black">
       {/* Main content area — full screen */}
       <main className="absolute inset-0">
-<ContentModeView
+        <ContentModeView
           mode={contentMode}
           toolManager={toolManager}
           sandboxContent={sandboxContent}
@@ -135,7 +137,7 @@ const handleToggleMode = useCallback(() => {
         />
       </main>
 
-{/* Floating Zoom-style video overlay */}
+      {/* Floating Zoom-style video overlay */}
       <FloatingVideoOverlay
         avatarStatus={avatarStatus}
         onAttachAvatar={attach}
@@ -146,7 +148,7 @@ const handleToggleMode = useCallback(() => {
         onCollapsedChange={setAvatarCollapsed}
       />
 
-{/* Mode indicator badge */}
+      {/* Mode indicator badge */}
       <div className="absolute top-3 left-3 z-10">
         <span className="inline-flex items-center gap-1.5 rounded-full bg-black/60 backdrop-blur-sm px-3 py-1 text-xs font-medium text-white/90" style={{ WebkitBackdropFilter: "blur(4px)" }}>
           <span className={`w-1.5 h-1.5 rounded-full ${

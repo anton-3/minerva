@@ -184,6 +184,7 @@ REUSING EXISTING VIDEOS (allowed anytime):
 GENERATING NEW VIDEOS (ONLY when explicitly requested by student):
 - Only generate if student explicitly asks for an animated video or animation
 - Examples: "Can you make an animation showing...", "Show me a video of...", "Animate this for me"
+- IMPORTANT!!!! BEFORE generating: check if any existing video in the context fits the concept — if so, reuse it instead
 - Do NOT generate videos proactively, even for transformations or calculus
 - Set contentMode to "video" and manimPrompt with 1-2 sentence description
 - ALWAYS end manimPrompt with: "Make a video no longer than 30 seconds."

@@ -6,6 +6,11 @@
 // - output_config.format with zodOutputFormat for typed JSON
 // - Response in content[0].text, parsed with JSON.parse
 // - Regex fallback for malformed responses
+//
+// Latency optimizations:
+// - Module-level Anthropic client singleton (reuses HTTP connections, avoids TLS handshake per request)
+// - Prompt caching via cache_control: { type: "ephemeral" } on all system prompts
+//   (after first request, subsequent requests skip re-processing the system prompt — saves ~200-500ms)
 
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
@@ -24,11 +29,20 @@ import {
 
 export interface TutorBrain {
   respond(request: TutorBrainRequest): Promise<TutorBrainResponse>;
+  respondStream(
+    request: TutorBrainRequest,
+    signal?: AbortSignal
+  ): AsyncGenerator<TutorStreamEvent>;
   generateSummary(
     transcript: { speaker: string; text: string }[]
   ): Promise<SessionSummary>;
   generateLearningPlan(goals: string[], subject: string): Promise<LearningPlan>;
 }
+
+// SSE stream events emitted by respondStream()
+export type TutorStreamEvent =
+  | { type: "speech"; speech: string }
+  | { type: "result"; data: Omit<TutorBrainResponse, "speech"> };
 
 // Zod schemas for structured output
 // Multi-tool canvas commands: Desmos, Desmos 3D, GeoGebra
@@ -101,7 +115,7 @@ const TutorResponseSchema = z.object({
       velocity: z.enum(["improving", "plateau", "struggling"]).optional(),
     })
     .optional(),
-contentMode: z.enum(["welcome", "math", "sandbox", "video"]).optional(),
+  contentMode: z.enum(["welcome", "math", "sandbox", "video"]).optional(),
   sandboxContent: z.string().optional(),
   sandboxAccent: z.string().optional(),
   manimVideoFile: z.string().optional(),
@@ -170,84 +184,97 @@ const MODEL_FAST = "claude-haiku-4-5-20251001";
 const MODEL = "claude-sonnet-4-5-20250929";
 const MAX_HISTORY = 20;
 
-export function createTutorBrain(): TutorBrain {
-  const client = new Anthropic();
+// Module-level singleton — reuses underlying HTTP connections across requests
+// (avoids TLS handshake per request when createTutorBrain() is called repeatedly)
+const client = new Anthropic();
 
+// Helper: build Claude request from TutorBrainRequest (shared by respond + respondStream)
+function buildClaudeRequest(request: TutorBrainRequest): {
+  messages: Anthropic.MessageParam[];
+  systemPrompt: string;
+  hasImage: boolean;
+} {
+  const recentHistory = request.conversationHistory.slice(-MAX_HISTORY);
+
+  const contextParts: string[] = [];
+  if (request.studentProfile) {
+    const p = request.studentProfile;
+    contextParts.push(`Student: ${p.name}, age ${p.age}, grade ${p.grade}`);
+  }
+  if (request.learningPlan) {
+    const lp = request.learningPlan;
+    contextParts.push(
+      `Learning Plan: ${lp.subject} — Current topic: "${lp.currentTopic}". Goals: ${lp.goals.join(", ")}`
+    );
+  }
+  if (request.canvasState) {
+    contextParts.push(`Math Canvas:\n${request.canvasState}`);
+  }
+  if (request.masteryScores && request.masteryScores.length > 0) {
+    const masteryText = request.masteryScores
+      .map((m) => `${m.subject}/${m.topic}: ${Math.round(m.score * 100)}%`)
+      .join(", ");
+    contextParts.push(`Mastery: ${masteryText}`);
+  }
+
+  const contextBlock =
+    contextParts.length > 0
+      ? `\n\n--- Context ---\n${contextParts.join("\n")}\n--- End Context ---`
+      : "";
+
+  const userText = `${request.studentMessage}${contextBlock}`;
+  const hasImage = !!request.imageData;
+
+  const userContent: Anthropic.ContentBlockParam[] = request.imageData
+    ? [
+        {
+          type: "image" as const,
+          source: {
+            type: "base64" as const,
+            media_type: request.imageData.mediaType,
+            data: request.imageData.base64,
+          },
+        },
+        { type: "text" as const, text: userText },
+      ]
+    : [{ type: "text" as const, text: userText }];
+
+  const messages: Anthropic.MessageParam[] = [
+    ...recentHistory.map((m) => ({
+      role: m.role as "user" | "assistant",
+      content: m.content,
+    })),
+    {
+      role: "user" as const,
+      content: userContent,
+    },
+  ];
+
+  const systemPrompt = hasImage
+    ? TUTOR_SYSTEM_PROMPT +
+      `\n\nRESPONSE FORMAT: You MUST respond with a valid JSON object. Example: {"speech": "your spoken response here", "contentMode": "sandbox", "sandboxContent": "<div>...</div>", "sandboxAccent": "physics"}\nOnly output the JSON object, nothing else.`
+    : TUTOR_SYSTEM_PROMPT;
+
+  return { messages, systemPrompt, hasImage };
+}
+
+export function createTutorBrain(): TutorBrain {
   return {
     async respond(request: TutorBrainRequest): Promise<TutorBrainResponse> {
-      // Trim conversation history to last MAX_HISTORY messages
-      const recentHistory = request.conversationHistory.slice(-MAX_HISTORY);
-
-      // Build context for Claude
-      const contextParts: string[] = [];
-      if (request.studentProfile) {
-        const p = request.studentProfile;
-        contextParts.push(
-          `Student: ${p.name}, age ${p.age}, grade ${p.grade}`
-        );
-      }
-      if (request.learningPlan) {
-        const lp = request.learningPlan;
-        contextParts.push(
-          `Learning Plan: ${lp.subject} — Current topic: "${lp.currentTopic}". Goals: ${lp.goals.join(", ")}`
-        );
-      }
-      if (request.canvasState) {
-        contextParts.push(`Math Canvas:\n${request.canvasState}`);
-      }
-      if (request.masteryScores && request.masteryScores.length > 0) {
-        const masteryText = request.masteryScores
-          .map((m) => `${m.subject}/${m.topic}: ${Math.round(m.score * 100)}%`)
-          .join(", ");
-        contextParts.push(`Mastery: ${masteryText}`);
-      }
-
-      const contextBlock =
-        contextParts.length > 0
-          ? `\n\n--- Context ---\n${contextParts.join("\n")}\n--- End Context ---`
-          : "";
-
-      // Build user content — text or multimodal (text + image)
-      const userText = `${request.studentMessage}${contextBlock}`;
-      const userContent: Anthropic.ContentBlockParam[] = request.imageData
-        ? [
-            {
-              type: "image" as const,
-              source: {
-                type: "base64" as const,
-                media_type: request.imageData.mediaType,
-                data: request.imageData.base64,
-              },
-            },
-            { type: "text" as const, text: userText },
-          ]
-        : [{ type: "text" as const, text: userText }];
-
-      const messages: Anthropic.MessageParam[] = [
-        ...recentHistory.map((m) => ({
-          role: m.role as "user" | "assistant",
-          content: m.content,
-        })),
-        {
-          role: "user" as const,
-          content: userContent,
-        },
-      ];
+      const { messages, systemPrompt, hasImage } = buildClaudeRequest(request);
 
       try {
-        const hasImage = !!request.imageData;
-
-        // Vision requests: skip output_config (structured outputs can be unreliable with images on Haiku)
-        // Instead, append JSON instruction to system prompt and parse manually
-        const systemPrompt = hasImage
-          ? TUTOR_SYSTEM_PROMPT + `\n\nRESPONSE FORMAT: You MUST respond with a valid JSON object. Example: {"speech": "your spoken response here", "contentMode": "sandbox", "sandboxContent": "<div>...</div>", "sandboxAccent": "physics"}\nOnly output the JSON object, nothing else.`
-          : TUTOR_SYSTEM_PROMPT;
-
         const createParams: Anthropic.MessageCreateParams = {
           model: MODEL_FAST,
           max_tokens: 4096,
           temperature: 0.4,
-          system: systemPrompt,
+          system: [
+            {
+              type: "text" as const,
+              text: systemPrompt,
+              cache_control: { type: "ephemeral" as const },
+            },
+          ],
           messages,
           ...(hasImage
             ? {}
@@ -294,6 +321,125 @@ export function createTutorBrain(): TutorBrain {
       }
     },
 
+    async *respondStream(
+      request: TutorBrainRequest,
+      signal?: AbortSignal
+    ): AsyncGenerator<TutorStreamEvent> {
+      const streamT0 = Date.now();
+      console.log(`[Latency:claude] RESPOND_STREAM_START +0ms`);
+
+      const { messages, systemPrompt, hasImage } = buildClaudeRequest(request);
+      const SPEECH_REGEX = /"speech"\s*:\s*"((?:[^"\\]|\\.)*)"\s*[,}]/;
+
+      console.log(
+        `[Latency:claude] REQUEST_BUILT +${Date.now() - streamT0}ms | model=${MODEL_FAST} history=${messages.length} msgs`
+      );
+
+      try {
+        const stream = client.messages.stream(
+          {
+            model: MODEL_FAST,
+            max_tokens: 4096,
+            system: [
+              {
+                type: "text" as const,
+                text: systemPrompt,
+                cache_control: { type: "ephemeral" as const },
+              },
+            ],
+            messages,
+            ...(hasImage
+              ? {}
+              : {
+                  output_config: {
+                    format: zodOutputFormat(TutorResponseSchema),
+                  },
+                  thinking: { type: "disabled" as const },
+                }),
+          },
+          signal ? { signal } : undefined
+        );
+
+        console.log(
+          `[Latency:claude] STREAM_CREATED +${Date.now() - streamT0}ms | waiting for first token...`
+        );
+
+        let buffer = "";
+        let speechEmitted = false;
+        let firstTokenLogged = false;
+        let tokenCount = 0;
+
+        for await (const event of stream) {
+          if (
+            event.type === "content_block_delta" &&
+            event.delta.type === "text_delta"
+          ) {
+            tokenCount++;
+            if (!firstTokenLogged) {
+              firstTokenLogged = true;
+              console.log(
+                `[Latency:claude] FIRST_TOKEN +${Date.now() - streamT0}ms | TTFT (time to first token)`
+              );
+            }
+
+            buffer += event.delta.text;
+
+            if (!speechEmitted) {
+              const match = buffer.match(SPEECH_REGEX);
+              if (match) {
+                speechEmitted = true;
+                console.log(
+                  `[Latency:claude] SPEECH_EXTRACTED +${Date.now() - streamT0}ms | tokens so far: ${tokenCount}`
+                );
+                // Use JSON.parse for proper unescape of JSON string values
+                let speech: string;
+                try {
+                  speech = JSON.parse(`"${match[1]}"`);
+                } catch {
+                  speech = match[1]
+                    .replace(/\\"/g, '"')
+                    .replace(/\\n/g, "\n")
+                    .replace(/\\\\/g, "\\");
+                }
+                yield { type: "speech", speech };
+              }
+            }
+          }
+        }
+
+        console.log(
+          `[Latency:claude] STREAM_COMPLETE +${Date.now() - streamT0}ms | total tokens: ${tokenCount}`
+        );
+
+        // Stream finished — parse full response for remaining fields
+        const fullResponse = tryParseJson(buffer);
+        if (fullResponse) {
+          if (!speechEmitted) {
+            yield { type: "speech", speech: fullResponse.speech };
+          }
+          const { speech: _, ...rest } = fullResponse;
+          console.log(
+            `[Latency:claude] RESULT_YIELDED +${Date.now() - streamT0}ms | keys: ${Object.keys(rest).join(",") || "none"}`
+          );
+          yield { type: "result", data: rest };
+        } else if (!speechEmitted) {
+          yield {
+            type: "speech",
+            speech:
+              buffer.slice(0, 500) ||
+              "I'm having trouble right now. Can you try again?",
+          };
+        }
+      } catch (err) {
+        if (signal?.aborted) return;
+        console.error("[tutor] Stream error:", err);
+        yield {
+          type: "speech",
+          speech:
+            "I'm having a little trouble right now. Can you repeat what you said?",
+        };
+      }
+    },
 
     async generateSummary(
       transcript: { speaker: string; text: string }[]
@@ -305,7 +451,13 @@ export function createTutorBrain(): TutorBrain {
       const response = await client.messages.create({
         model: MODEL,
         max_tokens: 1024,
-        system: SUMMARY_SYSTEM_PROMPT,
+        system: [
+          {
+            type: "text" as const,
+            text: SUMMARY_SYSTEM_PROMPT,
+            cache_control: { type: "ephemeral" as const },
+          },
+        ],
         messages: [
           {
             role: "user",
@@ -329,7 +481,13 @@ export function createTutorBrain(): TutorBrain {
       const response = await client.messages.create({
         model: MODEL,
         max_tokens: 1024,
-        system: LEARNING_PLAN_SYSTEM_PROMPT,
+        system: [
+          {
+            type: "text" as const,
+            text: LEARNING_PLAN_SYSTEM_PROMPT,
+            cache_control: { type: "ephemeral" as const },
+          },
+        ],
         messages: [
           {
             role: "user",
