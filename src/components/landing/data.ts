@@ -21,7 +21,7 @@ export const socraticFeatures = [
     icon: MessageCircleQuestion,
     title: "Masterful Inquiry",
     description:
-      "Powered by Claude 4.5, our AI uses the Socratic method to break down complex problems into manageable questions, building genuine understanding.",
+      "Powered by the latest AI models, our AI uses the Socratic method to break down complex problems into manageable questions, building genuine understanding.",
   },
   {
     icon: AudioLines,
