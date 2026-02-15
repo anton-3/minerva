@@ -23,7 +23,8 @@ export function useSession() {
   const status = useSessionStore((s) => s.status);
   const conversationHistory = useSessionStore((s) => s.conversationHistory);
   const contentMode = useSessionStore((s) => s.contentMode);
-  const sandboxHtml = useSessionStore((s) => s.sandboxHtml);
+  const sandboxContent = useSessionStore((s) => s.sandboxContent);
+  const sandboxAccent = useSessionStore((s) => s.sandboxAccent);
   const videoUrl = useSessionStore((s) => s.videoUrl);
   const setStatus = useSessionStore((s) => s.setStatus);
   const setAvatarStatus = useSessionStore((s) => s.setAvatarStatus);
@@ -172,7 +173,8 @@ export function useSession() {
     setActiveTool: canvas.setActiveTool,
 // Content mode
     contentMode,
-    sandboxHtml,
+    sandboxContent,
+    sandboxAccent,
     videoUrl,
     setContentMode,
     // User camera

@@ -13,6 +13,9 @@ import { createKnowledgeLookup } from "@/lib/perplexity/client";
 import { createManimClient } from "@/lib/manim/client";
 import type { TutorBrainRequest, TutorBrainResponse } from "@/types/session";
 
+// Allow long-running requests for Manim video generation (up to 5 minutes)
+export const maxDuration = 300;
+
 // Simple heuristic to detect factual questions that benefit from Perplexity
 const FACTUAL_PATTERNS = [
   /what (?:is|are|was|were)\b/i,
@@ -49,12 +52,19 @@ async function getManimVideosContext(): Promise<string> {
   }
 }
 
-// If Claude requested a Manim video, find existing or generate new
+// If Claude requested a Manim video, resolve the URL
 async function handleManimGeneration(
   response: TutorBrainResponse
 ): Promise<TutorBrainResponse> {
   if (!process.env.NEXT_PUBLIC_MANIM_URL) {
     return response;
+  }
+  
+  // Auto-correct: if Claude provided video content but wrong mode, fix it
+  const hasVideoContent = !!(response.manimVideoFile || response.manimPrompt);
+  if (hasVideoContent && response.contentMode !== "video") {
+    console.log("[api/tutor/respond] Auto-correcting contentMode to 'video' (Claude provided video content)");
+    response = { ...response, contentMode: "video" };
   }
   
   // Only handle if video mode requested
@@ -65,32 +75,26 @@ async function handleManimGeneration(
   const manim = createManimClient();
   
   try {
-    const existingVideos = await manim.getExistingVideos();
+    // Case 1: Claude specified an existing video file to reuse
+    if (response.manimVideoFile) {
+      const videoUrl = manim.getVideoUrl(response.manimVideoFile);
+      console.log("[api/tutor/respond] Reusing existing video:", videoUrl);
+      return { ...response, videoUrl };
+    }
     
-    // If there's a manimPrompt, check if it matches an existing video first
+    // Case 2: Claude wants to generate a new video
     if (response.manimPrompt) {
-      const promptLower = response.manimPrompt.toLowerCase().trim();
-      const matchingVideo = existingVideos.find(
-        (v) => v.prompt.toLowerCase().trim() === promptLower
-      );
-      
-      if (matchingVideo) {
-        const videoUrl = manim.getVideoUrl(matchingVideo.filename);
-        console.log("[api/tutor/respond] Reusing existing video:", videoUrl);
-        return { ...response, videoUrl };
-      }
-      
-      // No match found, generate new video
-      console.log("[api/tutor/respond] No matching video found, generating:", response.manimPrompt);
+      console.log("[api/tutor/respond] Generating new video:", response.manimPrompt);
       const videoUrl = await manim.generateVideo(response.manimPrompt);
       console.log("[api/tutor/respond] Manim video generated:", videoUrl);
       return { ...response, videoUrl };
     }
     
-    // No manimPrompt, use first existing video
+    // Case 3: No video specified, try to use first available
+    const existingVideos = await manim.getExistingVideos();
     if (existingVideos.length > 0) {
       const videoUrl = manim.getVideoUrl(existingVideos[0].filename);
-      console.log("[api/tutor/respond] Using first existing video:", videoUrl);
+      console.log("[api/tutor/respond] Fallback to first existing video:", videoUrl);
       return { ...response, videoUrl };
     }
     
@@ -172,6 +176,7 @@ export async function POST(request: Request) {
     // Debug logging
     console.log("[api/tutor/respond] Claude response:", {
       contentMode: response.contentMode,
+      manimVideoFile: response.manimVideoFile,
       manimPrompt: response.manimPrompt,
       hasVideoUrl: !!response.videoUrl,
     });

@@ -24,7 +24,7 @@ interface UseTutorBrainOptions {
   getSnapshot: () => string;
 }
 
-const API_TIMEOUT_MS = 15000; // 15s timeout — sandbox HTML responses can be larger
+const API_TIMEOUT_MS = 5 * 60 * 1000; // 5 minute timeout — Manim video generation can take 60-120+ seconds
 
 export function useTutorBrain(options: UseTutorBrainOptions) {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -107,6 +107,8 @@ export function useTutorBrain(options: UseTutorBrainOptions) {
       // Debug: log what we received from the API
       console.log("[useTutorBrain] Response received:", {
         contentMode: response.contentMode,
+        hasSandboxContent: !!response.sandboxContent,
+        sandboxAccent: response.sandboxAccent,
         hasVideoUrl: !!response.videoUrl,
         videoUrl: response.videoUrl,
         manimPrompt: response.manimPrompt,
@@ -140,20 +142,20 @@ export function useTutorBrain(options: UseTutorBrainOptions) {
       }
 
 // Store sandbox/manim content FIRST (before switching modes)
-      if (response.sandboxHtml) {
-        useSessionStore.getState().setSandboxHtml(response.sandboxHtml);
+      if (response.sandboxContent) {
+        useSessionStore.getState().setSandboxContent(response.sandboxContent, response.sandboxAccent);
       }
       if (response.videoUrl) {
         useSessionStore.getState().setVideoUrl(response.videoUrl);
       }
 
       // Process content mode switch from Claude
-      // RULE: Never switch to sandbox unless sandboxHtml is present.
+      // RULE: Never switch to sandbox unless sandboxContent is present.
       // Never switch to video unless videoUrl is present.
       // Never switch to math unless canvasCommands are present.
       const currentMode = useSessionStore.getState().contentMode;
       const hasCanvas = response.canvasCommands && response.canvasCommands.length > 0;
-      const hasSandbox = !!response.sandboxHtml;
+      const hasSandbox = !!response.sandboxContent;
       const hasVideo = !!response.videoUrl;
 
       if (response.contentMode) {

@@ -33,7 +33,8 @@ export default function SessionPage() {
     setActiveTool,
 // Content mode
     contentMode,
-    sandboxHtml,
+    sandboxContent,
+    sandboxAccent,
     videoUrl,
     setContentMode,
     // User camera
@@ -126,7 +127,8 @@ const handleToggleMode = useCallback(() => {
 <ContentModeView
           mode={contentMode}
           toolManager={toolManager}
-          sandboxHtml={sandboxHtml}
+          sandboxContent={sandboxContent}
+          sandboxAccent={sandboxAccent}
           videoUrl={videoUrl}
           onToolChange={setActiveTool}
           onVideoEnded={handleVideoEnded}

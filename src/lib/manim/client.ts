@@ -43,18 +43,29 @@ export function createManimClient(): ManimClient {
     },
 
     async generateVideo(prompt: string) {
-      const res = await fetch(`${MANIM_BASE_URL}/generate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt }),
-      });
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(`Manim generation failed: ${res.status} ${errText}`);
+      // Manim generation can take 60-120+ seconds for complex animations
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5 * 60 * 1000); // 5 minute timeout
+      
+      try {
+        const res = await fetch(`${MANIM_BASE_URL}/generate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt }),
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+        
+        if (!res.ok) {
+          const errText = await res.text();
+          throw new Error(`Manim generation failed: ${res.status} ${errText}`);
+        }
+        const data = await res.json();
+        return data.url; //`${MANIM_BASE_URL}${data.url}`;
+      } catch (err) {
+        clearTimeout(timeoutId);
+        throw err;
       }
-      const data = await res.json();
-      // data.url is "/videos/<filename>", prepend base URL
-      return `${MANIM_BASE_URL}${data.url}`;
     },
   };
 }

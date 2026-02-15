@@ -69,9 +69,11 @@ export interface TutorBrainResponse {
   progressUpdate?: { topic: string; score: number; velocity?: "improving" | "plateau" | "struggling" };
   internalNotes?: string;
   contentMode?: ContentMode;
-  sandboxHtml?: string;
-  manimPrompt?: string;   // Claude outputs this; server generates and returns videoUrl
-  videoUrl?: string;      // Full URL to the video (added by server)
+  sandboxContent?: string;  // HTML content body (frontend wraps with Twind template)
+  sandboxAccent?: string;   // Subject for accent color: physics, chemistry, biology, history, etc.
+  manimVideoFile?: string;  // Reuse existing video by filename (e.g., "abc123.mp4")
+  manimPrompt?: string;     // Generate NEW video with this prompt (takes 30-120s)
+  videoUrl?: string;        // Full URL to the video (added by server)
 }
 
 export interface ConversationMessage {
@@ -120,7 +122,8 @@ export interface SessionState {
   studentProfile: StudentProfile | null;
   learningPlan: LearningPlanContext | null;
   contentMode: ContentMode;
-  sandboxHtml: string | null;
+  sandboxContent: string | null;  // HTML content body for sandbox
+  sandboxAccent: string | null;   // Subject accent color
   videoUrl: string | null;
   masteryScores: MasteryScore[];
 }

@@ -23,7 +23,7 @@ interface SessionActions {
   addMessage: (message: ConversationMessage) => void;
   addTranscriptEntry: (entry: TranscriptEntry) => void;
   setContentMode: (mode: ContentMode) => void;
-  setSandboxHtml: (html: string | null) => void;
+  setSandboxContent: (content: string | null, accent?: string | null) => void;
   setVideoUrl: (url: string | null) => void;
   setMasteryScores: (scores: MasteryScore[]) => void;
   reset: () => void;
@@ -38,7 +38,8 @@ const initialState: SessionState = {
   studentProfile: null,
   learningPlan: null,
   contentMode: "welcome",
-  sandboxHtml: null,
+  sandboxContent: null,
+  sandboxAccent: null,
   videoUrl: null,
   masteryScores: [],
 };
@@ -63,7 +64,7 @@ export const useSessionStore = create<SessionState & SessionActions>((set) => ({
     })),
 
 setContentMode: (contentMode) => set({ contentMode }),
-  setSandboxHtml: (sandboxHtml) => set({ sandboxHtml }),
+  setSandboxContent: (sandboxContent, sandboxAccent) => set({ sandboxContent, sandboxAccent: sandboxAccent ?? null }),
   setVideoUrl: (videoUrl) => set({ videoUrl }),
   setMasteryScores: (masteryScores) => set({ masteryScores }),
 

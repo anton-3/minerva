@@ -1,34 +1,36 @@
-// SandboxPanel — renders Claude-generated HTML/CSS/JS in a sandboxed iframe
-// Used for non-math subjects: physics sims, chemistry diagrams, history timelines, etc.
-// Security: allow-scripts only (no allow-same-origin) — iframe cannot access parent.
+// SandboxPanel — renders Claude-generated content in a sandboxed iframe with Twind
+// Uses Twind CDN for Tailwind CSS support. Claude outputs only content body.
+// Security: allow-scripts + allow-same-origin for network access to Twind CDN.
 
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { buildSandboxHtml } from "@/lib/sandbox/template";
 
 interface SandboxPanelProps {
-  html: string | null;
+  content: string | null;
+  accent: string | null;
 }
 
-export function SandboxPanel({ html }: SandboxPanelProps) {
+export function SandboxPanel({ content, accent }: SandboxPanelProps) {
   const [visible, setVisible] = useState(false);
-  const prevHtml = useRef<string | null>(null);
+  const prevContent = useRef<string | null>(null);
 
-  // Fade in when new HTML arrives
+  // Fade in when new content arrives
   useEffect(() => {
-    if (html && html !== prevHtml.current) {
+    if (content && content !== prevContent.current) {
       setVisible(false);
       const timer = setTimeout(() => setVisible(true), 50);
-      prevHtml.current = html;
+      prevContent.current = content;
       return () => clearTimeout(timer);
     }
-    if (!html) {
+    if (!content) {
       setVisible(false);
-      prevHtml.current = null;
+      prevContent.current = null;
     }
-  }, [html]);
+  }, [content]);
 
-  if (!html) {
+  if (!content) {
     return (
       <div className="w-full h-full flex items-center justify-center bg-[#0a0a0a]">
         <div className="text-center">
@@ -56,15 +58,8 @@ export function SandboxPanel({ html }: SandboxPanelProps) {
     );
   }
 
-  // Viewport CSS ensures content fills properly — allows scrolling for multi-section pages
-  const viewportCss = `<style>
-html{margin:0;padding:0;width:100%;min-height:100vh;background:#0a0a0a;}
-body{margin:0;padding:5vh 5vw;width:100%;min-height:100vh;background:#0a0a0a;color:rgba(255,255,255,0.9);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;box-sizing:border-box;}
-svg{display:block;max-width:100%;max-height:100%;}
-canvas{display:block;max-width:100%;max-height:100%;}
-::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:3px}
-</style>`;
-  const enrichedHtml = viewportCss + html;
+  // Build full HTML from content body
+  const fullHtml = buildSandboxHtml(content, accent || 'general');
 
   return (
     <div
@@ -72,8 +67,8 @@ canvas{display:block;max-width:100%;max-height:100%;}
       style={{ opacity: visible ? 1 : 0 }}
     >
       <iframe
-        srcDoc={enrichedHtml}
-        sandbox="allow-scripts"
+        srcDoc={fullHtml}
+        sandbox="allow-scripts allow-same-origin"
         className="w-full h-full border-0"
         style={{ background: "#0a0a0a" }}
         title="Interactive lesson content"

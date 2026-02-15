@@ -13,7 +13,8 @@ import { VideoPanel } from "./VideoPanel";
 interface ContentModeProps {
   mode: ContentModeType;
   toolManager: ToolManager;
-  sandboxHtml: string | null;
+  sandboxContent: string | null;
+  sandboxAccent: string | null;
   videoUrl: string | null;
   onToolChange?: (tool: MathTool) => void;
   onVideoEnded?: () => void;
@@ -22,7 +23,8 @@ interface ContentModeProps {
 export function ContentModeView({
   mode,
   toolManager,
-  sandboxHtml,
+  sandboxContent,
+  sandboxAccent,
   videoUrl,
   onToolChange,
   onVideoEnded,
@@ -53,7 +55,7 @@ export function ContentModeView({
           mode === "sandbox" ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"
         }`}
       >
-        <SandboxPanel html={sandboxHtml} />
+        <SandboxPanel content={sandboxContent} accent={sandboxAccent} />
       </div>
 
       {/* Video mode — Manim animations and other videos */}
