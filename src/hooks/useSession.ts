@@ -160,6 +160,7 @@ export function useSession() {
     status,
     avatarStatus: avatar.status,
     isProcessing: brain.isProcessing,
+    isThinking: brain.isThinking,
     conversationHistory,
     attach: avatar.attach,
     avatarMute: avatar.mute,

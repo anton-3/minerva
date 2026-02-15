@@ -25,6 +25,7 @@ interface FloatingVideoOverlayProps {
   onAttachAvatar: (element: HTMLVideoElement) => void;
   userCamera: UseUserCamera;
   onScan?: (result: { base64: string; mediaType: "image/jpeg" }) => void;
+  isThinking?: boolean;
 }
 
 // ─── Dimensions per mode ───
@@ -255,6 +256,7 @@ export function FloatingVideoOverlay({
   onAttachAvatar,
   userCamera,
   onScan,
+  isThinking = false,
 }: FloatingVideoOverlayProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("speaker");
   const [minimized, setMinimized] = useState(false);
@@ -262,7 +264,21 @@ export function FloatingVideoOverlay({
   const attachedRef = useRef(false);
   const [detection, setDetection] = useState<DetectionResult | null>(null);
   const [scanFlash, setScanFlash] = useState(false);
+  const [showPulse, setShowPulse] = useState(false);
   const rndRef = useRef<Rnd>(null);
+
+  // Pulse when thinking OR when avatar is speaking (includes greeting)
+  const shouldPulse = isThinking || avatarStatus === "speaking";
+
+  // Delayed fade-out: stays active 800ms after conditions go false
+  useEffect(() => {
+    if (shouldPulse) {
+      setShowPulse(true);
+    } else {
+      const timer = setTimeout(() => setShowPulse(false), 800);
+      return () => clearTimeout(timer);
+    }
+  }, [shouldPulse]);
 
   const avatarActive = avatarStatus !== "disconnected";
 
@@ -412,7 +428,11 @@ export function FloatingVideoOverlay({
           dragHandleClassName="overlay-drag-handle"
           className="z-50"
         >
-          <div className="w-full h-full rounded-xl overflow-hidden shadow-2xl border border-white/10 bg-zinc-900 group relative">
+          <div className={`w-full h-full rounded-xl overflow-hidden shadow-2xl bg-zinc-900 group relative transition-all duration-700 ${
+            showPulse
+              ? "border-2 border-blue-400/60 thinking-pulse"
+              : "border border-white/10"
+          }`}>
 
             {/* Resize grip indicators (inside, bottom corners) */}
             {canResize && <ResizeGrips />}
@@ -581,7 +601,14 @@ export function FloatingVideoOverlay({
         </Rnd>
       )}
 
-      <style>{`@keyframes flash { 0% { opacity: 0.8; } 100% { opacity: 0; } }`}</style>
+      <style>{`
+        @keyframes flash { 0% { opacity: 0.8; } 100% { opacity: 0; } }
+        @keyframes thinking-glow {
+          0%, 100% { box-shadow: 0 0 8px 2px rgba(96, 165, 250, 0.3); }
+          50% { box-shadow: 0 0 20px 6px rgba(96, 165, 250, 0.5); }
+        }
+        .thinking-pulse { animation: thinking-glow 2s ease-in-out infinite; }
+      `}</style>
     </>
   );
 }

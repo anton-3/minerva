@@ -13,6 +13,7 @@ import { useState, useCallback, useRef } from "react";
 import { useSessionStore } from "@/stores/sessionStore";
 import type { TutorBrainRequest, TutorBrainResponse } from "@/types/session";
 
+
 interface UseTutorBrainOptions {
   speak: (text: string) => Promise<void>;
   interrupt: () => void;
@@ -27,6 +28,7 @@ const API_TIMEOUT_MS = 15000; // 15s timeout — sandbox HTML responses can be l
 
 export function useTutorBrain(options: UseTutorBrainOptions) {
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isThinking, setIsThinking] = useState(false); // Only true during handleStudentMessage, not greeting
   const optionsRef = useRef(options);
   optionsRef.current = options;
 
@@ -46,6 +48,7 @@ export function useTutorBrain(options: UseTutorBrainOptions) {
     optionsRef.current.interrupt();
 
     setIsProcessing(true);
+    setIsThinking(true);
 
     // Add student message to store
     store.addMessage({ role: "user", content: message });
@@ -218,8 +221,9 @@ export function useTutorBrain(options: UseTutorBrainOptions) {
         abortRef.current = null;
       }
       setIsProcessing(false);
+      setIsThinking(false);
     }
   }, []);
 
-  return { isProcessing, handleStudentMessage, sendGreeting };
+  return { isProcessing, isThinking, handleStudentMessage, sendGreeting };
 }

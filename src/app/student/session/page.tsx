@@ -19,6 +19,7 @@ export default function SessionPage() {
     status,
     avatarStatus,
     isProcessing,
+    isThinking,
     conversationHistory,
     attach,
     avatarMute,
@@ -124,6 +125,7 @@ export default function SessionPage() {
         onAttachAvatar={attach}
         userCamera={userCamera}
         onScan={handleScan}
+        isThinking={isThinking}
       />
 
       {/* Mode indicator badge */}

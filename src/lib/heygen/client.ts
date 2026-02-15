@@ -397,6 +397,8 @@ export function createAvatarClient(): AvatarClient {
         setTimeout(() => {
           if (speakResolve === resolve) {
             console.warn("[AvatarClient] speak() safety timeout after", estimatedMs, "ms");
+            avatarIsSpeaking = false;
+            notifyStatus("listening");
             speakResolve = null;
             resolve();
           }
