@@ -15,6 +15,7 @@ interface ContentModeProps {
   toolManager: ToolManager;
   manimUrl: string | null;
   sandboxHtml: string | null;
+  sandboxLoading?: boolean;
   onToolChange?: (tool: MathTool) => void;
   onManimEnded?: () => void;
 }
@@ -24,6 +25,7 @@ export function ContentModeView({
   toolManager,
   manimUrl,
   sandboxHtml,
+  sandboxLoading,
   onToolChange,
   onManimEnded,
 }: ContentModeProps) {
@@ -44,7 +46,7 @@ export function ContentModeView({
           mode === "sandbox" ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"
         }`}
       >
-        <SandboxPanel html={sandboxHtml} />
+        <SandboxPanel html={sandboxHtml} loading={sandboxLoading} />
       </div>
 
       {/* Manim mode — Video player */}

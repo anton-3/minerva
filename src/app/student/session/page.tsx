@@ -35,6 +35,7 @@ export default function SessionPage() {
     contentMode,
     manimVideoUrl,
     sandboxHtml,
+    sandboxLoading,
     setContentMode,
     // User camera
     userCamera,
@@ -114,6 +115,7 @@ export default function SessionPage() {
           toolManager={toolManager}
           manimUrl={manimVideoUrl}
           sandboxHtml={sandboxHtml}
+          sandboxLoading={sandboxLoading}
           onToolChange={setActiveTool}
           onManimEnded={() => setContentMode("math")}
         />

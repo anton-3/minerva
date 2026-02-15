@@ -24,7 +24,8 @@ interface UseTutorBrainOptions {
   getSnapshot: () => string;
 }
 
-const API_TIMEOUT_MS = 15000; // 15s timeout — sandbox HTML responses can be larger
+const API_TIMEOUT_MS = 10000; // 10s timeout — no more sandbox HTML in Call 1, so faster
+const VIZ_TIMEOUT_MS = 20000; // 20s timeout for async visualization generation
 
 export function useTutorBrain(options: UseTutorBrainOptions) {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -126,15 +127,12 @@ export function useTutorBrain(options: UseTutorBrainOptions) {
         }
       }
 
-      // Process content mode switch from Claude
-      if (response.contentMode) {
+      // Process content mode switch (math/manim — NOT sandbox, which is handled below)
+      if (response.contentMode && response.contentMode !== "sandbox") {
         useSessionStore.getState().setContentMode(response.contentMode);
       }
       if (response.manimVideoUrl) {
         useSessionStore.getState().setManimVideoUrl(response.manimVideoUrl);
-      }
-      if (response.sandboxHtml) {
-        useSessionStore.getState().setSandboxHtml(response.sandboxHtml);
       }
 
       // Execute canvas commands (errors here never break the session)
@@ -144,7 +142,38 @@ export function useTutorBrain(options: UseTutorBrainOptions) {
           .catch((err) => console.error("[useTutorBrain] Canvas error:", err));
       }
 
-      // Speak the response — now properly waits for AVATAR_SPEAK_ENDED (Bug 3 fix)
+      // Two-phase visualization: if Claude returned a visualizationPlan,
+      // fire an async request to generate the HTML while the avatar speaks.
+      if (response.visualizationPlan) {
+        useSessionStore.getState().setSandboxLoading(true);
+        useSessionStore.getState().setContentMode("sandbox");
+
+        const vizTimeoutId = setTimeout(() => controller.abort(), VIZ_TIMEOUT_MS);
+
+        fetch("/api/tutor/visualize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ plan: response.visualizationPlan }),
+          signal: controller.signal,
+        })
+          .then((r) => r.json())
+          .then(({ sandboxHtml }) => {
+            clearTimeout(vizTimeoutId);
+            if (sandboxHtml && !controller.signal.aborted) {
+              useSessionStore.getState().setSandboxHtml(sandboxHtml);
+            }
+          })
+          .catch((err) => {
+            clearTimeout(vizTimeoutId);
+            if (err instanceof DOMException && err.name === "AbortError") return;
+            console.error("[useTutorBrain] Visualization error:", err);
+          })
+          .finally(() => {
+            useSessionStore.getState().setSandboxLoading(false);
+          });
+      }
+
+      // Speak the response immediately — don't wait for visualization
       await optionsRef.current.speak(response.speech);
     } catch (err) {
       // Don't log abort errors — they're expected (Bug 2)

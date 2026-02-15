@@ -15,15 +15,18 @@ import type {
   TutorBrainResponse,
   SessionSummary,
   LearningPlan,
+  VisualizationPlan,
 } from "@/types/session";
 import {
   TUTOR_SYSTEM_PROMPT,
   SUMMARY_SYSTEM_PROMPT,
   LEARNING_PLAN_SYSTEM_PROMPT,
+  VISUALIZATION_SYSTEM_PROMPT,
 } from "./prompts";
 
 export interface TutorBrain {
   respond(request: TutorBrainRequest): Promise<TutorBrainResponse>;
+  generateVisualization(plan: VisualizationPlan): Promise<{ sandboxHtml: string }>;
   generateSummary(
     transcript: { speaker: string; text: string }[]
   ): Promise<SessionSummary>;
@@ -91,6 +94,12 @@ const CanvasCommandSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("geogebra.clear") }),
 ]);
 
+const VisualizationPlanSchema = z.object({
+  description: z.string(),
+  topic: z.string(),
+  studentAge: z.number(),
+});
+
 const TutorResponseSchema = z.object({
   speech: z.string(),
   canvasCommands: z.array(CanvasCommandSchema).optional(),
@@ -103,7 +112,11 @@ const TutorResponseSchema = z.object({
     .optional(),
   manimVideoUrl: z.string().optional(),
   contentMode: z.enum(["math", "sandbox", "manim"]).optional(),
-  sandboxHtml: z.string().optional(),
+  visualizationPlan: VisualizationPlanSchema.optional(),
+});
+
+const VisualizationResponseSchema = z.object({
+  sandboxHtml: z.string(),
 });
 
 const SessionSummarySchema = z.object({
@@ -238,7 +251,7 @@ export function createTutorBrain(): TutorBrain {
         // Vision requests: skip output_config (structured outputs can be unreliable with images on Haiku)
         // Instead, append JSON instruction to system prompt and parse manually
         const systemPrompt = hasImage
-          ? TUTOR_SYSTEM_PROMPT + `\n\nRESPONSE FORMAT: You MUST respond with a valid JSON object. Example: {"speech": "your spoken response here", "contentMode": "sandbox", "sandboxHtml": "<html>...</html>"}\nOnly output the JSON object, nothing else.`
+          ? TUTOR_SYSTEM_PROMPT + `\n\nRESPONSE FORMAT: You MUST respond with a valid JSON object. Example: {"speech": "your spoken response here", "contentMode": "sandbox", "visualizationPlan": {"description": "...", "topic": "...", "studentAge": 12}}\nOnly output the JSON object, nothing else.`
           : TUTOR_SYSTEM_PROMPT;
 
         const createParams: Anthropic.MessageCreateParams = {
@@ -291,6 +304,47 @@ export function createTutorBrain(): TutorBrain {
       }
     },
 
+
+    async generateVisualization(plan: VisualizationPlan): Promise<{ sandboxHtml: string }> {
+      try {
+        const response = await client.messages.create({
+          model: MODEL_FAST,
+          max_tokens: 4096,
+          system: VISUALIZATION_SYSTEM_PROMPT,
+          messages: [
+            {
+              role: "user",
+              content: `Topic: ${plan.topic}\nStudent age: ${plan.studentAge}\nVisualization: ${plan.description}`,
+            },
+          ],
+          output_config: {
+            format: zodOutputFormat(VisualizationResponseSchema),
+          },
+          thinking: {
+            type: "disabled" as const,
+          },
+        });
+
+        const text =
+          response.content[0].type === "text" ? response.content[0].text : "{}";
+        const parsed = VisualizationResponseSchema.safeParse(JSON.parse(text));
+        if (parsed.success) {
+          return parsed.data;
+        }
+
+        // Fallback: try to extract sandboxHtml from raw JSON
+        const raw = JSON.parse(text);
+        if (raw && typeof raw.sandboxHtml === "string") {
+          return { sandboxHtml: raw.sandboxHtml };
+        }
+
+        console.warn("[tutor] Visualization response invalid, returning empty");
+        return { sandboxHtml: "" };
+      } catch (err) {
+        console.error("[tutor] Error generating visualization:", err);
+        return { sandboxHtml: "" };
+      }
+    },
 
     async generateSummary(
       transcript: { speaker: string; text: string }[]

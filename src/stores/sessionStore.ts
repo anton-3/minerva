@@ -25,6 +25,7 @@ interface SessionActions {
   setContentMode: (mode: ContentMode) => void;
   setManimVideoUrl: (url: string | null) => void;
   setSandboxHtml: (html: string | null) => void;
+  setSandboxLoading: (loading: boolean) => void;
   setMasteryScores: (scores: MasteryScore[]) => void;
   reset: () => void;
 }
@@ -40,6 +41,7 @@ const initialState: SessionState = {
   contentMode: "math",
   manimVideoUrl: null,
   sandboxHtml: null,
+  sandboxLoading: false,
   masteryScores: [],
 };
 
@@ -65,6 +67,7 @@ export const useSessionStore = create<SessionState & SessionActions>((set) => ({
   setContentMode: (contentMode) => set({ contentMode }),
   setManimVideoUrl: (manimVideoUrl) => set({ manimVideoUrl }),
   setSandboxHtml: (sandboxHtml) => set({ sandboxHtml }),
+  setSandboxLoading: (sandboxLoading) => set({ sandboxLoading }),
   setMasteryScores: (masteryScores) => set({ masteryScores }),
 
   reset: () => set(initialState),

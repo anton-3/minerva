@@ -63,6 +63,12 @@ export interface TutorBrainRequest {
   masteryScores?: MasteryScore[];
 }
 
+export interface VisualizationPlan {
+  description: string;
+  topic: string;
+  studentAge: number;
+}
+
 export interface TutorBrainResponse {
   speech: string;
   canvasCommands?: CanvasCommand[];
@@ -71,6 +77,7 @@ export interface TutorBrainResponse {
   manimVideoUrl?: string;
   contentMode?: ContentMode;
   sandboxHtml?: string;
+  visualizationPlan?: VisualizationPlan;
 }
 
 export interface ConversationMessage {
@@ -121,6 +128,7 @@ export interface SessionState {
   contentMode: ContentMode;
   manimVideoUrl: string | null;
   sandboxHtml: string | null;
+  sandboxLoading: boolean;
   masteryScores: MasteryScore[];
 }
 

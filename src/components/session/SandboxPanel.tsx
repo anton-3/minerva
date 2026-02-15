@@ -1,15 +1,43 @@
 // SandboxPanel — renders Claude-generated HTML/CSS/JS in a sandboxed iframe
 // Used for non-math subjects: physics sims, chemistry diagrams, history timelines, etc.
 // Security: allow-scripts only (no allow-same-origin) — iframe cannot access parent.
+// Supports a loading state (shimmer) while visualization generates asynchronously.
 
 "use client";
 
 interface SandboxPanelProps {
   html: string | null;
+  loading?: boolean;
 }
 
-export function SandboxPanel({ html }: SandboxPanelProps) {
+export function SandboxPanel({ html, loading }: SandboxPanelProps) {
   if (!html) {
+    // Loading shimmer — visualization is generating asynchronously
+    if (loading) {
+      return (
+        <div className="w-full h-full flex items-center justify-center bg-white">
+          <div className="w-full max-w-md px-8">
+            <div className="space-y-4 animate-pulse">
+              {/* Title skeleton */}
+              <div className="h-6 bg-zinc-200 rounded-md w-3/4 mx-auto" />
+              {/* Main visual area skeleton */}
+              <div className="h-48 bg-zinc-100 rounded-lg border border-zinc-200" />
+              {/* Label skeletons */}
+              <div className="flex gap-3 justify-center">
+                <div className="h-4 bg-zinc-200 rounded w-20" />
+                <div className="h-4 bg-zinc-200 rounded w-16" />
+                <div className="h-4 bg-zinc-200 rounded w-24" />
+              </div>
+            </div>
+            <p className="text-zinc-400 text-sm text-center mt-6">
+              Generating visualization...
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    // Default empty state — no content, not loading
     return (
       <div className="w-full h-full flex items-center justify-center bg-white">
         <div className="text-center">

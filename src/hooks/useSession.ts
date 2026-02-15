@@ -25,6 +25,7 @@ export function useSession() {
   const contentMode = useSessionStore((s) => s.contentMode);
   const manimVideoUrl = useSessionStore((s) => s.manimVideoUrl);
   const sandboxHtml = useSessionStore((s) => s.sandboxHtml);
+  const sandboxLoading = useSessionStore((s) => s.sandboxLoading);
   const setStatus = useSessionStore((s) => s.setStatus);
   const setAvatarStatus = useSessionStore((s) => s.setAvatarStatus);
   const setSessionId = useSessionStore((s) => s.setSessionId);
@@ -176,6 +177,7 @@ export function useSession() {
     contentMode,
     manimVideoUrl,
     sandboxHtml,
+    sandboxLoading,
     setContentMode,
     setManimVideoUrl,
     // User camera
