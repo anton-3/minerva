@@ -173,11 +173,14 @@ export default function LandingPage() {
                   <div className="grid grid-cols-1 md:grid-cols-3 h-full pb-12">
                     {/* Left: AI Avatar */}
                     <div className="relative overflow-hidden flex items-center justify-center bg-gray-900 border-r border-gray-700">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src="https://files2.heygen.ai/avatar/v3/74447a27859a456c955e01f21ef18216_45620/preview_talk_1.webp"
-                        alt="AI Mentor Minerva"
+                      <video
+                        src="/avatar-preview.mp4"
+                        autoPlay
+                        loop
+                        muted
+                        playsInline
                         className="absolute inset-0 w-full h-full object-cover opacity-80"
+                        aria-label="AI Mentor Minerva"
                       />
                       <div className="absolute bottom-4 left-4 right-4 bg-black/40 backdrop-blur-md p-3 rounded-lg border border-white/10">
                         <div className="flex items-center gap-3">
