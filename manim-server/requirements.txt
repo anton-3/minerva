@@ -1,0 +1,5 @@
+anthropic==0.79.0
+flask==3.1.2
+manim==0.19.2
+python-dotenv==1.2.1
+openai==2.21.0
