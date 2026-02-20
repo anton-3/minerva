@@ -1,7 +1,8 @@
-// useAvatar hook — manages LiveAvatar session lifecycle (FULL mode)
+// useAvatar hook — manages LiveAvatar session lifecycle (LITE mode)
 // Wraps AvatarClient for React component consumption.
 // Uses attach() pattern: pass a <video> element and the SDK handles rendering.
-// HeyGen handles both TTS (repeat) and STT (voiceChat + USER_TRANSCRIPTION).
+// LITE mode: HeyGen provides avatar rendering + lip-sync only.
+// ASR is Deepgram (separate hook). TTS is ElevenLabs (server-side).
 
 "use client";
 
@@ -12,16 +13,12 @@ import type { AvatarClient, AvatarStatus } from "@/lib/heygen/types";
 export function useAvatar() {
   const clientRef = useRef<AvatarClient | null>(null);
   const [status, setStatus] = useState<AvatarStatus>("disconnected");
-  const userMsgCbsRef = useRef<((text: string) => void)[]>([]);
 
   const startSession = useCallback(async () => {
     const client = createAvatarClient();
     clientRef.current = client;
 
     client.onStatusChange(setStatus);
-    client.onUserMessage((text) => {
-      userMsgCbsRef.current.forEach((cb) => cb(text));
-    });
 
     await client.startSession();
   }, []);
@@ -34,8 +31,14 @@ export function useAvatar() {
     }
   }, []);
 
+  // speak(text) — text-only fallback for display/logging
   const speak = useCallback(async (text: string) => {
     if (clientRef.current) await clientRef.current.speak(text);
+  }, []);
+
+  // speakAudio(base64) — send Base64-encoded PCM 24kHz audio to avatar for lip-sync
+  const speakAudio = useCallback(async (pcmBase64: string) => {
+    if (clientRef.current) await clientRef.current.speakAudio(pcmBase64);
   }, []);
 
   const interrupt = useCallback(() => {
@@ -46,18 +49,6 @@ export function useAvatar() {
     if (clientRef.current) clientRef.current.attach(element);
   }, []);
 
-  const mute = useCallback(async () => {
-    if (clientRef.current) await clientRef.current.mute();
-  }, []);
-
-  const unmute = useCallback(async () => {
-    if (clientRef.current) await clientRef.current.unmute();
-  }, []);
-
-  const flush = useCallback(() => {
-    if (clientRef.current) clientRef.current.flush();
-  }, []);
-
   const muteAvatarAudio = useCallback(() => {
     if (clientRef.current) clientRef.current.muteAvatarAudio();
   }, []);
@@ -66,15 +57,21 @@ export function useAvatar() {
     if (clientRef.current) clientRef.current.unmuteAvatarAudio();
   }, []);
 
-  const onUserMessage = useCallback((cb: (text: string) => void) => {
-    userMsgCbsRef.current.push(cb);
-  }, []);
-
   useEffect(() => {
     return () => {
       clientRef.current?.endSession().catch(console.error);
     };
   }, []);
 
-  return { status, startSession, endSession, speak, interrupt, attach, mute, unmute, flush, muteAvatarAudio, unmuteAvatarAudio, onUserMessage };
+  return {
+    status,
+    startSession,
+    endSession,
+    speak,
+    speakAudio,
+    interrupt,
+    attach,
+    muteAvatarAudio,
+    unmuteAvatarAudio,
+  };
 }

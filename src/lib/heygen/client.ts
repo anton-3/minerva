@@ -1,15 +1,9 @@
-// LiveAvatar SDK wrapper — FULL mode
+// LiveAvatar SDK wrapper — LITE mode
 // Wraps @heygen/liveavatar-web-sdk. No SDK types leak outside.
-// FULL mode: avatar rendering + TTS via repeat(text) + ASR via voiceChat.
-// HeyGen handles both TTS and STT. LLM is Claude (our brain).
-// USER_TRANSCRIPTION events are debounced and routed to the tutor brain.
-//
-// Speech pipeline (Session 8 v2 — modeled after ElevenLabs/OpenAI/Vapi):
-// Layer 1: Browser WebRTC AEC3 (echoCancellation:true via HeyGen SDK)
-// Layer 2: Echo detection via n-gram matching against recent avatar speech
-// Layer 3: Backchannel classification (don't interrupt for "yeah", "uh-huh")
-// Layer 4: Noise-only filter (pure filler with no content)
-// Layer 5: Push-to-talk flush — immediate send on Space release
+// LITE mode: avatar rendering + lip-sync only. No HeyGen ASR or TTS.
+// Audio sent via repeatAudio() → agent.speak WebSocket events.
+// ASR is handled by Deepgram (separate module).
+// TTS is handled by ElevenLabs (server-side, audio arrives via SSE).
 
 import {
   LiveAvatarSession,
@@ -22,119 +16,10 @@ import type { AvatarClient, AvatarStatus } from "./types";
 
 export type { AvatarClient, AvatarStatus };
 
-// ─── Echo detection (industry-grade: n-gram matching) ──────────────────────
-// Instead of Jaccard similarity on the full text (fragile — "photosynthesis"
-// in both tutor and student triggers false positive), we use n-gram substring
-// matching. If a user phrase is a SUBSTRING of what the avatar recently said,
-// it's likely echo. If it contains novel words not in avatar speech, it's real.
-
-/** Sliding window of recent avatar speech (last 3 utterances) */
-const AVATAR_SPEECH_HISTORY: string[] = [];
-const MAX_SPEECH_HISTORY = 3;
-
-function addToSpeechHistory(text: string) {
-  AVATAR_SPEECH_HISTORY.push(text.toLowerCase());
-  if (AVATAR_SPEECH_HISTORY.length > MAX_SPEECH_HISTORY) {
-    AVATAR_SPEECH_HISTORY.shift();
-  }
-}
-
-function clearSpeechHistory() {
-  AVATAR_SPEECH_HISTORY.length = 0;
-}
-
-/**
- * Check if user text is likely echo of avatar speech.
- * Strategy: extract user's content words, check what % appear in recent
- * avatar speech. If >70% of user's content words are in avatar speech,
- * it's echo. Content words exclude common function words.
- */
-const FUNCTION_WORDS = new Set([
-  "i", "me", "my", "you", "your", "we", "they", "he", "she", "it",
-  "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
-  "have", "has", "had", "do", "does", "did", "will", "would", "could",
-  "should", "can", "may", "might", "shall", "to", "of", "in", "for",
-  "on", "with", "at", "by", "from", "as", "into", "about", "but",
-  "and", "or", "not", "so", "if", "then", "than", "that", "this",
-  "what", "which", "who", "how", "when", "where", "why",
-]);
-
-function isLikelyEcho(userText: string): boolean {
-  if (AVATAR_SPEECH_HISTORY.length === 0) return false;
-
-  const recentAvatarSpeech = AVATAR_SPEECH_HISTORY.join(" ");
-  const avatarWords = new Set(recentAvatarSpeech.split(/\s+/).filter(Boolean));
-
-  // Extract content words from user text (skip function words)
-  const userWords = userText.toLowerCase().split(/\s+/).filter(Boolean);
-  const contentWords = userWords.filter((w) => !FUNCTION_WORDS.has(w));
-
-  // If user said only function words (very short), check if entire phrase
-  // appears as substring in avatar speech
-  if (contentWords.length === 0) {
-    const normalized = userText.toLowerCase().trim();
-    return recentAvatarSpeech.includes(normalized);
-  }
-
-  // Count how many content words appear in avatar speech
-  let inAvatar = 0;
-  for (const w of contentWords) {
-    if (avatarWords.has(w)) inAvatar++;
-  }
-
-  const echoRatio = inAvatar / contentWords.length;
-
-  // >70% content word overlap = likely echo
-  // This is much more robust than Jaccard: "photosynthesis is when plants..."
-  // has "photosynthesis" in avatar speech but "plants" is novel → not echo
-  return echoRatio > 0.7;
-}
-
-// ─── Backchannel vs real speech classification ─────────────────────────────
-// Industry practice (ElevenLabs, Vapi): backchannels like "yeah", "uh-huh",
-// "ok" should NOT trigger barge-in. They mean "I'm listening, continue."
-// Only real content or explicit interrupts should stop the avatar.
-
-const BACKCHANNELS = new Set([
-  "yeah", "yes", "yep", "yup", "no", "nope",
-  "ok", "okay", "sure", "right", "alright",
-  "uh-huh", "uh huh", "mhm", "mm-hmm", "mm hmm",
-  "got it", "i see", "oh", "ah", "hmm",
-]);
-
-/** True if the text is a backchannel (acknowledgment, not a real question/statement) */
-function isBackchannel(text: string): boolean {
-  const normalized = text.toLowerCase().replace(/[^a-z\s-]/g, "").trim();
-  if (BACKCHANNELS.has(normalized)) return true;
-  // Also check 2-word combos like "oh ok", "yeah yeah"
-  const words = normalized.split(/\s+/);
-  if (words.length <= 2 && words.every((w) => BACKCHANNELS.has(w))) return true;
-  return false;
-}
-
-// ─── Pure noise filter (no content at all) ─────────────────────────────────
-// Only filter utterances that are PURELY non-lexical: "um", "uh", "hmm"
-// Do NOT filter "yeah", "ok" — those are backchannels with meaning.
-
-const PURE_NOISE = new Set([
-  "um", "uh", "hmm", "hm", "ah", "er", "mm", "erm",
-]);
-
-function isPureNoise(text: string): boolean {
-  const words = text.toLowerCase().replace(/[^a-z\s]/g, "").split(/\s+/).filter(Boolean);
-  if (words.length === 0) return true;
-  if (words.length > 2) return false; // 3+ words is never pure noise
-  return words.every((w) => PURE_NOISE.has(w));
-}
-
 // ─── Constants ─────────────────────────────────────────────────────────────
 
-const FALLBACK_DEBOUNCE_MS = 800; // Debounce natural speech pauses — prevents splitting utterances into separate messages
-const ECHO_COOLDOWN_MS = 300; // Cooldown after AVATAR_SPEAK_ENDED
-const ASR_IGNORE_MS = 1500; // Ignore initial ASR burst
-const SESSION_START_TIMEOUT_MS = 15000; // Timeout for session.start()
-const INTERRUPT_SETTLE_MS = 100; // Wait after interrupt before new speak
-const BARGE_IN_WORD_THRESHOLD = 3; // Minimum words for barge-in during avatar speech
+const SESSION_START_TIMEOUT_MS = 15000;
+const INTERRUPT_SETTLE_MS = 100;
 
 // ─── Client factory ────────────────────────────────────────────────────────
 
@@ -144,21 +29,12 @@ export function createAvatarClient(): AvatarClient {
   let streamReady = false;
   let avatarAudioMuted = false;
 
-  // Debounce ASR: accumulate fragments, flush on push-to-talk release
-  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-  let pendingText = "";
-
   // Speech state
   let avatarIsSpeaking = false;
-  let echoCooldownActive = false;
-  let asrEnabled = false;
-  let pushToTalkActive = false;
-  let postFlushCooldown = false; // Prevents trailing ASR fragments from creating new messages
 
-  // speak() promise resolution
+  // speakAudio() promise resolution — resolves on AVATAR_SPEAK_ENDED
   let speakResolve: (() => void) | null = null;
 
-  const userMessageCallbacks: ((text: string) => void)[] = [];
   const statusChangeCallbacks: ((status: AvatarStatus) => void)[] = [];
 
   function notifyStatus(status: AvatarStatus) {
@@ -171,39 +47,14 @@ export function createAvatarClient(): AvatarClient {
     }
   }
 
-  // Latency tracking — shared timestamp for the current speech-to-response cycle
+  // Latency tracking
   let cycleStartMs = 0;
-
-  function flushTranscription() {
-    const text = pendingText.trim();
-    pendingText = "";
-
-    if (text.length < 2) return;
-
-    // Layer 4: pure noise filter (only "um", "uh" — not backchannels)
-    if (isPureNoise(text)) {
-      console.log("[AvatarClient] Filtered pure noise:", text);
-      return;
-    }
-
-    // Post-flush cooldown — ignore trailing ASR fragments for 500ms after a flush
-    postFlushCooldown = true;
-    setTimeout(() => { postFlushCooldown = false; }, 500);
-
-    // Start latency cycle — this is T0 for the whole pipeline
-    cycleStartMs = performance.now();
-    console.log(
-      `[Latency] T0 FLUSH_TRANSCRIPTION +0ms | "${text.slice(0, 80)}"`
-    );
-
-    userMessageCallbacks.forEach((cb) => cb(text));
-  }
 
   return {
     async startSession() {
       notifyStatus("connecting");
 
-      // Fetch session token from our server
+      // Fetch session token from our server (LITE mode)
       const tokenRes = await fetch("/api/heygen/token", { method: "POST" });
       if (!tokenRes.ok) {
         notifyStatus("disconnected");
@@ -211,8 +62,8 @@ export function createAvatarClient(): AvatarClient {
       }
       const { token } = await tokenRes.json();
 
-      // FULL mode — voiceChat starts muted (push-to-talk: student holds Space to unmute)
-      session = new LiveAvatarSession(token, { voiceChat: { defaultMuted: true } });
+      // LITE mode — no voiceChat config (mic managed by Deepgram)
+      session = new LiveAvatarSession(token, {});
 
       // Session lifecycle events
       session.on(SessionEvent.SESSION_STATE_CHANGED, (state: SessionState) => {
@@ -236,11 +87,10 @@ export function createAvatarClient(): AvatarClient {
         notifyStatus("connected");
       });
 
-      // Session disconnected — surface end reason for debugging/UX
+      // Session disconnected — surface end reason
       session.on(SessionEvent.SESSION_DISCONNECTED, (reason: SessionDisconnectReason) => {
         console.warn("[AvatarClient] Session disconnected, reason:", reason);
         avatarIsSpeaking = false;
-        asrEnabled = false;
         if (speakResolve) {
           speakResolve();
           speakResolve = null;
@@ -248,21 +98,11 @@ export function createAvatarClient(): AvatarClient {
         notifyStatus("disconnected");
       });
 
-      // ── Avatar speaking state ──────────────────────────────────
+      // ── Avatar speaking state (from WebSocket events in LITE mode) ──
       session.on(AgentEventsEnum.AVATAR_SPEAK_STARTED, () => {
         const elapsed = cycleStartMs ? (performance.now() - cycleStartMs).toFixed(0) : "?";
-        console.log(`[Latency] AVATAR_SPEAK_STARTED +${elapsed}ms | avatar mouth moving`);
+        console.log(`[Latency] AVATAR_SPEAK_STARTED +${elapsed}ms | avatar lip-syncing`);
         avatarIsSpeaking = true;
-
-        // Flush any accumulated user speech BEFORE clearing
-        if (pendingText.trim().length >= 2) {
-          if (debounceTimer) clearTimeout(debounceTimer);
-          flushTranscription();
-        } else {
-          if (debounceTimer) clearTimeout(debounceTimer);
-          pendingText = "";
-        }
-
         notifyStatus("speaking");
       });
 
@@ -270,105 +110,16 @@ export function createAvatarClient(): AvatarClient {
         const elapsed = cycleStartMs ? (performance.now() - cycleStartMs).toFixed(0) : "?";
         console.log(`[Latency] AVATAR_SPEAK_ENDED +${elapsed}ms`);
         avatarIsSpeaking = false;
-
-        // Echo cooldown — browser AEC may miss tail-end audio
-        echoCooldownActive = true;
-        setTimeout(() => {
-          echoCooldownActive = false;
-
-          // Flush any text accumulated during avatar speech that never hit
-          // the barge-in threshold. After cooldown, it's safe to deliver.
-          if (pendingText.trim().length >= 2) {
-            console.log("[AvatarClient] Flushing post-speech pending text:", pendingText);
-            flushTranscription();
-          }
-        }, ECHO_COOLDOWN_MS);
-
         notifyStatus("listening");
 
-        // Resolve speak() promise
+        // Resolve speakAudio() promise
         if (speakResolve) {
           speakResolve();
           speakResolve = null;
         }
       });
 
-      // ── User speech transcription ──────────────────────────────
-      session.on(AgentEventsEnum.USER_TRANSCRIPTION, (event) => {
-        const text = event.text;
-        console.log(
-          "[AvatarClient] USER_TRANSCRIPTION:", text,
-          "speaking:", avatarIsSpeaking,
-          "asr:", asrEnabled,
-          "cooldown:", echoCooldownActive
-        );
-
-        // Ignore during initial ASR burst
-        if (!asrEnabled) return;
-        if (!text) return;
-
-        // Ignore during echo cooldown after avatar finishes
-        if (echoCooldownActive) {
-          console.log("[AvatarClient] Dropped (echo cooldown):", text);
-          return;
-        }
-
-        // Ignore trailing fragments right after a flush (prevents split messages)
-        if (postFlushCooldown && !pushToTalkActive) {
-          // Accumulate instead of dropping — will merge with next utterance
-          pendingText += (pendingText ? " " : "") + text;
-          console.log("[AvatarClient] Accumulating during post-flush cooldown:", text);
-          return;
-        }
-
-        // ── During avatar speech: echo detect + barge-in logic ──
-        if (avatarIsSpeaking) {
-          // Layer 2: echo detection via n-gram matching
-          if (isLikelyEcho(text)) {
-            console.log("[AvatarClient] Dropped echo:", text);
-            return;
-          }
-
-          // Layer 3: backchannel classification (don't interrupt for "yeah")
-          if (isBackchannel(text)) {
-            console.log("[AvatarClient] Backchannel (no interrupt):", text);
-            // Still accumulate — might be part of a longer phrase
-            pendingText += (pendingText ? " " : "") + text;
-            return; // Don't interrupt, don't reset debounce
-          }
-
-          // Check word count — need enough words to be a real interruption
-          const totalWords = (pendingText + " " + text).trim().split(/\s+/).length;
-          if (totalWords < BARGE_IN_WORD_THRESHOLD) {
-            // Not enough words yet — accumulate but don't interrupt
-            pendingText += (pendingText ? " " : "") + text;
-            console.log("[AvatarClient] Accumulating during speech:", pendingText, "(", totalWords, "words)");
-            return;
-          }
-
-          // Real barge-in: enough novel words, not echo, not backchannel
-          console.log("[AvatarClient] BARGE-IN:", text);
-          session?.interrupt();
-          avatarIsSpeaking = false;
-          if (speakResolve) {
-            speakResolve();
-            speakResolve = null;
-          }
-          notifyStatus("listening");
-        }
-
-        // ── Accumulate transcription ─────────────────────────────
-        pendingText += (pendingText ? " " : "") + text;
-
-        // Push-to-talk: while Space is held, just accumulate — flush on release
-        if (pushToTalkActive) return;
-
-        // Fallback debounce for trailing ASR fragments after mute
-        if (debounceTimer) clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(flushTranscription, FALLBACK_DEBOUNCE_MS);
-      });
-
-      // Timeout on session.start()
+      // Start session with timeout
       await Promise.race([
         session.start(),
         new Promise<never>((_, reject) =>
@@ -379,71 +130,96 @@ export function createAvatarClient(): AvatarClient {
         ),
       ]);
 
-      console.log("[AvatarClient] Session started");
-
-      // Enable ASR after initial burst settles
-      setTimeout(() => {
-        asrEnabled = true;
-        console.log("[AvatarClient] ASR enabled after initial burst window");
-      }, ASR_IGNORE_MS);
+      console.log("[AvatarClient] LITE mode session started");
+      notifyStatus("listening");
     },
 
     async endSession() {
-      if (debounceTimer) clearTimeout(debounceTimer);
-      pendingText = "";
-      asrEnabled = false;
-      pushToTalkActive = false;
+      avatarIsSpeaking = false;
+      if (speakResolve) {
+        speakResolve();
+        speakResolve = null;
+      }
       if (session) {
         await session.stop();
         session = null;
         pendingElement = null;
         streamReady = false;
-        avatarIsSpeaking = false;
-        echoCooldownActive = false;
-        speakResolve = null;
-        clearSpeechHistory();
         notifyStatus("disconnected");
       }
     },
 
-    // speak() returns Promise resolving on AVATAR_SPEAK_ENDED
-    // Interrupts current speech if still playing
-    async speak(text: string) {
-      if (!session) return;
-      const speakEntryMs = performance.now();
-      const elapsed = cycleStartMs ? (speakEntryMs - cycleStartMs).toFixed(0) : "?";
+    // speakAudio() — send pre-generated PCM 24kHz audio to avatar for lip-sync.
+    // Accepts Base64-encoded PCM (16-bit, 24kHz, mono).
+    //
+    // WORKAROUND: SDK v0.0.10 bug — repeatAudio() sends raw binary strings
+    // but the HeyGen WebSocket server expects Base64-encoded audio in agent.speak.
+    // We bypass the SDK and send directly on the WebSocket with proper Base64 encoding.
+    async speakAudio(pcmBase64: string) {
+      if (!session) {
+        console.warn("[AvatarClient] speakAudio: no session");
+        return;
+      }
+
+      // Access the internal WebSocket (private field — SDK bug workaround)
+      const ws = (session as unknown as { _sessionEventSocket: WebSocket | null })._sessionEventSocket;
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        console.warn("[AvatarClient] WebSocket not open for speakAudio");
+        return;
+      }
+
+      cycleStartMs = performance.now();
       console.log(
-        `[Latency] AVATAR_SPEAK_CALLED +${elapsed}ms | "${text.slice(0, 60)}..."`
+        `[Latency] SPEAK_AUDIO_CALLED +0ms | sending ${pcmBase64.length} chars Base64 via WebSocket`
       );
 
-      // Interrupt current speech before starting new one
+      // Interrupt current speech before starting new
       if (avatarIsSpeaking) {
         session.interrupt();
         avatarIsSpeaking = false;
         await new Promise((r) => setTimeout(r, INTERRUPT_SETTLE_MS));
       }
 
-      // Track what we're saying for echo detection
-      addToSpeechHistory(text);
-
-      // Set speaking state immediately
       avatarIsSpeaking = true;
       notifyStatus("speaking");
 
-      // Fire-and-forget repeat(), wrapped in Promise for caller
       return new Promise<void>((resolve) => {
         speakResolve = resolve;
-        const repeatMs = performance.now();
-        const repeatElapsed = cycleStartMs ? (repeatMs - cycleStartMs).toFixed(0) : "?";
-        console.log(`[Latency] HEYGEN_REPEAT_CALLED +${repeatElapsed}ms | sent to HeyGen TTS`);
-        session!.repeat(text);
+
+        // Chunk Base64 into ~1-second segments for smooth streaming.
+        // 1 second of PCM 24kHz 16-bit mono = 48000 bytes = 64000 Base64 chars.
+        // Must chunk on 4-char boundaries (Base64 block size).
+        const B64_CHARS_PER_SECOND = Math.ceil(48000 / 3) * 4; // 64000
+        const eventId = crypto.randomUUID();
+        let chunkCount = 0;
+
+        for (let i = 0; i < pcmBase64.length; i += B64_CHARS_PER_SECOND) {
+          const chunk = pcmBase64.slice(i, i + B64_CHARS_PER_SECOND);
+          ws.send(JSON.stringify({
+            type: "agent.speak",
+            event_id: eventId,
+            audio: chunk,
+          }));
+          chunkCount++;
+        }
+
+        // Signal end of audio
+        ws.send(JSON.stringify({
+          type: "agent.speak_end",
+          event_id: eventId,
+        }));
+
+        console.log(
+          `[AvatarClient] Sent ${chunkCount} Base64 chunks + speak_end via WebSocket`
+        );
 
         // Safety timeout if AVATAR_SPEAK_ENDED never fires
-        const wordCount = text.split(/\s+/).length;
-        const estimatedMs = wordCount * 150 + 2000;
+        // Estimate duration from Base64 length: b64 chars × 3/4 = bytes, ÷ 48000 = seconds
+        const pcmBytes = (pcmBase64.length * 3) / 4;
+        const estimatedMs = (pcmBytes / 48000) * 1000 + 5000;
         setTimeout(() => {
           if (speakResolve === resolve) {
-            console.warn("[AvatarClient] speak() safety timeout after", estimatedMs, "ms");
+            console.warn("[AvatarClient] speakAudio() safety timeout after", Math.round(estimatedMs), "ms");
             avatarIsSpeaking = false;
             notifyStatus("listening");
             speakResolve = null;
@@ -451,6 +227,18 @@ export function createAvatarClient(): AvatarClient {
           }
         }, estimatedMs);
       });
+    },
+
+    // speak() — text-only, for display/logging. Does NOT generate TTS.
+    // In LITE mode, TTS is handled server-side by ElevenLabs.
+    // This method is kept for backward compatibility with chat display.
+    async speak(text: string) {
+      if (!session) return;
+      // In LITE mode, repeat(text) sends avatar.speak_text via WebSocket.
+      // HeyGen LITE may or may not handle this (server TTS is not guaranteed).
+      // If it does, great. If not, speakAudio() is the primary method.
+      console.log("[AvatarClient] speak(text) called — forwarding to repeat():", text.slice(0, 60));
+      session.repeat(text);
     },
 
     interrupt() {
@@ -467,63 +255,18 @@ export function createAvatarClient(): AvatarClient {
 
     attach(element: HTMLMediaElement) {
       pendingElement = element;
-      // Apply current muted state to the element
       element.muted = avatarAudioMuted;
       tryAttach();
     },
 
-    onUserMessage(callback) {
-      userMessageCallbacks.push(callback);
-    },
-
-    flush() {
-      if (debounceTimer) {
-        clearTimeout(debounceTimer);
-        debounceTimer = null;
-      }
-      pushToTalkActive = false;
-      if (pendingText.trim().length >= 2) {
-        console.log("[AvatarClient] flush() — sending immediately:", pendingText.trim());
-        flushTranscription();
-      } else {
-        pendingText = "";
-      }
-    },
-
-    async mute() {
-      pushToTalkActive = false;
-      if (session) {
-        try {
-          await session.voiceChat.mute();
-        } catch (err) {
-          console.error("[AvatarClient] Failed to mute:", err);
-        }
-      }
-    },
-
-    async unmute() {
-      pushToTalkActive = true;
-      if (session) {
-        try {
-          await session.voiceChat.unmute();
-        } catch (err) {
-          console.error("[AvatarClient] Failed to unmute:", err);
-        }
-      }
-    },
-
     muteAvatarAudio() {
       avatarAudioMuted = true;
-      if (pendingElement) {
-        pendingElement.muted = true;
-      }
+      if (pendingElement) pendingElement.muted = true;
     },
 
     unmuteAvatarAudio() {
       avatarAudioMuted = false;
-      if (pendingElement) {
-        pendingElement.muted = false;
-      }
+      if (pendingElement) pendingElement.muted = false;
     },
 
     onStatusChange(callback) {

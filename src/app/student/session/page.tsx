@@ -23,14 +23,14 @@ export default function SessionPage() {
     isThinking,
     conversationHistory,
     attach,
-    avatarMute,
-    avatarUnmute,
-    avatarFlush,
     muteAvatarAudio,
     unmuteAvatarAudio,
     startSession,
     endSession,
     handleTextMessage,
+    // Push-to-talk (Deepgram ASR)
+    startListening,
+    stopListening,
     // Canvas tools
     toolManager,
     clearCanvas,
@@ -70,20 +70,19 @@ export default function SessionPage() {
     }
   }, [chatOpen]);
 
-  // Push-to-talk: hold Space to unmute, release to mute.
+  // Push-to-talk: hold Space to start Deepgram ASR, release to stop + send transcript.
   // Handles both direct key events AND postMessage from sandboxed iframes
   // (iframes capture focus on click, so parent window misses key events).
-  // Also mutes avatar audio while spacebar is held to prevent feedback.
+  // Also mutes avatar audio while spacebar is held to prevent echo.
   useEffect(() => {
     const pttDown = () => {
       setMicOpen(true);
-      muteAvatarAudio();      // mute avatar audio so user doesn't hear it while speaking
-      avatarUnmute();
+      muteAvatarAudio();      // mute avatar audio so mic doesn't pick it up
+      startListening();       // start Deepgram ASR (also interrupts avatar)
     };
     const pttUp = () => {
       setMicOpen(false);
-      avatarFlush();          // send accumulated text immediately
-      avatarMute();           // then mute mic
+      stopListening();        // stop ASR + send accumulated transcript to brain
       unmuteAvatarAudio();    // restore avatar audio
     };
 
@@ -128,7 +127,7 @@ export default function SessionPage() {
       window.removeEventListener("message", handleMessage);
       window.removeEventListener("keydown", handleChatToggle);
     };
-  }, [avatarMute, avatarUnmute, avatarFlush, muteAvatarAudio, unmuteAvatarAudio]);
+  }, [startListening, stopListening, muteAvatarAudio, unmuteAvatarAudio]);
 
   const handleNewMessage = useCallback(() => {
     if (!chatOpen) {

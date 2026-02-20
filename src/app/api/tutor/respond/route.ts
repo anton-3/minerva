@@ -5,6 +5,8 @@
 //
 // SSE events:
 //   data: {"type":"speech","speech":"..."}                    — text speech from Claude
+//   data: {"type":"audio","audio":"<base64 PCM 24kHz>"}      — TTS audio chunk (ElevenLabs)
+//   data: {"type":"audio-end"}                                — end of audio for current speech
 //   data: {"type":"tool-call","toolName":"...","input":{...}} — tool invocation
 //   data: {"type":"tool-result","toolName":"...","output":{}} — server-executed tool result
 //   data: {"type":"done"}                                     — stream complete
@@ -20,6 +22,7 @@
 import { NextResponse } from "next/server";
 import { createTutorBrain, TutorStreamEvent } from "@/lib/ai/client";
 import { createManimClient } from "@/lib/manim/client";
+import { createTTSClient } from "@/lib/elevenlabs/client";
 import type { TutorBrainRequest } from "@/types/session";
 
 // Allow long-running requests for Manim video generation (up to 5 minutes)
@@ -150,9 +153,11 @@ export async function POST(request: Request) {
   const abortController = new AbortController();
 
   const brain = createTutorBrain();
+  const tts = createTTSClient();
   const encoder = new TextEncoder();
 
-  console.log(`[Latency:server] STREAM_SETUP +${Date.now() - t0}ms | starting Claude stream`);
+  console.log(`[Latency:server] STREAM_SETUP +${Date.now() - t0}ms | starting Claude stream | TTS=${tts.available ? "on" : "off"}`);
+
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -166,12 +171,42 @@ export async function POST(request: Request) {
             firstEvent = false;
           }
 
+          // tts-sentence: Claude finished a sentence — TTS it immediately
+          // (emitted DURING Claude streaming, before full text is complete)
+          if (event.type === "tts-sentence" && tts.available) {
+            const sentence = event.sentence;
+            try {
+              const sentT0 = Date.now();
+              const pcmChunks: Uint8Array[] = [];
+              let totalBytes = 0;
+              for await (const chunk of tts.streamSpeech(sentence)) {
+                pcmChunks.push(chunk);
+                totalBytes += chunk.length;
+              }
+              const fullPcm = Buffer.concat(pcmChunks);
+              const b64 = fullPcm.toString("base64");
+              console.log(
+                `[Latency:server] TTS_SENTENCE +${Date.now() - t0}ms (${Date.now() - sentT0}ms TTS) | ${totalBytes} bytes "${sentence.slice(0, 40)}..."`
+              );
+
+              // Emit audio immediately — client plays this while we TTS the next sentence
+              controller.enqueue(
+                encoder.encode(`data: ${JSON.stringify({ type: "audio", audio: b64 })}\n\n`)
+              );
+              controller.enqueue(
+                encoder.encode('data: {"type":"audio-end"}\n\n')
+              );
+            } catch (ttsErr) {
+              console.error("[api/tutor/respond] TTS sentence error:", ttsErr);
+            }
+          }
+
+          // speech: full text for chat display (TTS already handled by tts-sentence events)
           if (event.type === "speech") {
             console.log(
               `[Latency:server] SPEECH_SSE_EMIT +${Date.now() - t0}ms | "${event.speech.slice(0, 60)}..."`
             );
-            const sseData = `data: ${JSON.stringify(event)}\n\n`;
-            controller.enqueue(encoder.encode(sseData));
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
           } else if (event.type === "tool-call") {
             // Handle server-side tool execution
             if (event.toolName === "showVideo") {

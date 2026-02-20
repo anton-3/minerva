@@ -2,9 +2,11 @@
 // Coordinates: student speaks → Claude responds (SSE stream) → avatar speaks + tools execute
 // See: specs/001-minerva-mvp/plan.md (Core Session Flow)
 //
-// SSE streaming pipeline with tool calling:
+// SSE streaming pipeline with tool calling (LITE mode):
 // The API returns an SSE stream with these events:
-// - "speech" — text to speak (emitted early for low latency)
+// - "speech" — text for chat display (emitted early for low latency)
+// - "audio" — base64 PCM 24kHz chunk from ElevenLabs TTS
+// - "audio-end" — end of audio for current speech → decode + send to avatar
 // - "tool-call" — tool invocation (executeCanvasCommands, showSandbox, setContentMode)
 // - "tool-result" — server-executed tool result (showVideo, updateProgress)
 // - "done" — stream complete
@@ -21,6 +23,7 @@ import type { TutorBrainRequest, ContentMode, CanvasCommand } from "@/types/sess
 
 interface UseTutorBrainOptions {
   speak: (text: string) => Promise<void>;
+  speakAudio: (pcmBase64: string) => Promise<void>;
   interrupt: () => void;
   executeSequence: (
     cmds: CanvasCommand[],
@@ -78,6 +81,8 @@ export function useTutorBrain(options: UseTutorBrainOptions) {
     let speechHandled = false;
     let speakPromise: Promise<void> | null = null;
     let firstChunkLogged = false;
+    let audioChunks: string[] = []; // base64 PCM chunks from ElevenLabs TTS
+    let audioReceived = false; // true once we get at least one audio event
 
     const store = useSessionStore.getState();
 
@@ -99,7 +104,7 @@ export function useTutorBrain(options: UseTutorBrainOptions) {
         sseBuffer = remaining;
 
         for (const event of events) {
-          // ── Speech event: start avatar speaking immediately ──
+          // ── Speech event: add to chat (avatar audio comes via separate audio events) ──
           if (event.type === "speech" && !speechHandled) {
             speechHandled = true;
             clearTimeout(opts.timeoutId); // connection alive, speech received
@@ -115,13 +120,40 @@ export function useTutorBrain(options: UseTutorBrainOptions) {
             const speech = event.speech as string;
             opts.onSpeech(speech);
 
+            // NOTE: In LITE mode, we do NOT call speak(text) here.
+            // Avatar lip-sync is driven by audio events from ElevenLabs TTS.
+            // speak(text) is only used as a fallback if no audio arrives (see audio-end handling).
+          }
+
+          // ── Audio event: accumulate Base64 PCM chunks from ElevenLabs TTS ──
+          if (event.type === "audio") {
+            audioReceived = true;
+            audioChunks.push(event.audio as string);
+          }
+
+          // ── Audio-end event: send sentence audio to avatar for lip-sync ──
+          // Server sends audio+audio-end PER SENTENCE for low latency.
+          // We chain speakAudio() calls so sentences play sequentially.
+          if (event.type === "audio-end") {
+            const pcmBase64 = audioChunks.join("");
+            audioChunks = [];
+
+            if (pcmBase64.length === 0) continue;
+
             if (opts.t0) {
               console.log(
-                `[Latency] CALLING_SPEAK +${(performance.now() - opts.t0).toFixed(0)}ms | handing to avatar`
+                `[Latency] AUDIO_END +${(performance.now() - opts.t0).toFixed(0)}ms | ${pcmBase64.length} chars Base64`
               );
             }
-            // Fire speak — don't await, let tool events process while avatar talks
-            speakPromise = optionsRef.current.speak(speech);
+
+            // Chain with previous promise so sentences play in order.
+            // First sentence starts immediately; subsequent sentences queue up.
+            const prev: Promise<void> = speakPromise || Promise.resolve();
+            speakPromise = prev.then(() =>
+              optionsRef.current.speakAudio(pcmBase64).catch((err) => {
+                console.warn("[useTutorBrain] Avatar speakAudio error:", err);
+              })
+            );
           }
 
           // ── Tool call events: execute client-side tools ──
@@ -219,7 +251,7 @@ export function useTutorBrain(options: UseTutorBrainOptions) {
             }
           }
 
-          // ── Error event: fallback speech ──
+          // ── Error event: fallback speech (text-only, no audio) ──
           if (event.type === "error" && !speechHandled) {
             speechHandled = true;
             clearTimeout(opts.timeoutId);
@@ -228,12 +260,24 @@ export function useTutorBrain(options: UseTutorBrainOptions) {
               (event.speech as string) ||
               "I'm having some trouble. Can you try that again?";
             opts.onSpeech(speech);
+            // Error fallback: use text-based speak() since no TTS audio
             speakPromise = optionsRef.current.speak(speech);
           }
         }
       }
     } finally {
       reader.releaseLock();
+    }
+
+    // Stream ended — check if fallback needed
+
+    // Fallback: if speech was received but no audio events, use text-based speak()
+    // This handles the case where ElevenLabs TTS fails server-side
+    if (speechHandled && !audioReceived && !speakPromise) {
+      console.warn("[useTutorBrain] No audio received — falling back to text speak()");
+      speakPromise = optionsRef.current.speak(
+        store.conversationHistory[store.conversationHistory.length - 1]?.content || ""
+      );
     }
 
     // Wait for avatar to finish speaking

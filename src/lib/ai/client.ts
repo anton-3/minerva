@@ -49,6 +49,7 @@ export interface TutorBrain {
 // SSE stream events emitted by respondStream()
 export type TutorStreamEvent =
   | { type: "speech"; speech: string }
+  | { type: "tts-sentence"; sentence: string }
   | { type: "tool-call"; toolName: string; toolCallId: string; input: unknown }
   | { type: "tool-result"; toolName: string; toolCallId: string; output: unknown }
   | { type: "done" };
@@ -346,6 +347,7 @@ export function createTutorBrain(): TutorBrain {
         );
 
         let speechBuffer = "";
+        let sentenceBuffer = ""; // Accumulates tokens until sentence boundary
         let firstTokenLogged = false;
         let tokenCount = 0;
         let stepNumber = 0;
@@ -357,13 +359,14 @@ export function createTutorBrain(): TutorBrain {
           // Handle start of new step (resets for multi-step tool execution)
           if (chunk.type === "start-step") {
             stepNumber++;
-            speechBuffer = ""; // Reset buffer for new step
+            speechBuffer = "";
+            sentenceBuffer = "";
             console.log(
               `[Latency:claude] START_STEP ${stepNumber} +${Date.now() - streamT0}ms`
             );
           }
 
-          // Handle text deltas (speech)
+          // Handle text deltas — detect sentence boundaries for early TTS
           if (chunk.type === "text-delta") {
             tokenCount++;
             if (!firstTokenLogged) {
@@ -373,23 +376,52 @@ export function createTutorBrain(): TutorBrain {
               );
             }
             speechBuffer += chunk.text;
+            sentenceBuffer += chunk.text;
+
+            // Check for sentence boundary: .!? followed by space or end
+            // This lets us start TTS on the first sentence while Claude is still generating
+            const sentenceMatch = sentenceBuffer.match(/^([\s\S]*?[.!?])\s+([\s\S]*)/);
+            if (sentenceMatch) {
+              const completeSentence = sentenceMatch[1].trim();
+              sentenceBuffer = sentenceMatch[2]; // Keep remainder
+              if (completeSentence.length > 0) {
+                console.log(
+                  `[Latency:claude] TTS_SENTENCE +${Date.now() - streamT0}ms | "${completeSentence.slice(0, 50)}..."`
+                );
+                yield { type: "tts-sentence", sentence: completeSentence };
+              }
+            }
           }
 
-          // Handle text-end - emit speech for this step
-          // This fires when text generation for a step completes (before tool calls execute)
+          // Handle text-end — emit full speech for chat + flush remaining sentence
           if (chunk.type === "text-end") {
+            // Flush any remaining text as final TTS sentence
+            if (sentenceBuffer.trim()) {
+              console.log(
+                `[Latency:claude] TTS_SENTENCE (final) +${Date.now() - streamT0}ms | "${sentenceBuffer.trim().slice(0, 50)}..."`
+              );
+              yield { type: "tts-sentence", sentence: sentenceBuffer.trim() };
+              sentenceBuffer = "";
+            }
+
+            // Emit full speech text for chat display
             if (speechBuffer.trim()) {
               console.log(
                 `[Latency:claude] SPEECH_COMPLETE (step ${stepNumber}) +${Date.now() - streamT0}ms | "${speechBuffer.slice(0, 60)}..."`
               );
               yield { type: "speech", speech: speechBuffer.trim() };
-              speechBuffer = ""; // Clear after emitting
+              speechBuffer = "";
             }
           }
 
           // Handle tool calls - emit for frontend/route to process
           if (chunk.type === "tool-call") {
-            // Safety: emit any accumulated speech before tool call (in case text-end didn't fire)
+            // Flush remaining sentence buffer before tool call
+            if (sentenceBuffer.trim()) {
+              yield { type: "tts-sentence", sentence: sentenceBuffer.trim() };
+              sentenceBuffer = "";
+            }
+            // Safety: emit any accumulated speech before tool call
             if (speechBuffer.trim()) {
               console.log(
                 `[Latency:claude] SPEECH_COMPLETE (before tool) +${Date.now() - streamT0}ms | "${speechBuffer.slice(0, 60)}..."`
@@ -423,7 +455,11 @@ export function createTutorBrain(): TutorBrain {
           }
         }
 
-        // Fallback: emit any remaining speech (shouldn't normally hit this)
+        // Fallback: flush any remaining buffers (shouldn't normally hit this)
+        if (sentenceBuffer.trim()) {
+          yield { type: "tts-sentence", sentence: sentenceBuffer.trim() };
+          sentenceBuffer = "";
+        }
         if (speechBuffer.trim()) {
           console.log(
             `[Latency:claude] SPEECH_COMPLETE (fallback) +${Date.now() - streamT0}ms | "${speechBuffer.slice(0, 60)}..."`

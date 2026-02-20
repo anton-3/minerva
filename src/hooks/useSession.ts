@@ -1,12 +1,11 @@
 // useSession hook — session state machine
 // Manages session lifecycle: idle → connecting → active → ended
-// Coordinates: User Camera + LiveAvatar FULL (avatar TTS + ASR) +
-// Canvas + Claude brain.
-// HeyGen handles both TTS and STT. User camera via native getUserMedia.
+// Coordinates: User Camera + LiveAvatar LITE (lip-sync only) +
+// Deepgram ASR + ElevenLabs TTS (server-side) + Canvas + Claude brain.
 //
-// Speech audit fixes (Session 7):
-// - Wire avatar.interrupt to brain options
-// - Bug 9: Use brain.sendGreeting() instead of fake "hi" message
+// LITE mode pipeline:
+// User speaks → Deepgram ASR → handleStudentMessage → Claude → ElevenLabs TTS →
+// PCM audio → avatar lip-sync via repeatAudio()
 
 "use client";
 
@@ -17,6 +16,7 @@ import { useZoom } from "./useZoom";
 import { useCanvas } from "./useCanvas";
 import { useTutorBrain } from "./useTutorBrain";
 import { useUserCamera } from "./useUserCamera";
+import { createASRClient, ASRClient } from "@/lib/deepgram/client";
 import { captureFrame } from "@/lib/camera/scanner";
 
 export function useSession() {
@@ -37,37 +37,26 @@ export function useSession() {
   const userCamera = useUserCamera();
   const brain = useTutorBrain({
     speak: avatar.speak,
+    speakAudio: avatar.speakAudio,
     interrupt: avatar.interrupt,
     executeSequence: canvas.executeSequence,
     getSnapshot: canvas.getSnapshot,
   });
 
-  // Track whether listeners are wired
+  // Deepgram ASR client ref
+  const asrRef = useRef<ASRClient | null>(null);
+
+  // Track whether Deepgram transcript listener is wired
   const wiredRef = useRef(false);
   const sessionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Wire HeyGen ASR transcriptions → tutor brain.
-  // When user says "read", attach a camera screenshot so the model can see homework.
-  useEffect(() => {
-    if (!wiredRef.current) {
-      avatar.onUserMessage((text) => {
-        const trimmed = text.trim();
-        const includeScreenshot =
-          trimmed.length > 0 &&
-          trimmed.toLowerCase().includes("read") &&
-          userCamera.videoRef.current;
-        if (includeScreenshot) {
-          const result = captureFrame(userCamera.videoRef.current!);
-          if (result) {
-            brain.handleStudentMessage(text, result);
-            return;
-          }
-        }
-        brain.handleStudentMessage(text);
-      });
-      wiredRef.current = true;
-    }
-  }, [avatar, brain, userCamera.videoRef]);
+  // Accumulate final transcripts until push-to-talk is released
+  const pendingTranscriptRef = useRef("");
+
+  // Generation counter — prevents cross-PTT transcript leakage.
+  // Each startListening() increments this. Only finals matching the current generation
+  // are accumulated. 0 = not listening (reject all stale finals).
+  const listenGenRef = useRef(0);
 
   // Track avatar status in store
   useEffect(() => {
@@ -83,25 +72,40 @@ export function useSession() {
       const newSessionId = crypto.randomUUID();
       setSessionId(newSessionId);
 
-      // Start LiveAvatar session FIRST (FULL mode — TTS + ASR via voiceChat)
-      await avatar.startSession();
+      // Create and connect Deepgram ASR client
+      const asr = createASRClient();
+      asrRef.current = asr;
+      wiredRef.current = false; // Reset wiring flag for new ASR client
 
-      // Zoom is currently disabled — using native getUserMedia for camera instead
-      // TODO: Re-enable Zoom if needed for Education Track
-      // zoom
-      //   .joinSession(`minerva-${newSessionId.slice(0, 8)}`, "Student")
-      //   .then(() => console.log("[useSession] Zoom session joined"))
-      //   .catch((err) => console.warn("[useSession] Zoom session failed:", err));
+      // Start LiveAvatar LITE session + Deepgram ASR in parallel
+      await Promise.all([
+        avatar.startSession(),
+        asr.connect(),
+      ]);
+
+      // Wire ASR transcript listener after connect.
+      // Uses generation counter to reject stale finals from previous PTT sessions.
+      asr.onTranscript((text, isFinal) => {
+        if (!isFinal) return;
+        // Only accept transcripts during an active PTT session (gen > 0)
+        if (listenGenRef.current === 0) {
+          console.log(`[useSession] Ignoring stale final transcript: "${text}"`);
+          return;
+        }
+        pendingTranscriptRef.current += (pendingTranscriptRef.current ? " " : "") + text;
+        console.log(`[useSession] Accumulated transcript (gen ${listenGenRef.current}): "${pendingTranscriptRef.current}"`);
+      });
+      wiredRef.current = true;
 
       setStatus("active");
 
-      // Bug 9: Use sendGreeting instead of fake "hi"
+      // Send greeting — avatar speaks via ElevenLabs TTS → repeatAudio()
       brain.sendGreeting();
     } catch (err) {
       console.error("[useSession] Failed to start session:", err);
       setStatus("error");
     }
-  }, [avatar, zoom, setStatus, setSessionId, brain]);
+  }, [avatar, setStatus, setSessionId, brain]);
 
   const endSession = useCallback(async () => {
     try {
@@ -110,6 +114,12 @@ export function useSession() {
         avatar.endSession(),
         zoom.leaveSession(),
       ]);
+
+      // Disconnect Deepgram ASR
+      if (asrRef.current) {
+        asrRef.current.disconnect();
+        asrRef.current = null;
+      }
 
       // Stop user camera
       userCamera.stopCamera();
@@ -169,6 +179,63 @@ export function useSession() {
     };
   }, [status]);
 
+  // ─── Push-to-talk handlers (called from session page) ─────────────────
+  const startListening = useCallback(() => {
+    if (asrRef.current) {
+      // Interrupt avatar if speaking (barge-in)
+      avatar.interrupt();
+
+      // New generation — any stale finals from previous PTT will be rejected
+      listenGenRef.current++;
+      pendingTranscriptRef.current = "";
+
+      asrRef.current.startListening();
+      console.log(`[useSession] PTT started (gen ${listenGenRef.current})`);
+    }
+  }, [avatar]);
+
+  const stopListening = useCallback(() => {
+    if (asrRef.current) {
+      const capturedGen = listenGenRef.current;
+      asrRef.current.stopListening();
+
+      // Grace period: 300ms audio flush + Finalize + network round-trip
+      // Deepgram Finalize forces immediate final transcript (no silence wait)
+      setTimeout(() => {
+        // If a new PTT session started, discard this one
+        if (listenGenRef.current !== capturedGen) {
+          console.log(`[useSession] Discarding gen ${capturedGen} transcript — new PTT started`);
+          return;
+        }
+
+        // Close the generation — reject any more stale finals
+        listenGenRef.current = 0;
+
+        const transcript = pendingTranscriptRef.current.trim();
+        pendingTranscriptRef.current = "";
+
+        console.log(`[useSession] PTT ended (gen ${capturedGen}): "${transcript}"`);
+
+        if (transcript.length === 0) return;
+
+        // Check if user said "read" for camera screenshot
+        const includeScreenshot =
+          transcript.toLowerCase().includes("read") &&
+          userCamera.videoRef.current;
+
+        if (includeScreenshot) {
+          const result = captureFrame(userCamera.videoRef.current!);
+          if (result) {
+            brain.handleStudentMessage(transcript, result);
+            return;
+          }
+        }
+
+        brain.handleStudentMessage(transcript);
+      }, 800);
+    }
+  }, [brain, userCamera.videoRef]);
+
   return {
     status,
     avatarStatus: avatar.status,
@@ -176,14 +243,14 @@ export function useSession() {
     isThinking: brain.isThinking,
     conversationHistory,
     attach: avatar.attach,
-    avatarMute: avatar.mute,
-    avatarUnmute: avatar.unmute,
-    avatarFlush: avatar.flush,
     muteAvatarAudio: avatar.muteAvatarAudio,
     unmuteAvatarAudio: avatar.unmuteAvatarAudio,
     startSession,
     endSession,
     handleTextMessage: brain.handleStudentMessage,
+    // Push-to-talk (Deepgram ASR)
+    startListening,
+    stopListening,
     // Canvas tools
     toolManager: canvas.toolManager,
     clearCanvas: canvas.clear,
