@@ -337,6 +337,7 @@ export function useTutorBrain(options: UseTutorBrainOptions) {
           },
           canvasState,
           modelId: store.selectedModel,
+          contentMode: store.contentMode,
           ...(imageData && { imageData }),
           ...(store.masteryScores.length > 0 && {
             masteryScores: store.masteryScores,
@@ -470,5 +471,77 @@ export function useTutorBrain(options: UseTutorBrainOptions) {
     }
   }, []);
 
-  return { isProcessing, isThinking, handleStudentMessage, sendGreeting };
+  // ─── Video ended — auto-continue lesson (no student message) ──────────
+  const handleVideoEnded = useCallback(async () => {
+    const store = useSessionStore.getState();
+
+    // Don't trigger if already processing another request
+    if (abortRef.current) return;
+
+    setIsProcessing(true);
+    setIsThinking(true);
+
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    try {
+      const request: TutorBrainRequest = {
+        studentMessage:
+          "[VIDEO_ENDED — The animation just finished playing. Continue the lesson: ask the student what they noticed or understood from the animation, then guide them to apply the concept. Transition to practice on the canvas.]",
+        conversationHistory: store.conversationHistory,
+        learningPlan: store.learningPlan,
+        studentProfile: store.studentProfile ?? {
+          name: "Student",
+          age: 12,
+          grade: 7,
+        },
+        canvasState: "",
+        modelId: store.selectedModel,
+        contentMode: "video", // Video just ended — still showing last frame
+      };
+
+      const timeoutId = setTimeout(
+        () => controller.abort(),
+        API_TIMEOUT_MS
+      );
+
+      const res = await fetch("/api/tutor/respond", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(request),
+        signal: controller.signal,
+      });
+
+      if (controller.signal.aborted) return;
+
+      await consumeStream(res, controller, {
+        timeoutId,
+        onSpeech: (speech) => {
+          // Add only the tutor's follow-up — no student message (system trigger)
+          store.addMessage({ role: "assistant", content: speech });
+          store.addTranscriptEntry({
+            speaker: "tutor",
+            text: speech,
+            timestamp: new Date(),
+          });
+        },
+      });
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      console.error("[useTutorBrain] Video-ended error:", err);
+      await optionsRef.current
+        .speak(
+          "So, what did you notice in that animation? What was happening to the function?"
+        )
+        .catch(console.error);
+    } finally {
+      if (abortRef.current === controller) {
+        abortRef.current = null;
+      }
+      setIsProcessing(false);
+      setIsThinking(false);
+    }
+  }, []);
+
+  return { isProcessing, isThinking, handleStudentMessage, sendGreeting, handleVideoEnded };
 }

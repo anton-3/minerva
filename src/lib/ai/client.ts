@@ -163,13 +163,13 @@ const tutorTools = {
 
   showVideo: tool({
     description:
-      "Display or generate a 3Blue1Brown-style Manim math animation video. Prefer reusing existing videos when available. Only generate new videos when student explicitly requests an animation.",
+      "Present a 3Blue1Brown-style math animation to teach a concept. Use existingFile to present an available animation. Only use generatePrompt if the student explicitly asks for a custom animation (takes 30-120s).",
     inputSchema: z.object({
-      existingFile: z.string().optional().describe("Filename of existing video to reuse (e.g., 'abc123.mp4')"),
+      existingFile: z.string().optional().describe("Filename of animation to present (e.g., 'abc123.mp4')"),
       generatePrompt: z
         .string()
         .optional()
-        .describe("Prompt to generate NEW video (30-120s generation time). End with 'Make a video no longer than 30 seconds.'"),
+        .describe("Prompt to generate NEW animation (30-120s). End with 'Make a video no longer than 30 seconds.'"),
     }),
     // Has execute - server calls Manim API (handled in route.ts)
   }),
@@ -197,7 +197,7 @@ const tutorTools = {
   }),
 
   getExistingVideos: tool({
-    description: "Get a list of existing Manim videos.",
+    description: "Check what math animation videos are available to present. Call this when introducing a new math topic to see if a relevant animation exists.",
     inputSchema: z.object({}),
     execute: async () => {
       const manim = createManimClient();
@@ -273,6 +273,15 @@ function buildAIMessages(request: TutorBrainRequest): {
       .map((m) => `${m.subject}/${m.topic}: ${Math.round(m.score * 100)}%`)
       .join(", ");
     contextParts.push(`Mastery: ${masteryText}`);
+  }
+  if (request.contentMode) {
+    const modeDescriptions: Record<string, string> = {
+      math: "Math canvas (Desmos/GeoGebra) is visible",
+      sandbox: "Interactive HTML sandbox is visible",
+      video: "A math animation video is playing",
+      welcome: "Welcome screen is showing",
+    };
+    contextParts.push(`Screen: ${modeDescriptions[request.contentMode] || request.contentMode}`);
   }
 
   const contextBlock =

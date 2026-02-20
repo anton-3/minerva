@@ -261,6 +261,8 @@ export function useSession() {
     sandboxAccent,
     videoUrl,
     setContentMode,
+    // Video ended — auto-continue lesson
+    handleVideoEnded: brain.handleVideoEnded,
     // User camera
     userCamera,
     // Zoom controls — kept for potential future use

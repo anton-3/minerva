@@ -92,6 +92,7 @@ export interface TutorBrainRequest {
   };
   masteryScores?: MasteryScore[];
   modelId?: AIModelId;
+  contentMode?: ContentMode;
 }
 
 export interface TutorBrainResponse {

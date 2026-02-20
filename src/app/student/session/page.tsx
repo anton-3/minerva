@@ -41,6 +41,8 @@ export default function SessionPage() {
     sandboxAccent,
     videoUrl,
     setContentMode,
+    // Video ended — auto-continue lesson
+    handleVideoEnded: onVideoEndedBrain,
     // User camera
     userCamera,
   } = useSession();
@@ -57,11 +59,12 @@ export default function SessionPage() {
     }
   }, [contentMode]);
 
-  // Handle video ended — restore avatar and switch back to math mode
+  // Handle video ended — restore avatar, keep last frame visible, auto-continue lesson
   const handleVideoEnded = useCallback(() => {
     setAvatarCollapsed(false);
-    setContentMode("math");
-  }, [setContentMode]);
+    // Don't switch to math — video stays on last frame until Claude decides what to show next
+    onVideoEndedBrain();
+  }, [onVideoEndedBrain]);
 
   // Reset unread count when chat opens
   useEffect(() => {
