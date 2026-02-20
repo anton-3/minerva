@@ -25,10 +25,15 @@ export async function POST() {
       avatar_id: sandbox ? "dd73ea75-1218-4ef3-92ce-606d5f7fbc0a" : process.env.HEYGEN_AVATAR_ID,
       is_sandbox: sandbox,
       // FULL mode: avatar rendering + built-in TTS via session.repeat(text).
-      // We only use repeat() for TTS — LLM is Claude, STT is browser Web Speech API.
+      // We only use repeat() for TTS — LLM is Claude, ASR is HeyGen's built-in STT.
+      // No context_id → disables HeyGen's built-in LLM. Avatar still emits
+      // USER_TRANSCRIPTION events and supports repeat() for TTS.
       avatar_persona: {
         voice_id: process.env.HEYGEN_VOICE_ID,
         language: "en",
+      },
+      video_settings: {
+        quality: "high", // 720p — best balance of quality vs latency
       },
     }),
   });

@@ -15,6 +15,7 @@ import {
   LiveAvatarSession,
   SessionEvent,
   SessionState,
+  SessionDisconnectReason,
   AgentEventsEnum,
 } from "@heygen/liveavatar-web-sdk";
 import type { AvatarClient, AvatarStatus } from "./types";
@@ -233,6 +234,18 @@ export function createAvatarClient(): AvatarClient {
         streamReady = true;
         tryAttach();
         notifyStatus("connected");
+      });
+
+      // Session disconnected — surface end reason for debugging/UX
+      session.on(SessionEvent.SESSION_DISCONNECTED, (reason: SessionDisconnectReason) => {
+        console.warn("[AvatarClient] Session disconnected, reason:", reason);
+        avatarIsSpeaking = false;
+        asrEnabled = false;
+        if (speakResolve) {
+          speakResolve();
+          speakResolve = null;
+        }
+        notifyStatus("disconnected");
       });
 
       // ── Avatar speaking state ──────────────────────────────────
