@@ -60,7 +60,10 @@ export async function PATCH(request: Request) {
       .where(eq(sessions.id, id))
       .returning();
 
-    return NextResponse.json(updated);
+    // Serialize Date objects to ISO strings for JSON response
+    return NextResponse.json(JSON.parse(JSON.stringify(updated, (_, v) =>
+      v instanceof Date ? v.toISOString() : v
+    )));
   } catch (error) {
     console.error("[api/session] Error updating session:", error);
     return NextResponse.json({ error: "Failed to update session" }, { status: 500 });

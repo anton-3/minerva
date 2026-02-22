@@ -228,6 +228,11 @@ export function StepsPanel({ steps }: StepsPanelProps) {
       animatedCountRef.current = 0;
       return;
     }
+    // If step count decreased (board was cleared + new steps added),
+    // reset the animation counter so new elements get animated
+    if (contentSteps.length < animatedCountRef.current) {
+      animatedCountRef.current = 0;
+    }
     const id = requestAnimationFrame(() => safeAnimate());
     return () => cancelAnimationFrame(id);
   }, [contentSteps.length]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -296,6 +301,40 @@ export function StepsPanel({ steps }: StepsPanelProps) {
 
     lastScrollTop.current = el.scrollTop;
   }, []);
+
+  // ─── Draggable section nav ─────────────────────────────────────────────
+  // Default position: right side, vertically centered (under avatar window)
+  const [navPos, setNavPos] = useState<{ x: number; y: number } | null>(null);
+  const dragRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
+
+  const onDragStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const pos = navPos ?? getDefaultNavPos();
+    dragRef.current = { startX: e.clientX, startY: e.clientY, originX: pos.x, originY: pos.y };
+
+    const onMove = (ev: MouseEvent) => {
+      if (!dragRef.current || !boardRef.current) return;
+      const dx = ev.clientX - dragRef.current.startX;
+      const dy = ev.clientY - dragRef.current.startY;
+      const bounds = boardRef.current.getBoundingClientRect();
+      const nx = Math.max(0, Math.min(bounds.width - 120, dragRef.current.originX + dx));
+      const ny = Math.max(0, Math.min(bounds.height - 60, dragRef.current.originY + dy));
+      setNavPos({ x: nx, y: ny });
+    };
+    const onUp = () => {
+      dragRef.current = null;
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }, [navPos]);
+
+  function getDefaultNavPos() {
+    if (!boardRef.current) return { x: 0, y: 0 };
+    const bounds = boardRef.current.getBoundingClientRect();
+    return { x: bounds.width - 170, y: bounds.height / 2 - 40 };
+  }
 
   // Return to live: resume auto-follow and scroll to latest content
   const returnToLive = useCallback(() => {
@@ -394,14 +433,28 @@ export function StepsPanel({ steps }: StepsPanelProps) {
         </div>
       </div>
 
-      {/* Section navigation — fixed right side, under avatar window */}
+      {/* Section navigation — draggable, defaults to right-center (under avatar) */}
       {sections.length > 1 && (
         <div
-          className="absolute right-4 z-20 flex flex-col gap-0.5 max-h-[40%] overflow-y-auto bg-white/80 backdrop-blur-sm rounded-lg border border-border-light shadow-sm p-1.5"
-          style={{ top: "calc(50% - 40px)" }}
+          className="absolute z-20 flex flex-col gap-0.5 max-h-[40%] overflow-y-auto bg-white/80 backdrop-blur-sm rounded-lg border border-border-light shadow-sm p-1.5"
+          style={navPos
+            ? { left: navPos.x, top: navPos.y }
+            : { right: 16, top: "calc(50% - 40px)" }
+          }
         >
-          <div className="px-2 py-0.5 text-[10px] font-medium text-text-tertiary uppercase tracking-wider">
-            Sections
+          {/* Drag handle */}
+          <div
+            className="flex justify-center py-0.5 cursor-grab active:cursor-grabbing select-none"
+            onMouseDown={onDragStart}
+          >
+            <svg width="16" height="8" viewBox="0 0 16 8" className="text-neutral-400">
+              <circle cx="4" cy="2" r="1.2" fill="currentColor" />
+              <circle cx="8" cy="2" r="1.2" fill="currentColor" />
+              <circle cx="12" cy="2" r="1.2" fill="currentColor" />
+              <circle cx="4" cy="6" r="1.2" fill="currentColor" />
+              <circle cx="8" cy="6" r="1.2" fill="currentColor" />
+              <circle cx="12" cy="6" r="1.2" fill="currentColor" />
+            </svg>
           </div>
           {sections.map((section, i) => (
             <button
@@ -421,11 +474,11 @@ export function StepsPanel({ steps }: StepsPanelProps) {
         </div>
       )}
 
-      {/* "Back to latest" pill — shown when auto-follow is paused */}
+      {/* "Back to latest" pill — shown when auto-follow is paused, positioned above control bar */}
       {showBackToLive && (
         <button
           onClick={returnToLive}
-          className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 px-3 py-1.5 bg-brand-primary text-white rounded-full text-xs font-medium shadow-md hover:bg-brand-primary/90 transition-all"
+          className="absolute bottom-16 left-1/2 -translate-x-1/2 z-20 px-3 py-1.5 bg-brand-primary text-white rounded-full text-xs font-medium shadow-md hover:bg-brand-primary/90 transition-all"
         >
           ↓ Back to latest
         </button>
