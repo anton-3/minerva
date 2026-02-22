@@ -4,6 +4,7 @@
 
 "use client";
 
+import { memo } from "react";
 import { useSessionStore } from "@/stores/sessionStore";
 import { AI_MODELS, type AIModelId } from "@/types/session";
 import {
@@ -19,7 +20,7 @@ interface ModelPickerProps {
   onOpenChange?: (open: boolean) => void;
 }
 
-export function ModelPicker({ className, onOpenChange }: ModelPickerProps) {
+export const ModelPicker = memo(function ModelPicker({ className, onOpenChange }: ModelPickerProps) {
   const selectedModel = useSessionStore((s) => s.selectedModel);
   const setSelectedModel = useSessionStore((s) => s.setSelectedModel);
 
@@ -50,4 +51,4 @@ export function ModelPicker({ className, onOpenChange }: ModelPickerProps) {
       </SelectContent>
     </Select>
   );
-}
+});

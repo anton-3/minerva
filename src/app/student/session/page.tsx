@@ -52,6 +52,12 @@ export default function SessionPage() {
   const { visible: controlsVisible, show: showControls, lock: lockControls, unlock: unlockControls } =
     useAutoHide(status === "active");
 
+  // Stable callback for ModelPicker — prevents re-renders from recreating the function
+  const handleModelPickerOpen = useCallback((open: boolean) => {
+    if (open) lockControls();
+    else unlockControls();
+  }, [lockControls, unlockControls]);
+
   // Reset unread count when chat opens
   useEffect(() => {
     if (chatOpen) {
@@ -137,10 +143,11 @@ export default function SessionPage() {
         style={{ opacity: controlsVisible ? 1 : 0, pointerEvents: controlsVisible ? "auto" : "none" }}
         onMouseEnter={lockControls}
         onMouseLeave={unlockControls}
+        onKeyDownCapture={(e) => { if (e.code === "Space") e.stopPropagation(); }}
       >
         <ModelPicker
           className="w-[170px] bg-white/80 backdrop-blur-sm"
-          onOpenChange={(open) => open ? lockControls() : unlockControls()}
+          onOpenChange={handleModelPickerOpen}
         />
       </div>
 
