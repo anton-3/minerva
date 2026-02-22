@@ -127,10 +127,15 @@ export function createAvatarClient(): AvatarClient {
       notifyStatus("connecting");
 
       // Fetch session token from our server (LITE mode)
+      // Server-side handles retry with backoff for concurrency limits / 5xx
       const tokenRes = await fetch("/api/heygen/token", { method: "POST" });
       if (!tokenRes.ok) {
+        const errData = await tokenRes.json().catch(() => ({ code: "unknown", error: "Network error" }));
         notifyStatus("disconnected");
-        throw new Error("Failed to fetch LiveAvatar session token");
+        const err = new Error(errData.error || "Failed to fetch LiveAvatar session token");
+        (err as Error & { code?: string }).code = errData.code;
+        (err as Error & { detail?: string }).detail = errData.detail;
+        throw err;
       }
       const { token } = await tokenRes.json();
 

@@ -35,7 +35,9 @@ export function useSession() {
   const sandboxAccent = useSessionStore((s) => s.sandboxAccent);
   const videoUrl = useSessionStore((s) => s.videoUrl);
   const contentSteps = useSessionStore((s) => s.contentSteps);
+  const errorMessage = useSessionStore((s) => s.errorMessage);
   const setStatus = useSessionStore((s) => s.setStatus);
+  const setErrorMessage = useSessionStore((s) => s.setErrorMessage);
   const setAvatarStatus = useSessionStore((s) => s.setAvatarStatus);
   const setSessionId = useSessionStore((s) => s.setSessionId);
   const setContentMode = useSessionStore((s) => s.setContentMode);
@@ -115,9 +117,25 @@ export function useSession() {
       brain.sendGreeting();
     } catch (err) {
       console.error("[useSession] Failed to start session:", err);
+      const code = (err as Error & { code?: string }).code;
+      let msg = "Something went wrong. Please try again.";
+      if (code === "concurrency_limit") {
+        msg = "Another session is still active. Please wait a moment and try again.";
+      } else if (code === "session_not_found") {
+        msg = "Session expired. Please try joining again.";
+      } else if (code === "rate_limited") {
+        msg = "Too many requests. Please wait a moment.";
+      } else if (code === "auth_error") {
+        msg = "Avatar service authentication failed.";
+      } else if (code === "config_error") {
+        msg = "Avatar service not configured.";
+      } else if (err instanceof Error && err.message.includes("timed out")) {
+        msg = "Connection timed out. Please try again.";
+      }
+      setErrorMessage(msg);
       setStatus("error");
     }
-  }, [avatar, setStatus, setSessionId, brain]);
+  }, [avatar, setStatus, setErrorMessage, setSessionId, brain]);
 
   const endSession = useCallback(async () => {
     try {
@@ -192,6 +210,18 @@ export function useSession() {
       }
     };
   }, [status]);
+
+  // Cleanup on tab close / navigation — prevent stale HeyGen sessions
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (useSessionStore.getState().status === "active") {
+        // Fire-and-forget cleanup — can't await in beforeunload
+        void endSessionRef.current();
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, []);
 
   // ─── Silence timer — auto-continue when student is quiet ──────────────
   const clearSilenceTimer = useCallback(() => {
@@ -287,6 +317,7 @@ export function useSession() {
 
   return {
     status,
+    errorMessage,
     avatarStatus: avatar.status,
     isProcessing: brain.isProcessing,
     isThinking: brain.isThinking,

@@ -20,6 +20,7 @@ import { DEFAULT_MODEL } from "@/types/session";
 
 interface SessionActions {
   setStatus: (status: SessionStatus) => void;
+  setErrorMessage: (msg: string | null) => void;
   setAvatarStatus: (status: AvatarStatus) => void;
   setSessionId: (id: string) => void;
   setStudentProfile: (profile: StudentProfile) => void;
@@ -41,10 +42,11 @@ interface SessionActions {
   reset: () => void;
 }
 
-// Extended SessionState with selectedModel and zoom
+// Extended SessionState with selectedModel, zoom, and error details
 interface ExtendedSessionState extends SessionState {
   selectedModel: AIModelId;
   zoom: number;
+  errorMessage: string | null;
 }
 
 const MIN_ZOOM = 0.3;
@@ -67,6 +69,7 @@ const initialState: ExtendedSessionState = {
   masteryScores: [],
   selectedModel: DEFAULT_MODEL,
   zoom: 1,
+  errorMessage: null,
 };
 
 export const useSessionStore = create<ExtendedSessionState & SessionActions>()(
@@ -74,7 +77,8 @@ export const useSessionStore = create<ExtendedSessionState & SessionActions>()(
     (set) => ({
       ...initialState,
 
-      setStatus: (status) => set({ status }),
+      setStatus: (status) => set({ status, ...(status !== "error" ? { errorMessage: null } : {}) }),
+      setErrorMessage: (errorMessage) => set({ errorMessage }),
       setAvatarStatus: (avatarStatus) => set({ avatarStatus }),
       setSessionId: (sessionId) => set({ sessionId }),
       setStudentProfile: (studentProfile) => set({ studentProfile }),

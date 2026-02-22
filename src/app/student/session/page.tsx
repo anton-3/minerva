@@ -18,6 +18,7 @@ import { ParticlesBackground } from "@/components/session/ParticlesBackground";
 export default function SessionPage() {
   const {
     status,
+    errorMessage,
     avatarStatus,
     isProcessing,
     isThinking,
@@ -210,6 +211,28 @@ export default function SessionPage() {
             }`}
           >
             {micOpen ? "Listening..." : "Hold Space to talk"}
+          </div>
+        </div>
+      )}
+
+      {/* Error overlay — shown when session fails to start */}
+      {status === "error" && errorMessage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl p-6 max-w-sm mx-4 text-center space-y-4">
+            <div className="w-10 h-10 mx-auto rounded-full bg-red-50 flex items-center justify-center">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-500">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+            </div>
+            <p className="text-sm text-text-secondary">{errorMessage}</p>
+            <button
+              onClick={startSession}
+              className="px-5 py-2 rounded-full bg-brand-primary text-white text-sm font-medium hover:bg-brand-primary/90 transition-colors"
+            >
+              Try Again
+            </button>
           </div>
         </div>
       )}
