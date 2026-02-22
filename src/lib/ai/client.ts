@@ -26,6 +26,7 @@ import type {
   SessionSummary,
   LearningPlan,
   AIModelId,
+  ContentStep,
 } from "@/types/session";
 import { DEFAULT_MODEL } from "@/types/session";
 import {
@@ -187,11 +188,108 @@ const tutorTools = {
     // Has execute - server writes to DB (handled in route.ts)
   }),
 
+  showSteps: tool({
+    description:
+      "Draw on Minerva's whiteboard. Write equations, text, diagrams, and annotate previous content with circles, arrows, underlines, boxes. Each element animates as if being written/drawn. Use this as your PRIMARY teaching tool for step-by-step instruction.",
+    inputSchema: z.object({
+      steps: z.array(z.discriminatedUnion("type", [
+        z.object({ type: z.literal("clear") }),
+        z.object({
+          type: z.literal("step"),
+          label: z.string().optional().describe("Label like 'Step 1', 'Given', 'Answer'"),
+          math: z.string().optional().describe("LaTeX math expression (e.g., '2x + 5 = 13')"),
+          text: z.string().optional().describe("Plain text explanation"),
+        }),
+        z.object({
+          type: z.literal("diagram"),
+          svg: z.string().describe("SVG markup string for hand-drawn diagram"),
+        }),
+        z.object({
+          type: z.literal("numberLine"),
+          min: z.number().describe("Left end of number line"),
+          max: z.number().describe("Right end of number line"),
+          highlights: z.array(z.number()).optional().describe("Numbers to highlight on the line"),
+        }),
+        z.object({
+          type: z.literal("divider"),
+          label: z.string().optional().describe("Optional section heading"),
+        }),
+        // Inline content blocks — unified board (replaces separate content modes)
+        z.object({
+          type: z.literal("graph"),
+          tool: MathToolSchema.describe("Which graphing tool: desmos, desmos3d, or geogebra"),
+          expressions: z.array(z.object({
+            latex: z.string().describe("Math expression in LaTeX"),
+            id: z.string().optional().describe("Unique ID for this expression"),
+            color: z.string().optional().describe("Expression color (CSS color)"),
+          })).optional().describe("Math expressions to plot"),
+          viewport: z.object({
+            left: z.number(), right: z.number(), top: z.number(), bottom: z.number(),
+          }).optional().describe("Visible viewport bounds"),
+        }),
+        z.object({
+          type: z.literal("sandbox"),
+          html: z.string().describe("HTML content (will be rendered in sandboxed iframe)"),
+          accent: z.string().optional().describe("Subject: physics, chemistry, biology, history, etc."),
+          height: z.number().optional().describe("Height in pixels (default: 400)"),
+        }),
+        z.object({
+          type: z.literal("video"),
+          url: z.string().describe("Video URL to play"),
+          autoPlay: z.boolean().optional().describe("Auto-play the video (default: true)"),
+        }),
+        z.object({
+          type: z.literal("image"),
+          src: z.string().describe("Image URL"),
+          alt: z.string().optional().describe("Alt text description"),
+          width: z.number().optional().describe("Display width in pixels"),
+        }),
+        z.object({
+          type: z.literal("code"),
+          language: z.string().describe("Programming language (python, javascript, etc.)"),
+          code: z.string().describe("Source code to display"),
+        }),
+        // Annotation types — reference previous content elements by index
+        z.object({
+          type: z.literal("circle"),
+          target: z.number().describe("Index of content element to circle (0-based)"),
+          color: z.string().optional().describe("Circle color (default: red)"),
+        }),
+        z.object({
+          type: z.literal("underline"),
+          target: z.number().describe("Index of content element to underline (0-based)"),
+          color: z.string().optional().describe("Underline color (default: blue)"),
+        }),
+        z.object({
+          type: z.literal("arrow"),
+          from: z.number().describe("Index of source element"),
+          to: z.number().describe("Index of target element"),
+          label: z.string().optional().describe("Text label on the arrow"),
+        }),
+        z.object({
+          type: z.literal("box"),
+          target: z.number().describe("Index of content element to box (0-based)"),
+          color: z.string().optional().describe("Box color (default: green)"),
+        }),
+        z.object({
+          type: z.literal("crossOut"),
+          target: z.number().describe("Index of content element to cross out (0-based)"),
+        }),
+        z.object({
+          type: z.literal("highlight"),
+          stepIndex: z.number().describe("Index of step to highlight (0-based)"),
+          color: z.string().optional().describe("Highlight color (CSS color)"),
+        }),
+      ])).describe("Array of whiteboard commands: content elements, inline blocks, and annotations"),
+    }),
+    // No execute - client handles rendering
+  }),
+
   setContentMode: tool({
     description:
-      "Switch the main content panel display mode. Use 'math' for Desmos/GeoGebra, 'sandbox' for HTML content, 'video' for Manim animations, 'welcome' for initial greeting state.",
+      "Switch the main content panel display mode. Use 'math' for Desmos/GeoGebra, 'sandbox' for HTML content, 'video' for Manim animations, 'steps' for step-by-step tutoring, 'welcome' for initial greeting state.",
     inputSchema: z.object({
-      mode: z.enum(["welcome", "math", "sandbox", "video"]).describe("Content mode to switch to"),
+      mode: z.enum(["welcome", "math", "sandbox", "video", "steps"]).describe("Content mode to switch to"),
     }),
     // No execute - client handles UI state
   }),
@@ -246,6 +344,101 @@ function getProviderOptions(modelId: AIModelId = DEFAULT_MODEL) {
 
 const MAX_HISTORY = 20;
 
+// Serialize contentSteps into compact text so the model knows what's on the whiteboard.
+// Follows the ChatGPT Canvas / Khanmigo pattern: inject structured state each turn.
+// Format: indexed lines so the model can reference steps by number for annotations.
+function serializeSteps(steps: ContentStep[]): string {
+  if (!steps || steps.length === 0) return "";
+
+  const lines: string[] = [];
+  let contentIndex = 0; // Only content elements get indices (not annotations)
+
+  for (const s of steps) {
+    switch (s.type) {
+      case "step": {
+        const parts: string[] = [];
+        if (s.label) parts.push(s.label + ":");
+        if (s.math) parts.push(s.math);
+        if (s.text) parts.push(`(${s.text})`);
+        lines.push(`[${contentIndex}] ${parts.join(" ")}`);
+        contentIndex++;
+        break;
+      }
+      case "divider":
+        lines.push(`[${contentIndex}] ─── ${s.label || "section"} ───`);
+        contentIndex++;
+        break;
+      case "numberLine":
+        lines.push(`[${contentIndex}] numberLine: ${s.min} to ${s.max}${s.highlights ? `, highlights: ${s.highlights.join(", ")}` : ""}`);
+        contentIndex++;
+        break;
+      case "diagram":
+        lines.push(`[${contentIndex}] [diagram]`);
+        contentIndex++;
+        break;
+      // Inline content blocks
+      case "graph":
+        lines.push(`[${contentIndex}] [${s.tool} graph${s.expressions ? `: ${s.expressions.map(e => e.latex).join(", ")}` : ""}]`);
+        contentIndex++;
+        break;
+      case "sandbox":
+        lines.push(`[${contentIndex}] [sandbox${s.accent ? ` (${s.accent})` : ""}]`);
+        contentIndex++;
+        break;
+      case "video":
+        lines.push(`[${contentIndex}] [video: ${s.url}]`);
+        contentIndex++;
+        break;
+      case "image":
+        lines.push(`[${contentIndex}] [image${s.alt ? `: ${s.alt}` : ""}]`);
+        contentIndex++;
+        break;
+      case "code":
+        lines.push(`[${contentIndex}] [code (${s.language}): ${s.code.slice(0, 80)}${s.code.length > 80 ? "..." : ""}]`);
+        contentIndex++;
+        break;
+      // Annotations reference content by index
+      case "circle":
+        lines.push(`  ↳ [${s.target}] circled${s.color ? ` (${s.color})` : ""}`);
+        break;
+      case "underline":
+        lines.push(`  ↳ [${s.target}] underlined${s.color ? ` (${s.color})` : ""}`);
+        break;
+      case "box":
+        lines.push(`  ↳ [${s.target}] boxed${s.color ? ` (${s.color})` : ""}`);
+        break;
+      case "arrow":
+        lines.push(`  ↳ arrow [${s.from}]→[${s.to}]${s.label ? ` "${s.label}"` : ""}`);
+        break;
+      case "crossOut":
+        lines.push(`  ↳ [${s.target}] crossed out`);
+        break;
+      case "highlight":
+        lines.push(`  ↳ [${s.stepIndex}] highlighted${s.color ? ` (${s.color})` : ""}`);
+        break;
+      // skip "clear" — already handled by store
+    }
+  }
+
+  return `Whiteboard (${contentIndex} items):\n${lines.join("\n")}`;
+}
+
+// Extract readable text from sandbox HTML (strip tags, scripts, styles).
+// Returns a compact summary so the model knows what content the student sees.
+function summarizeSandbox(html: string, accent?: string | null): string {
+  // Strip <script> and <style> blocks entirely
+  let text = html.replace(/<script[\s\S]*?<\/script>/gi, "");
+  text = text.replace(/<style[\s\S]*?<\/style>/gi, "");
+  // Strip all HTML tags
+  text = text.replace(/<[^>]+>/g, " ");
+  // Collapse whitespace
+  text = text.replace(/\s+/g, " ").trim();
+  // Truncate to ~500 chars
+  if (text.length > 500) text = text.slice(0, 500) + "...";
+  const subject = accent ? ` (${accent})` : "";
+  return `Sandbox content${subject}: ${text || "[interactive visualization]"}`;
+}
+
 // Helper: build AI SDK messages from TutorBrainRequest
 function buildAIMessages(request: TutorBrainRequest): {
   messages: ModelMessage[];
@@ -268,6 +461,15 @@ function buildAIMessages(request: TutorBrainRequest): {
   if (request.canvasState) {
     contextParts.push(`Math Canvas:\n${request.canvasState}`);
   }
+  if (request.contentSteps && request.contentSteps.length > 0) {
+    contextParts.push(serializeSteps(request.contentSteps));
+  }
+  if (request.sandboxContent && request.contentMode === "sandbox") {
+    contextParts.push(summarizeSandbox(request.sandboxContent, request.sandboxAccent));
+  }
+  if (request.videoUrl && request.contentMode === "video") {
+    contextParts.push(`Video playing: ${request.videoUrl}`);
+  }
   if (request.masteryScores && request.masteryScores.length > 0) {
     const masteryText = request.masteryScores
       .map((m) => `${m.subject}/${m.topic}: ${Math.round(m.score * 100)}%`)
@@ -276,8 +478,9 @@ function buildAIMessages(request: TutorBrainRequest): {
   }
   if (request.contentMode) {
     const modeDescriptions: Record<string, string> = {
+      steps: "Step-by-step whiteboard is visible (student sees the content listed above)",
       math: "Math canvas (Desmos/GeoGebra) is visible",
-      sandbox: "Interactive HTML sandbox is visible",
+      sandbox: "Interactive HTML sandbox is visible (student sees the content summarized above)",
       video: "A math animation video is playing",
       welcome: "Welcome screen is showing",
     };
@@ -360,6 +563,8 @@ export function createTutorBrain(): TutorBrain {
         let firstTokenLogged = false;
         let tokenCount = 0;
         let stepNumber = 0;
+        let anySpeechEmitted = false; // Track if any speech was generated across all steps
+        let toolCallsSeen: string[] = []; // Track tool calls for fallback speech
 
         // Process the full stream for text and tool events
         // AI SDK fullStream events: start-step, text-start, text-delta, text-end, tool-call, tool-result, finish-step
@@ -415,6 +620,7 @@ export function createTutorBrain(): TutorBrain {
 
             // Emit full speech text for chat display
             if (speechBuffer.trim()) {
+              anySpeechEmitted = true;
               console.log(
                 `[Latency:claude] SPEECH_COMPLETE (step ${stepNumber}) +${Date.now() - streamT0}ms | "${speechBuffer.slice(0, 60)}..."`
               );
@@ -432,6 +638,7 @@ export function createTutorBrain(): TutorBrain {
             }
             // Safety: emit any accumulated speech before tool call
             if (speechBuffer.trim()) {
+              anySpeechEmitted = true;
               console.log(
                 `[Latency:claude] SPEECH_COMPLETE (before tool) +${Date.now() - streamT0}ms | "${speechBuffer.slice(0, 60)}..."`
               );
@@ -439,6 +646,7 @@ export function createTutorBrain(): TutorBrain {
               speechBuffer = "";
             }
 
+            toolCallsSeen.push(chunk.toolName);
             console.log(
               `[Latency:claude] TOOL_CALL +${Date.now() - streamT0}ms | ${chunk.toolName}`
             );
@@ -466,14 +674,47 @@ export function createTutorBrain(): TutorBrain {
 
         // Fallback: flush any remaining buffers (shouldn't normally hit this)
         if (sentenceBuffer.trim()) {
+          anySpeechEmitted = true;
           yield { type: "tts-sentence", sentence: sentenceBuffer.trim() };
           sentenceBuffer = "";
         }
         if (speechBuffer.trim()) {
+          anySpeechEmitted = true;
           console.log(
             `[Latency:claude] SPEECH_COMPLETE (fallback) +${Date.now() - streamT0}ms | "${speechBuffer.slice(0, 60)}..."`
           );
           yield { type: "speech", speech: speechBuffer.trim() };
+        }
+
+        // Safety net: if tools were called but no speech was generated,
+        // emit fallback speech so the avatar has something to say.
+        // GPT-4.1 sometimes calls tools without generating text.
+        if (!anySpeechEmitted && toolCallsSeen.length > 0) {
+          // Pick contextual fallback based on what tools were called
+          const fallbacks: Record<string, string[]> = {
+            showSteps: [
+              "ok watch the board",
+              "here, let me write this out",
+              "take a look at this",
+              "let me show you what I mean",
+            ],
+            executeCanvasCommands: [
+              "let's see what this looks like on the graph",
+              "check out this visualization",
+            ],
+            showSandbox: [
+              "here's what this looks like",
+              "take a look at this",
+            ],
+          };
+          const primaryTool = toolCallsSeen[0];
+          const options = fallbacks[primaryTool] || ["ok let's take a look at this"];
+          const fallback = options[Math.floor(Math.random() * options.length)];
+          console.warn(
+            `[Latency:claude] NO_SPEECH_FALLBACK +${Date.now() - streamT0}ms | tools=${toolCallsSeen.join(",")} — emitting fallback: "${fallback}"`
+          );
+          yield { type: "tts-sentence", sentence: fallback };
+          yield { type: "speech", speech: fallback };
         }
 
         console.log(

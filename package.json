@@ -19,6 +19,7 @@
     "@ai-sdk/openai": "^3.0.29",
     "@deepgram/sdk": "^4.11.3",
     "@elevenlabs/elevenlabs-js": "^2.36.0",
+    "@gsap/react": "^2.1.2",
     "@heygen/liveavatar-web-sdk": "^0.0.10",
     "@types/jsonwebtoken": "^9.0.10",
     "@zoom/videosdk": "^2.3.14",
@@ -27,7 +28,9 @@
     "clsx": "^2.1.1",
     "dotenv": "^17.3.1",
     "drizzle-orm": "^0.45.1",
+    "gsap": "^3.14.2",
     "jsonwebtoken": "^9.0.3",
+    "katex": "^0.16.28",
     "lucide-react": "^0.564.0",
     "next": "16.1.6",
     "pg": "^8.18.0",
@@ -38,6 +41,7 @@
     "react-is": "^19.2.3",
     "react-rnd": "^10.5.2",
     "recharts": "^3.7.0",
+    "roughjs": "^4.6.6",
     "tailwind-merge": "^3.4.0",
     "zod": "^4.3.6",
     "zustand": "^5.0.11"
@@ -48,6 +52,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/desmos": "^1.11.0",
+    "@types/katex": "^0.16.8",
     "@types/node": "^20",
     "@types/pg": "^8.16.0",
     "@types/react": "^19",

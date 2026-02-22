@@ -161,9 +161,18 @@ export async function POST(request: Request) {
 
   const stream = new ReadableStream({
     async start(controller) {
+      // Guard: track if stream is closed (client disconnect or completion)
+      let closed = false;
+      const safeEnqueue = (data: Uint8Array) => {
+        if (closed) return;
+        try { controller.enqueue(data); } catch { closed = true; }
+      };
+
       try {
         let firstEvent = true;
         for await (const event of brain.respondStream(body, abortController.signal)) {
+          if (closed) break; // Stop processing if client disconnected
+
           if (firstEvent) {
             console.log(
               `[Latency:server] FIRST_SSE_EVENT +${Date.now() - t0}ms | type=${event.type}`
@@ -190,10 +199,10 @@ export async function POST(request: Request) {
               );
 
               // Emit audio immediately — client plays this while we TTS the next sentence
-              controller.enqueue(
+              safeEnqueue(
                 encoder.encode(`data: ${JSON.stringify({ type: "audio", audio: b64 })}\n\n`)
               );
-              controller.enqueue(
+              safeEnqueue(
                 encoder.encode('data: {"type":"audio-end"}\n\n')
               );
             } catch (ttsErr) {
@@ -206,7 +215,7 @@ export async function POST(request: Request) {
             console.log(
               `[Latency:server] SPEECH_SSE_EMIT +${Date.now() - t0}ms | "${event.speech.slice(0, 60)}..."`
             );
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+            safeEnqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
           } else if (event.type === "tool-call") {
             // Handle server-side tool execution
             if (event.toolName === "showVideo") {
@@ -221,7 +230,7 @@ export async function POST(request: Request) {
                 toolCallId: event.toolCallId,
                 output: result,
               };
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify(resultEvent)}\n\n`));
+              safeEnqueue(encoder.encode(`data: ${JSON.stringify(resultEvent)}\n\n`));
             } else if (event.toolName === "updateProgress") {
               console.log(`[Latency:server] EXECUTING_TOOL +${Date.now() - t0}ms | updateProgress`);
               const result = await handleUpdateProgressTool(
@@ -236,35 +245,35 @@ export async function POST(request: Request) {
                 toolCallId: event.toolCallId,
                 output: result,
               };
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify(resultEvent)}\n\n`));
+              safeEnqueue(encoder.encode(`data: ${JSON.stringify(resultEvent)}\n\n`));
             } else {
               // Client-side tools: forward the tool-call event to frontend
               console.log(
                 `[Latency:server] TOOL_CALL_SSE_EMIT +${Date.now() - t0}ms | ${event.toolName}`
               );
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+              safeEnqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
             }
           } else if (event.type === "tool-result") {
             // Forward tool results (from AI SDK auto-execution if any)
             console.log(
               `[Latency:server] TOOL_RESULT_SSE_EMIT +${Date.now() - t0}ms | ${event.toolName}`
             );
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+            safeEnqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
           } else if (event.type === "done") {
             console.log(`[Latency:server] STREAM_DONE +${Date.now() - t0}ms`);
-            controller.enqueue(encoder.encode('data: {"type":"done"}\n\n'));
+            safeEnqueue(encoder.encode('data: {"type":"done"}\n\n'));
           }
         }
       } catch (err) {
         console.error("[api/tutor/respond] Stream error:", err);
-        const errorEvent = `data: ${JSON.stringify({
+        safeEnqueue(encoder.encode(`data: ${JSON.stringify({
           type: "error",
           speech:
             "I'm having some trouble right now. Can you try saying that again?",
-        })}\n\n`;
-        controller.enqueue(encoder.encode(errorEvent));
+        })}\n\n`));
       } finally {
-        controller.close();
+        if (!closed) controller.close();
+        closed = true;
       }
     },
     cancel() {

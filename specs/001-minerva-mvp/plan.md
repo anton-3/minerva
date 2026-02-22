@@ -1,23 +1,37 @@
 # Implementation Plan: Minerva AI Avatar Tutor
 
-**Branch**: `001-minerva-mvp` | **Date**: 2026-02-14 | **Spec**: [spec.md](./spec.md)
-**Input**: Feature specification from `/specs/001-minerva-mvp/spec.md`
+**Branch**: `main` | **Last Updated**: 2026-02-21 | **Spec**: [spec.md](./spec.md)
+
+> **Note**: This spec was originally written for the TreeHacks 2026 hackathon (Feb 14-16, 2026). Minerva is now a post-hackathon product. The source of truth for current architecture is `plan.md` and `progress.md` in the project root.
 
 ## Summary
 
-Build an AI avatar tutor platform where a HeyGen LiveAvatar teaches middle school students via real-time conversation and interactive tldraw whiteboard. Claude API powers the tutor brain (Socratic method + canvas command generation). Perplexity Sonar provides factual grounding. Supabase handles auth + data. Parent dashboard for goal setting and progress tracking. Deployed on Vercel.
+AI avatar tutor platform where a HeyGen LiveAvatar teaches students via real-time conversation. An interactive whiteboard (KaTeX + GSAP + Rough.js) displays equations, graphs, simulations, and videos inline. Multi-model AI brain (Claude, Gemini, GPT) powers tutoring via Vercel AI SDK. ElevenLabs provides TTS. Deepgram provides ASR. Parents set goals and track progress via dashboard. Deployed on Vercel.
 
 ## Technical Context
 
 **Language/Version**: TypeScript 5.x, Node.js (Next.js runtime)
-**Primary Dependencies**: Next.js 16.1 LTS, @heygen/streaming-avatar 2.1.0, tldraw 4.3.1, @anthropic-ai/sdk 0.74.0, @supabase/supabase-js 2.95.3, zustand 5.0.11
+**Primary Dependencies**:
+| Dependency | Version | Purpose |
+|-----------|---------|---------|
+| Next.js | 16.1 LTS | Framework (App Router, Turbopack) |
+| React | 19.2 | UI |
+| Tailwind CSS | v4 | Styling |
+| Vercel AI SDK | latest | Multi-model AI (`@ai-sdk/anthropic`, `@ai-sdk/google`, `@ai-sdk/openai`) |
+| @heygen/liveavatar-web-sdk | 0.0.10 | Avatar (WebRTC via LiveKit) |
+| ElevenLabs | server-side | TTS (PCM 24kHz, per-sentence streaming) |
+| Deepgram | real-time | ASR (push-to-talk transcription) |
+| KaTeX | latest | Math equation rendering |
+| GSAP | latest | Whiteboard animations |
+| Rough.js | latest | Hand-drawn annotations |
+| Desmos API | 2D + 3D | Interactive graphing |
+| GeoGebra API | latest | Interactive geometry |
+| Supabase | 2.95.3 | Database (Postgres + Auth) |
+| Zustand | 5.0.11 | State management |
+
 **Storage**: Supabase (Postgres + Auth + Realtime)
-**Testing**: Manual testing + demo rehearsals (hackathon context)
 **Target Platform**: Web browser (desktop + tablet), deployed on Vercel
 **Project Type**: Web application (full-stack Next.js)
-**Performance Goals**: <5s end-to-end response latency, 3+ minute sustained sessions
-**Constraints**: 36-hour hackathon, 4-person team with mixed skills, HeyGen 10-min session limit
-**Scale/Scope**: Single-user demo, ~7 pages, ~15 API routes, ~6 black box modules
 
 ## Constitution Check
 
@@ -26,31 +40,14 @@ Build an AI avatar tutor platform where a HeyGen LiveAvatar teaches middle schoo
 | Principle | Status | Notes |
 |-----------|--------|-------|
 | I. Black Box Interfaces | PASS | Every external dependency wrapped in `src/lib/`. Components communicate via typed interfaces. |
-| II. Single Responsibility | PASS | Each module has one owner (one person). Clear ownership boundaries. |
-| III. Primitive-First Design | PASS | Core primitives: `TutorResponse`, `CanvasCommand`, `TranscriptEntry`, `SessionState`, `LearningPlan` |
+| II. Single Responsibility | PASS | Each module has clear ownership boundaries. |
+| III. Primitive-First Design | PASS | Core primitives: `ContentStep`, `ConversationMessage`, `TranscriptEntry`, `SessionState`, `LearningPlanContext` |
 | IV. Interface Simplicity | PASS | One way to do each thing. Semantic types over structural complexity. |
-| V. Wrap External Dependencies | PASS | HeyGen, Claude, Perplexity, Recall.ai, Supabase all wrapped in `src/lib/` modules |
+| V. Wrap External Dependencies | PASS | HeyGen, AI SDK, ElevenLabs, Deepgram, Supabase all wrapped in `src/lib/` modules |
 
 ## Project Structure
 
-### Documentation (this feature)
-
-```text
-specs/001-minerva-mvp/
-├── spec.md              # Feature specification
-├── plan.md              # This file
-├── research.md          # Research artifacts
-├── data-model.md        # Database schema
-├── contracts/           # Module interface contracts
-│   ├── avatar.md        # Avatar module interface
-│   ├── canvas.md        # Canvas module interface
-│   ├── tutor-brain.md   # Claude tutor brain interface
-│   ├── knowledge.md     # Perplexity knowledge interface
-│   └── recorder.md      # Recall.ai recording interface
-└── tasks.md             # Implementation tasks
-```
-
-### Source Code (repository root)
+### Source Code
 
 ```text
 src/
@@ -68,178 +65,125 @@ src/
 │   ├── student/
 │   │   ├── page.tsx              # Student home
 │   │   └── session/page.tsx      # THE tutoring session (core)
-│   └── api/                      # API routes (Next.js Route Handlers)
+│   └── api/                      # API routes
 │       ├── heygen/token/route.ts
-│       ├── tutor/respond/route.ts
+│       ├── tutor/respond/route.ts  # SSE streaming endpoint
 │       ├── tutor/plan/route.ts
-│       ├── search/route.ts
-│       ├── recall/bot/route.ts
-│       ├── recall/webhook/route.ts
+│       ├── elevenlabs/tts/route.ts
 │       ├── session/route.ts
-│       ├── session/summary/route.ts
 │       └── progress/route.ts
 ├── components/
-│   ├── ui/                       # shadcn/ui (pre-installed)
+│   ├── ui/                       # shadcn/ui
 │   ├── session/                  # Session page components
 │   │   ├── AvatarPanel.tsx       # HeyGen avatar video display
-│   │   ├── CanvasPanel.tsx       # tldraw whiteboard wrapper
-│   │   ├── ChatPanel.tsx         # Text chat sidebar
-│   │   └── SessionControls.tsx   # Mic, timer, end session
+│   │   ├── StepsPanel.tsx        # Whiteboard (KaTeX + GSAP + Rough.js)
+│   │   ├── ContentMode.tsx       # Content mode router (being unified)
+│   │   ├── SandboxPanel.tsx      # HTML iframe sandbox (being inlined)
+│   │   ├── MathToolPanel.tsx     # Desmos/GeoGebra wrapper (being inlined)
+│   │   ├── VideoPanel.tsx        # Video player (being inlined)
+│   │   ├── BottomControlBar.tsx  # Mic, controls, model picker
+│   │   └── ModelPicker.tsx       # AI model selection
 │   ├── parent/                   # Parent dashboard components
-│   │   ├── ChildCard.tsx
-│   │   ├── GoalForm.tsx
-│   │   ├── ProgressChart.tsx
-│   │   └── SessionSummaryCard.tsx
 │   └── shared/
-│       ├── Header.tsx
-│       └── LoadingSpinner.tsx
-├── lib/                          # BLACK BOX MODULES (wrapped dependencies)
+├── lib/                          # BLACK BOX MODULES
 │   ├── heygen/                   # Avatar module
-│   │   ├── client.ts             # StreamingAvatar SDK wrapper
-│   │   └── types.ts              # Avatar-specific types
-│   ├── claude/                   # Tutor brain module
-│   │   ├── client.ts             # Anthropic SDK wrapper
-│   │   └── prompts.ts            # System prompts (Socratic method)
-│   ├── canvas/                   # Canvas command module
-│   │   ├── commands.ts           # Command executor + math templates
-│   │   └── types.ts              # CanvasCommand type
-│   ├── perplexity/               # Knowledge module
-│   │   └── client.ts             # Sonar API wrapper
-│   ├── recall/                   # Recording module
-│   │   └── client.ts             # Recall.ai API wrapper
+│   │   └── client.ts             # LiveAvatar SDK wrapper + speech pipeline
+│   ├── ai/                       # Tutor brain module (was lib/claude/)
+│   │   ├── client.ts             # Vercel AI SDK wrapper, multi-model, tool calling, context injection
+│   │   └── prompts.ts            # System prompts (5-phase teaching methodology)
+│   ├── elevenlabs/               # TTS module
+│   │   └── client.ts             # ElevenLabs API wrapper
+│   ├── deepgram/                 # ASR module
+│   │   └── client.ts             # Deepgram real-time transcription
 │   ├── supabase/                 # Database module
 │   │   ├── client.ts             # Browser client
 │   │   └── server.ts             # Server client
-│   └── utils.ts                  # shadcn/ui utility (pre-existing)
-├── hooks/                        # React hooks (compose black box modules)
+│   └── utils.ts
+├── hooks/
+│   ├── useSession.ts             # Session lifecycle — wires avatar + brain + ASR
+│   ├── useTutorBrain.ts          # Conversation loop — SSE consumer, silence handler
 │   ├── useAvatar.ts              # Avatar lifecycle hook
-│   ├── useCanvas.ts              # Canvas editor + commands hook
-│   ├── useTutorBrain.ts          # Conversation loop hook
-│   └── useSession.ts             # Session state machine hook
+│   └── useDeepgram.ts            # ASR hook
 ├── stores/
 │   └── sessionStore.ts           # Zustand session state
 └── types/
-    ├── session.ts                # Core primitive types
+    ├── session.ts                # Core types (ContentStep, ConversationMessage, etc.)
     └── database.ts               # Supabase schema types
 ```
 
-**Structure Decision**: Full-stack Next.js (single project). All API routes in `src/app/api/`. All wrapped dependencies in `src/lib/`. All shared types in `src/types/`. Components organized by domain (session, parent, shared).
+## Core Data Flow
 
-## Black Box Module Contracts
-
-### Avatar Module (`src/lib/heygen/`)
-
-```typescript
-// Interface - what other modules see
-interface AvatarClient {
-  startSession(): Promise<{ stream: MediaStream }>;
-  endSession(): Promise<void>;
-  speak(text: string): Promise<void>;
-  interrupt(): Promise<void>;
-  onUserMessage(callback: (text: string) => void): void;
-  onStatusChange(callback: (status: "connecting" | "connected" | "speaking" | "listening" | "disconnected") => void): void;
-}
+```
+Student speaks (push-to-talk button)
+  → Deepgram ASR (real-time transcription)
+  → useTutorBrain sends POST /api/tutor/respond
+  → Vercel AI SDK: streamText() with tools (multi-model)
+  → SSE stream: speech text + audio chunks + tool calls
+  → ElevenLabs TTS: per-sentence audio generation (PCM 24kHz)
+  → HeyGen LiveAvatar: lip-sync from audio bytes
+  → Tool calls execute on frontend:
+    - showSteps → adds ContentStep[] to whiteboard
+    - executeCanvasCommands → Desmos/GeoGebra interactions
+    - showSandbox → HTML iframe visualization
+    - showVideo → Manim math animation
+  → Content appears on the board
 ```
 
-Wraps `@heygen/streaming-avatar`. No HeyGen types leak outside this module.
+## Key Interfaces (Current)
 
-### Canvas Module (`src/lib/canvas/`)
+### ContentStep (Whiteboard blocks)
 
 ```typescript
-// Interface - what other modules see
-type CanvasCommand =
-  | { action: "clear" }
-  | { action: "drawEquation"; equation: string; x: number; y: number }
-  | { action: "drawNumberLine"; min: number; max: number; y: number }
-  | { action: "drawCoordinatePlane"; originX: number; originY: number }
-  | { action: "drawAngle"; vertexX: number; vertexY: number; angle: number; label?: string }
-  | { action: "drawFraction"; numerator: string; denominator: string; x: number; y: number }
-  | { action: "highlight"; id: string; color: string }
-  | { action: "createShape"; shape: Record<string, unknown> }
-
-interface CanvasExecutor {
-  execute(command: CanvasCommand): string | void;  // returns shape ID if created
-  executeSequence(commands: CanvasCommand[], delayMs?: number): Promise<void>;
-  clear(): void;
-  getSnapshot(): string;  // serialized description for Claude context
-}
+export type ContentStep =
+  | { type: "clear" }
+  | { type: "step"; label?: string; math?: string; text?: string }
+  | { type: "divider"; label?: string }
+  | { type: "numberLine"; min: number; max: number; highlights?: number[] }
+  | { type: "diagram"; svg: string }
+  // Annotations (reference other steps by index)
+  | { type: "circle"; target: number; color?: string }
+  | { type: "underline"; target: number; color?: string }
+  | { type: "arrow"; from: number; to: number; label?: string }
+  | { type: "box"; target: number; color?: string }
+  | { type: "crossOut"; target: number }
+  | { type: "highlight"; stepIndex: number; color?: string }
 ```
 
-Wraps `tldraw` Editor API. No tldraw types leak outside this module.
-
-### Tutor Brain Module (`src/lib/claude/`)
+### TutorBrainRequest
 
 ```typescript
-// Interface - what other modules see
-interface TutorBrainRequest {
+export interface TutorBrainRequest {
   studentMessage: string;
-  conversationHistory: { role: "user" | "assistant"; content: string }[];
-  learningPlan: { subject: string; currentTopic: string; goals: string[] } | null;
-  studentProfile: { name: string; age: number; grade: number };
-  canvasState: string;  // from CanvasExecutor.getSnapshot()
-}
-
-interface TutorBrainResponse {
-  speech: string;
-  canvasCommands?: CanvasCommand[];
-  progressUpdate?: { topic: string; score: number };
-  internalNotes?: string;
-}
-
-interface TutorBrain {
-  respond(request: TutorBrainRequest): Promise<TutorBrainResponse>;
-  generateSummary(transcript: { speaker: string; text: string }[]): Promise<SessionSummary>;
-  generateLearningPlan(goals: string[], subject: string): Promise<LearningPlan>;
+  conversationHistory: ConversationMessage[];
+  learningPlan: LearningPlanContext | null;
+  studentProfile: StudentProfile;
+  canvasState: string;
+  contentSteps?: ContentStep[];       // Whiteboard state for context injection
+  sandboxContent?: string | null;     // HTML iframe content
+  sandboxAccent?: string | null;      // Subject hint
+  videoUrl?: string | null;           // Currently playing video
+  imageData?: { base64: string; mediaType: string };
+  masteryScores?: MasteryScore[];
+  modelId?: AIModelId;
+  contentMode?: ContentMode;
 }
 ```
 
-Wraps `@anthropic-ai/sdk`. Contains all system prompts. No Anthropic types leak outside.
-
-### Knowledge Module (`src/lib/perplexity/`)
+### AI Models Supported
 
 ```typescript
-// Interface - what other modules see
-interface KnowledgeLookup {
-  search(query: string): Promise<{ answer: string; citations: string[] }>;
-}
+export type AIModelId =
+  | "claude-sonnet-4-5"
+  | "claude-haiku-4-5"
+  | "gemini-3-pro"
+  | "gemini-3-flash"
+  | "gpt-4.1-nano"
+  | "gpt-5.2-chat";
 ```
 
-Wraps Perplexity Sonar REST API. No Perplexity response types leak outside.
+## Next Major Work: Unified Board Migration
 
-### Recording Module (`src/lib/recall/`)
-
-```typescript
-// Interface - what other modules see
-interface SessionRecorder {
-  startRecording(meetingUrl: string, sessionId: string): Promise<{ botId: string }>;
-  stopRecording(botId: string): Promise<{ recordingUrl: string }>;
-}
-```
-
-Wraps Recall.ai REST API. No Recall types leak outside.
-
-## Team Ownership (4 People)
-
-| Person | Role | Modules Owned | Files Owned |
-|--------|------|--------------|-------------|
-| A | Session Architect | Session orchestration | `src/app/student/`, `src/hooks/useTutorBrain.ts`, `src/hooks/useSession.ts`, `src/stores/sessionStore.ts` |
-| B | Media Specialist | Avatar + Canvas | `src/lib/heygen/`, `src/lib/canvas/`, `src/hooks/useAvatar.ts`, `src/hooks/useCanvas.ts`, `src/components/session/AvatarPanel.tsx`, `src/components/session/CanvasPanel.tsx` |
-| C | Backend Brain | Claude + Perplexity + Recall + APIs | `src/app/api/`, `src/lib/claude/`, `src/lib/perplexity/`, `src/lib/recall/` |
-| D | Dashboard + Design | Parent dashboard + Auth + UI + Deploy | `src/app/parent/`, `src/app/login/`, `src/components/parent/`, `src/lib/supabase/`, Vercel, DB schema |
-
-## Execution Flow
-
-### Phase 1 (Hours 0-4): Setup + Interface Definition
-All 4 people define interfaces for their modules. Write type files. Create placeholder files. No implementation yet.
-
-### Phase 2 (Hours 4-12): P1 Implementation - Core Session Loop
-Each person implements their black box module independently. Person A wires them together.
-
-### Phase 3 (Hours 12-24): P2+P3 - Dashboard + Learning Plans
-Person D builds parent dashboard. Person C builds learning plan generation. Person A/B polish session UX.
-
-### Phase 4 (Hours 24-36): P4+P5 + Polish
-Recording, knowledge retrieval, landing page, demo prep.
+The current 5-mode system (steps/math/sandbox/video/welcome) is being replaced with a single scrollable surface with inline content blocks. See `plan.md` in project root and `.claude/plans/` for the detailed migration plan.
 
 ## Complexity Tracking
 

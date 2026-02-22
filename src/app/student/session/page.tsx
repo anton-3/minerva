@@ -7,12 +7,12 @@
 
 import { useEffect, useCallback, useState } from "react";
 import { useSession } from "@/hooks/useSession";
+import { useAutoHide } from "@/hooks/useAutoHide";
 import { ContentModeView } from "@/components/session/ContentMode";
 import { FloatingVideoOverlay } from "@/components/session/FloatingVideoOverlay";
 import { BottomControlBar } from "@/components/session/BottomControlBar";
 import { ChatSheet } from "@/components/session/ChatSheet";
 import { ModelPicker } from "@/components/session/ModelPicker";
-import type { ContentMode } from "@/types/session";
 import { ParticlesBackground } from "@/components/session/ParticlesBackground";
 
 export default function SessionPage() {
@@ -37,12 +37,7 @@ export default function SessionPage() {
     setActiveTool,
     // Content mode
     contentMode,
-    sandboxContent,
-    sandboxAccent,
-    videoUrl,
-    setContentMode,
-    // Video ended — auto-continue lesson
-    handleVideoEnded: onVideoEndedBrain,
+    contentSteps,
     // User camera
     userCamera,
   } = useSession();
@@ -52,19 +47,9 @@ export default function SessionPage() {
   const [micOpen, setMicOpen] = useState(false);
   const [avatarCollapsed, setAvatarCollapsed] = useState(false);
 
-  // Collapse avatar when entering video mode, restore when leaving
-  useEffect(() => {
-    if (contentMode === "video") {
-      setAvatarCollapsed(true);
-    }
-  }, [contentMode]);
-
-  // Handle video ended — restore avatar, keep last frame visible, auto-continue lesson
-  const handleVideoEnded = useCallback(() => {
-    setAvatarCollapsed(false);
-    // Don't switch to math — video stays on last frame until Claude decides what to show next
-    onVideoEndedBrain();
-  }, [onVideoEndedBrain]);
+  // Auto-hide controls — hidden after 2s, revealed by clicking a small tab
+  const { visible: controlsVisible, show: showControls, lock: lockControls, unlock: unlockControls } =
+    useAutoHide(status === "active");
 
   // Reset unread count when chat opens
   useEffect(() => {
@@ -138,13 +123,6 @@ export default function SessionPage() {
     }
   }, [chatOpen]);
 
-  const handleToggleMode = useCallback(() => {
-    const modes: ContentMode[] = ["welcome", "math", "sandbox", "video"];
-    const currentIndex = modes.indexOf(contentMode);
-    const nextIndex = (currentIndex + 1) % modes.length;
-    setContentMode(modes[nextIndex]);
-  }, [contentMode, setContentMode]);
-
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-neutral-background">
       {/* Animated particle network background — grab effect on mouse move */}
@@ -152,9 +130,17 @@ export default function SessionPage() {
       {/* Light overlay so particles stay subtle behind content */}
       <div className="absolute inset-0 bg-white/30" />
 
-      {/* Model picker — top right corner */}
-      <div className="absolute top-4 right-4 z-50">
-        <ModelPicker className="w-[170px] bg-white/80 backdrop-blur-sm" />
+      {/* Model picker — top right corner, auto-hides during active session */}
+      <div
+        className="absolute top-4 right-4 z-50 transition-opacity duration-300 ease-out"
+        style={{ opacity: controlsVisible ? 1 : 0, pointerEvents: controlsVisible ? "auto" : "none" }}
+        onMouseEnter={lockControls}
+        onMouseLeave={unlockControls}
+      >
+        <ModelPicker
+          className="w-[170px] bg-white/80 backdrop-blur-sm"
+          onOpenChange={(open) => open ? lockControls() : unlockControls()}
+        />
       </div>
 
       {/* Main content area — full screen */}
@@ -162,11 +148,8 @@ export default function SessionPage() {
         <ContentModeView
           mode={contentMode}
           toolManager={toolManager}
-          sandboxContent={sandboxContent}
-          sandboxAccent={sandboxAccent}
-          videoUrl={videoUrl}
+          contentSteps={contentSteps}
           onToolChange={setActiveTool}
-          onVideoEnded={handleVideoEnded}
         />
       </main>
 
@@ -180,7 +163,7 @@ export default function SessionPage() {
         onCollapsedChange={setAvatarCollapsed}
       />
 
-      {/* Bottom control bar */}
+      {/* Bottom control bar — auto-hides during active session */}
       <BottomControlBar
         status={status}
         onStart={startSession}
@@ -189,7 +172,6 @@ export default function SessionPage() {
         chatOpen={chatOpen}
         onToggleChat={() => setChatOpen((prev) => !prev)}
         unreadCount={unreadCount}
-        onToggleMode={handleToggleMode}
         currentMode={contentMode}
         cameraActive={userCamera.isActive}
         onToggleCamera={() => {
@@ -199,6 +181,9 @@ export default function SessionPage() {
             userCamera.startCamera();
           }
         }}
+        controlsVisible={controlsVisible}
+        onControlsMouseEnter={lockControls}
+        onControlsMouseLeave={unlockControls}
       />
 
       {/* Chat slide-out sheet */}
@@ -211,9 +196,12 @@ export default function SessionPage() {
         onNewMessage={handleNewMessage}
       />
 
-      {/* Push-to-talk indicator */}
+      {/* Push-to-talk indicator — auto-hides with controls */}
       {status === "active" && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-[72px] flex justify-center">
+        <div
+          className="pointer-events-none absolute inset-x-0 bottom-[72px] flex justify-center transition-opacity duration-300 ease-out"
+          style={{ opacity: controlsVisible ? 1 : 0 }}
+        >
           <div
             className={`rounded-full px-4 py-2 text-sm font-medium transition-all duration-150 ${
               micOpen
@@ -224,6 +212,20 @@ export default function SessionPage() {
             {micOpen ? "Listening..." : "Hold Space to talk"}
           </div>
         </div>
+      )}
+
+      {/* Reveal tab — small pill at bottom center, visible only when controls are hidden */}
+      {status === "active" && !controlsVisible && (
+        <button
+          onClick={showControls}
+          className="fixed bottom-2 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1 px-3 py-1 rounded-full bg-black/20 backdrop-blur-sm text-white/60 text-xs hover:bg-black/40 hover:text-white/90 transition-all duration-200 border border-white/10"
+          style={{ WebkitBackdropFilter: "blur(8px)" }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="18 15 12 9 6 15" />
+          </svg>
+          Controls
+        </button>
       )}
     </div>
   );

@@ -12,6 +12,7 @@ import type {
   StudentProfile,
   LearningPlanContext,
   ContentMode,
+  ContentStep,
   MasteryScore,
   AIModelId,
 } from "@/types/session";
@@ -28,15 +29,27 @@ interface SessionActions {
   setContentMode: (mode: ContentMode) => void;
   setSandboxContent: (content: string | null, accent?: string | null) => void;
   setVideoUrl: (url: string | null) => void;
+  addSteps: (steps: ContentStep[]) => void;
+  clearSteps: () => void;
   setMasteryScores: (scores: MasteryScore[]) => void;
   setSelectedModel: (model: AIModelId) => void;
+  // Zoom controls (shared between StepsPanel and BottomControlBar)
+  setZoom: (zoom: number) => void;
+  zoomIn: () => void;
+  zoomOut: () => void;
+  resetZoom: () => void;
   reset: () => void;
 }
 
-// Extended SessionState with selectedModel
+// Extended SessionState with selectedModel and zoom
 interface ExtendedSessionState extends SessionState {
   selectedModel: AIModelId;
+  zoom: number;
 }
+
+const MIN_ZOOM = 0.3;
+const MAX_ZOOM = 2.5;
+const ZOOM_STEP = 0.1;
 
 const initialState: ExtendedSessionState = {
   sessionId: null,
@@ -50,8 +63,10 @@ const initialState: ExtendedSessionState = {
   sandboxContent: null,
   sandboxAccent: null,
   videoUrl: null,
+  contentSteps: [],
   masteryScores: [],
   selectedModel: DEFAULT_MODEL,
+  zoom: 1,
 };
 
 export const useSessionStore = create<ExtendedSessionState & SessionActions>()(
@@ -78,8 +93,23 @@ export const useSessionStore = create<ExtendedSessionState & SessionActions>()(
       setContentMode: (contentMode) => set({ contentMode }),
       setSandboxContent: (sandboxContent, sandboxAccent) => set({ sandboxContent, sandboxAccent: sandboxAccent ?? null }),
       setVideoUrl: (videoUrl) => set({ videoUrl }),
+      addSteps: (steps) =>
+        set((state) => {
+          // Handle "clear" step — reset all steps
+          if (steps.some((s) => s.type === "clear")) {
+            return { contentSteps: steps.filter((s) => s.type !== "clear") };
+          }
+          return { contentSteps: [...state.contentSteps, ...steps] };
+        }),
+      clearSteps: () => set({ contentSteps: [] }),
       setMasteryScores: (masteryScores) => set({ masteryScores }),
       setSelectedModel: (selectedModel) => set({ selectedModel }),
+
+      // Zoom controls
+      setZoom: (zoom) => set({ zoom: Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom)) }),
+      zoomIn: () => set((s) => ({ zoom: Math.min(MAX_ZOOM, s.zoom + ZOOM_STEP) })),
+      zoomOut: () => set((s) => ({ zoom: Math.max(MIN_ZOOM, s.zoom - ZOOM_STEP) })),
+      resetZoom: () => set({ zoom: 1 }),
 
       reset: () => set({ ...initialState, selectedModel: initialState.selectedModel }),
     }),

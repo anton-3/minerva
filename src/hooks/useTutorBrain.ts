@@ -19,7 +19,7 @@
 
 import { useState, useCallback, useRef } from "react";
 import { useSessionStore } from "@/stores/sessionStore";
-import type { TutorBrainRequest, ContentMode, CanvasCommand } from "@/types/session";
+import type { TutorBrainRequest, ContentMode, ContentStep, CanvasCommand } from "@/types/session";
 
 interface UseTutorBrainOptions {
   speak: (text: string) => Promise<void>;
@@ -188,8 +188,20 @@ export function useTutorBrain(options: UseTutorBrainOptions) {
                 const content = input.content as string;
                 const accent = input.accent as string;
                 if (content) {
+                  // Unified board: add as inline sandbox block instead of switching modes
+                  store.addSteps([{ type: "sandbox", html: content, accent }]);
+                  store.setContentMode("steps");
+                  // Also store raw content for context serialization
                   store.setSandboxContent(content, accent);
-                  store.setContentMode("sandbox");
+                }
+                break;
+              }
+
+              case "showSteps": {
+                const steps = input.steps as ContentStep[];
+                if (steps && steps.length > 0) {
+                  store.addSteps(steps);
+                  store.setContentMode("steps");
                 }
                 break;
               }
@@ -223,8 +235,11 @@ export function useTutorBrain(options: UseTutorBrainOptions) {
               case "showVideo": {
                 const videoUrl = output.videoUrl as string | undefined;
                 if (videoUrl) {
+                  // Unified board: add as inline video block instead of switching modes
+                  store.addSteps([{ type: "video", url: videoUrl, autoPlay: true }]);
+                  store.setContentMode("steps");
+                  // Also store raw URL for context serialization
                   store.setVideoUrl(videoUrl);
-                  store.setContentMode("video");
                 } else if (output.error) {
                   console.error("[useTutorBrain] Video error:", output.error);
                 }
@@ -336,6 +351,10 @@ export function useTutorBrain(options: UseTutorBrainOptions) {
             grade: 7,
           },
           canvasState,
+          contentSteps: store.contentSteps,
+          sandboxContent: store.sandboxContent,
+          sandboxAccent: store.sandboxAccent,
+          videoUrl: store.videoUrl,
           modelId: store.selectedModel,
           contentMode: store.contentMode,
           ...(imageData && { imageData }),
@@ -496,6 +515,10 @@ export function useTutorBrain(options: UseTutorBrainOptions) {
           grade: 7,
         },
         canvasState: "",
+        contentSteps: store.contentSteps,
+        sandboxContent: store.sandboxContent,
+        sandboxAccent: store.sandboxAccent,
+        videoUrl: store.videoUrl,
         modelId: store.selectedModel,
         contentMode: "video", // Video just ended — still showing last frame
       };
@@ -543,5 +566,86 @@ export function useTutorBrain(options: UseTutorBrainOptions) {
     }
   }, []);
 
-  return { isProcessing, isThinking, handleStudentMessage, sendGreeting, handleVideoEnded };
+  // ─── Silence handler — auto-continue when student is quiet ──────────────
+  // Escalation levels: 1 = rephrase, 2 = scaffold, 3+ = ask what's confusing
+  const handleSilence = useCallback(async (level: number) => {
+    const store = useSessionStore.getState();
+
+    // Don't trigger if already processing another request
+    if (abortRef.current) return;
+
+    setIsProcessing(true);
+    setIsThinking(true);
+
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    // Build level-specific silence message so the model knows what to try
+    let silenceMessage: string;
+    if (level === 1) {
+      silenceMessage = `[STUDENT_SILENT level=1 — The student hasn't spoken for 8 seconds. Follow the HANDLING SILENCE rules in your instructions. If you just demonstrated something on the board, silence is normal — advance to guided practice. If you already asked a question, rephrase it more simply.]`;
+    } else if (level === 2) {
+      silenceMessage = `[STUDENT_SILENT level=2 — The student hasn't spoken for 16 seconds. You ALREADY responded to their silence once (see your previous message). Do NOT repeat what you just said. Try something DIFFERENT: break the problem into smaller pieces, offer a scaffold, or model the first step yourself. If you call tools, you MUST also generate speech text.]`;
+    } else {
+      silenceMessage = `[STUDENT_SILENT level=${level} — The student hasn't spoken for ${level * 8} seconds. You've tried ${level - 1} times and they still haven't responded. CHANGE YOUR APPROACH COMPLETELY: ask directly "hey, what part is tripping you up?" or "is everything making sense so far?" or try explaining the concept from a totally different angle. Do NOT repeat any previous transition or explanation.]`;
+    }
+
+    try {
+      const request: TutorBrainRequest = {
+        studentMessage: silenceMessage,
+        conversationHistory: store.conversationHistory,
+        learningPlan: store.learningPlan,
+        studentProfile: store.studentProfile ?? {
+          name: "Student",
+          age: 12,
+          grade: 7,
+        },
+        canvasState: "",
+        contentSteps: store.contentSteps,
+        sandboxContent: store.sandboxContent,
+        sandboxAccent: store.sandboxAccent,
+        videoUrl: store.videoUrl,
+        modelId: store.selectedModel,
+        contentMode: store.contentMode,
+      };
+
+      const timeoutId = setTimeout(
+        () => controller.abort(),
+        API_TIMEOUT_MS
+      );
+
+      const res = await fetch("/api/tutor/respond", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(request),
+        signal: controller.signal,
+      });
+
+      if (controller.signal.aborted) return;
+
+      await consumeStream(res, controller, {
+        timeoutId,
+        onSpeech: (speech) => {
+          // Add only tutor's response — no student message (system trigger)
+          store.addMessage({ role: "assistant", content: speech });
+          store.addTranscriptEntry({
+            speaker: "tutor",
+            text: speech,
+            timestamp: new Date(),
+          });
+        },
+      });
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      console.error("[useTutorBrain] Silence handler error:", err);
+    } finally {
+      if (abortRef.current === controller) {
+        abortRef.current = null;
+      }
+      setIsProcessing(false);
+      setIsThinking(false);
+    }
+  }, []);
+
+  return { isProcessing, isThinking, handleStudentMessage, sendGreeting, handleVideoEnded, handleSilence };
 }

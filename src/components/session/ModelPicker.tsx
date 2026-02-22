@@ -16,9 +16,10 @@ import {
 
 interface ModelPickerProps {
   className?: string;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export function ModelPicker({ className }: ModelPickerProps) {
+export function ModelPicker({ className, onOpenChange }: ModelPickerProps) {
   const selectedModel = useSessionStore((s) => s.selectedModel);
   const setSelectedModel = useSessionStore((s) => s.setSelectedModel);
 
@@ -26,6 +27,7 @@ export function ModelPicker({ className }: ModelPickerProps) {
     <Select
       value={selectedModel}
       onValueChange={(v) => setSelectedModel(v as AIModelId)}
+      onOpenChange={onOpenChange}
     >
       <SelectTrigger size="sm" className={className}>
         <SelectValue placeholder="Model">Model</SelectValue>

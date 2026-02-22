@@ -1,228 +1,165 @@
 # Minerva — Progress Tracker
 
-> **For AI agents**: Read this file first to understand where the project is. Update it after every meaningful task or group of tasks.
+> **For AI agents**: Read this file first to understand where the project is. Update it after every meaningful task.
 
-**Last updated**: 2026-02-15 (Session 13 - Read-triggered camera screenshot)
-**Branch**: `001-minerva-mvp`
-**Overall status**: Phases 1-8 COMPLETE (T001-T067). Session 13: read-triggered camera screenshot; removed paper detection and scan button.
+**Last updated**: 2026-02-22 (Session 18 — Unified board migration COMPLETE)
+**Branch**: `main`
+**Phase**: POST-HACKATHON — building and shipping as a real product for market
 
 ---
 
-## Session 13: Read-triggered camera screenshot
+## Current Architecture (What's Actually Built)
 
-**Goal**: Conversational homework help — when the user stops talking (push-to-talk release) and their words contain "read", send a screenshot of the camera with the message so the model can see the homework. Remove paper-detection and scan-button UI to minimize friction and latency.
+### Core Session Loop
+Student speaks (push-to-talk) → Deepgram ASR transcribes → AI responds via SSE stream (speech + tool calls) → ElevenLabs TTS generates audio → HeyGen LiveAvatar lip-syncs audio → Tools execute on frontend (whiteboard, graphs, sandbox, video)
 
-**Changes**:
-- **Removed**: Paper detection loop and "Paper detected" overlay in FloatingVideoOverlay; Scan button in overlay (gallery) and in BottomControlBar; handleScan and onScan wiring from session page.
-- **Added**: In useSession, when `onUserMessage(text)` fires, if `text` contains "read" (case-insensitive) and the camera is on, capture one frame via `captureFrame(userCamera.videoRef.current)` and call `brain.handleStudentMessage(text, result)`; otherwise `brain.handleStudentMessage(text)`.
+### Stack (February 2026)
+- **Framework**: Next.js 16.1 LTS, React 19.2, TypeScript, Tailwind v4
+- **AI**: Vercel AI SDK (`@ai-sdk/anthropic`, `@ai-sdk/google`, `@ai-sdk/openai`) — multi-model support
+- **Models**: Claude Sonnet 4.5, Claude Haiku 4.5, Gemini 3 Pro, Gemini 3 Flash, GPT-4.1 Nano, GPT-5.2 Chat
+- **TTS**: ElevenLabs (server-side, PCM 24kHz → base64 → avatar lip-sync)
+- **Avatar**: @heygen/liveavatar-web-sdk v0.0.10 (WebRTC via LiveKit)
+- **ASR**: Deepgram (real-time transcription)
+- **Whiteboard**: KaTeX + GSAP + Rough.js (replaced tldraw — much lighter, better UX)
+- **Graphing**: Desmos 2D, Desmos 3D, GeoGebra (interactive, student-explorable)
+- **Video**: Manim (3Blue1Brown-style math animations, server-generated)
+- **Sandbox**: HTML iframe with Twind CSS (physics, chemistry, biology, history)
+- **State**: Zustand 5.0.11
+- **Database**: Supabase (Postgres + Auth)
+- **Deployment**: Vercel
 
-**Files changed**:
+### Key Files
+| File | Purpose |
+|------|---------|
+| `src/lib/ai/prompts.ts` | THE most important file — teaching methodology, tool usage rules, silence handling |
+| `src/lib/ai/client.ts` | AI SDK wrapper — multi-model, tool calling, SSE streaming, context injection |
+| `src/hooks/useTutorBrain.ts` | Conversation loop orchestrator — SSE consumer, silence handler |
+| `src/hooks/useSession.ts` | Session lifecycle — wires avatar + brain + ASR + canvas |
+| `src/stores/sessionStore.ts` | Zustand store — session state, content steps, conversation history |
+| `src/components/session/StepsPanel.tsx` | Whiteboard — KaTeX rendering, GSAP animations, annotations, scroll/zoom, section nav |
+| `src/components/session/ContentMode.tsx` | Mode router — switches between steps/math/sandbox/video/welcome panels |
+| `src/app/api/tutor/respond/route.ts` | SSE API route — streams speech + audio + tool calls |
+| `src/types/session.ts` | All types — ContentStep, CanvasCommand, TutorBrainRequest, etc. |
+
+---
+
+## Session History (Reverse Chronological)
+
+### Session 18 (2026-02-22): Unified Board Migration — COMPLETE
+
+**All 5 phases completed in one session:**
+
+**Phase 1 — Scroll Refactor:**
+- Replaced transform-based `panY` with native CSS `overflow-y: auto`
+- Replaced `transform: scale(zoom)` with CSS `zoom` property (layout-aware, scrollbar works correctly)
+- Auto-follow via `scrollIntoView` instead of GSAP panY animation
+- Section nav via `scrollIntoView` instead of GSAP panY calculation
+- "Back to latest" via `scrollTo` instead of GSAP
+- Non-passive wheel listener for Ctrl/Cmd+zoom (React 19 passive wheel events)
+- Scroll direction detection for auto-follow pause
+- Removed panX, panY, mouse drag handlers entirely
+
+**Phase 2 — New ContentStep Types:**
+- Added to TypeScript union: `graph`, `sandbox`, `video`, `image`, `code`
+- Added to Zod schemas in `showSteps` tool
+- Updated `serializeSteps()` for context injection of new types
+
+**Phase 3 — Inline Renderer Components:**
+- `InlineGraph` — Desmos calculator loaded dynamically, expressions + viewport from step data
+- `InlineSandbox` — iframe with `srcDoc`, dark theme template, sandbox security
+- `InlineVideo` — `<video>` element with autoPlay and controls
+- `InlineImage` — `<img>` with optional sizing
+- `InlineCode` — syntax-highlighted code with language label, dark theme
+
+**Phase 4 — AI Tool Updates:**
+- `showSandbox` tool calls now add `{ type: "sandbox" }` inline blocks to whiteboard
+- `showVideo` tool results now add `{ type: "video" }` inline blocks to whiteboard
+- Updated prompts: WHITEBOARD REFERENCE now documents all inline block types
+- Updated TOOL SELECTION RULES: inline blocks preferred over mode switching
+- `executeCanvasCommands` kept as-is (needs actual Desmos/GeoGebra ToolManager)
+
+**Phase 5 — Cleanup:**
+- Removed `SandboxPanel` and `VideoPanel` from ContentModeView
+- ContentModeView simplified to: WelcomePanel + MathToolPanel + StepsPanel
+- Removed mode toggle button from session page
+- Removed avatar collapse on video mode (videos are inline)
+- Removed unused props (sandboxContent, sandboxAccent, videoUrl from ContentModeView)
+
+**Files changed:**
 | File | Change |
 |------|--------|
-| `src/app/student/session/page.tsx` | Removed captureFrame import, handleScan, onScan props |
-| `src/components/session/FloatingVideoOverlay.tsx` | Removed onScan prop, DocumentOverlay, ScanFlash, detection state/loop, handleScan, Scan button |
-| `src/components/session/BottomControlBar.tsx` | Removed onScan prop and scan button |
-| `src/hooks/useSession.ts` | Import captureFrame; in onUserMessage, if "read" then capture frame and pass imageData |
+| `src/components/session/StepsPanel.tsx` | Full rewrite: native scroll, CSS zoom, inline renderers (graph/sandbox/video/image/code) |
+| `src/types/session.ts` | 5 new ContentStep types: graph, sandbox, video, image, code |
+| `src/lib/ai/client.ts` | New Zod schemas, updated serializeSteps() |
+| `src/lib/ai/prompts.ts` | Inline block docs in WHITEBOARD REFERENCE, updated TOOL SELECTION RULES |
+| `src/hooks/useTutorBrain.ts` | showSandbox → inline block, showVideo → inline block |
+| `src/components/session/ContentMode.tsx` | Simplified: removed SandboxPanel/VideoPanel layers |
+| `src/app/student/session/page.tsx` | Removed mode toggle, video collapse, unused props |
 
-**Note**: `src/lib/camera/detector.ts` is now unused (left in repo for possible future use).
+**Also updated documentation:**
+- `progress.md`, `plan.md`, `CLAUDE.md`, `specs/001-minerva-mvp/plan.md`, `MEMORY.md`
 
----
+### Session 17 (2026-02-21): Context Awareness + Unified Board Planning
 
-## Session 12: Tool Calling Speech Fix
+**Teaching methodology fixes:**
+- Rewrote 5-phase teaching methodology (INTRODUCE → DEMONSTRATE → GUIDED → INDEPENDENT → ASSESS)
+- Fixed silence handler: level-specific messages (level 1 = advance, level 2 = scaffold differently, level 3+ = change approach completely)
+- Added GOLDEN RULE: never repeat yourself across silence responses
+- Strengthened "always generate speech" instruction for GPT-4.1 NO_SPEECH_FALLBACK issue
 
-**Problem**: When Claude called tools (setContentMode, executeCanvasCommands), it would sometimes generate ONLY tool calls without any speech text. The avatar would remain silent.
+**Context awareness (major feature):**
+- **Problem**: AI model was blind to what was displayed. It called `showSteps` with equations but on the next turn only saw its own speech text — not what it wrote on the board.
+- **Industry research**: ChatGPT Canvas, Khanmigo, Claude Artifacts all inject current visual state as structured data each turn.
+- **Fix**: Added `serializeSteps()` — converts whiteboard state into compact indexed text injected into each prompt
+- **Fix**: Added `summarizeSandbox()` — strips HTML tags from sandbox, truncates to 500 chars
+- **Fix**: All content modes now have context: steps (indexed text), math (Desmos snapshot), sandbox (text extract), video (URL)
+- Added `contentSteps`, `sandboxContent`, `sandboxAccent`, `videoUrl` to `TutorBrainRequest`
 
-**Root Cause**: Two issues:
-1. The prompt didn't explicitly require speech with every response
-2. The code was checking for a non-existent `step-finish` event instead of `text-end`
+**Whiteboard UX (scroll + navigation):**
+- Fixed scroll: plain scroll = panY (content scroll), Ctrl/Cmd+scroll = zoom
+- Auto-follow pause: "↓ Back to latest" pill when student scrolls up to review
+- Section navigation: floating nav derived from divider labels
 
-**Fixes Applied**:
+**Architecture decision — Unified Board:**
+- Research confirmed: 6/8 top education platforms use inline embedding on one surface, NOT mode-switching
+- Decision: Migrate from 5 separate content modes to one unified scrollable surface with typed content blocks
+- Current `contentMode` switching (steps/math/sandbox/video/welcome) will be replaced by inline blocks
+- Plan written, ready for implementation
 
-### 1. Fixed stream event handling in `client.ts`
-- Removed check for non-existent `step-finish` event
-- Speech is now emitted when we see a `tool-call` event (before yielding the tool)
-- Added `text-end` handler for text-only responses
-- Fallback still catches edge cases
-
-### 2. Updated system prompt in `prompts.ts`
-- Added **CRITICAL: ALWAYS GENERATE SPEECH TEXT** section
-- Explicitly tells Claude: "Never call tools without also generating speech"
-- Shows example response flow: generate speech FIRST, then call tools
-
-### Files Changed
+**Files changed:**
 | File | Change |
 |------|--------|
-| `src/lib/claude/client.ts` | Fixed multi-step stream handling for tools with `execute()` |
-| `src/lib/claude/prompts.ts` | Added mandatory speech requirement to prompt |
+| `src/lib/ai/prompts.ts` | 5-phase teaching, silence handling, speech requirements |
+| `src/lib/ai/client.ts` | `serializeSteps()`, `summarizeSandbox()`, context injection, mode descriptions |
+| `src/hooks/useTutorBrain.ts` | Level-specific silence messages, pass contentSteps/sandbox/video to requests |
+| `src/types/session.ts` | Added `contentSteps`, `sandboxContent`, `sandboxAccent`, `videoUrl` to TutorBrainRequest |
+| `src/components/session/StepsPanel.tsx` | Scroll fix, auto-follow, section nav |
 
-### Multi-Step Tool Execution Flow (NEW)
-When a tool has an `execute()` function (like `getExistingVideos`), the AI SDK handles it automatically:
+### Session 14-16: Whiteboard Migration (KaTeX + GSAP + Rough.js)
+- Replaced tldraw (1-2MB) with KaTeX (~100KB) + GSAP + Rough.js (~9KB)
+- Built StepsPanel with character-by-character equation writing, typewriter text, hand-drawn annotations
+- ContentStep type system: step, divider, numberLine, diagram, circle, underline, arrow, box, crossOut, highlight
+- MinervaBoard: pan/zoom, element positioning, GSAP timeline animation
 
-```
-Step 1:
-  start-step → speechBuffer reset
-  text-delta events → Claude's intro speech
-  text-end → speech emitted
-  tool-call → getExistingVideos
-  tool-result → AI SDK executes, returns result
-
-Step 2 (automatic continuation):
-  start-step → speechBuffer reset
-  text-delta events → Claude's follow-up based on tool result
-  text-end → speech emitted
-
-done
-```
-
-Key changes:
-- Added `start-step` handler to reset `speechBuffer` for each step
-- Removed `speechEmitted` flag - now emit speech per-step, not once
-- `text-end` emits speech immediately (not waiting for tool calls)
-- Safety: also emit speech on `tool-call` if `text-end` didn't fire
+### Session 13: Camera screenshot on "read" keyword
+### Session 12: Tool calling speech fix (text-end event handling)
+### Session 11: SSE streaming + design system + Manim videos merge
+### Session 10: Floating video overlay (Zoom-style PiP)
+### Session 7-8: Speech audit fixes (echo detection, barge-in, debounce)
+### Sessions 1-6: Core MVP (hackathon build)
 
 ---
 
-## Session 11: Merge — SSE Streaming + Design System + Manim Videos
+## Next Steps
 
-**Merged two branches**:
-1. `anton/latency-test` — SSE streaming for faster time-to-first-word
-2. HEAD — Sandbox token optimization + Manim video integration + Design system
+**Unified board migration is DONE.** All content types (equations, graphs, sandbox, video, images, code) render inline on one scrollable surface.
 
-### Key Changes After Merge
-
-**Architecture**:
-- SSE streaming pipeline: speech arrives early (~1s), avatar starts talking while remaining fields generate
-- `respondStream()` async generator on TutorBrain — uses `client.messages.stream()` + regex speech extraction
-- API route returns `text/event-stream` with `ReadableStream`
-- Frontend consumes SSE via `consumeStream()` helper in useTutorBrain
-
-**Sandbox Token Optimization** (80-90% token reduction):
-- Claude outputs `sandboxContent` + `sandboxAccent` (not full HTML)
-- Frontend wraps with Twind template in `buildSandboxHtml()`
-- Subject-based accent colors (physics=blue, chemistry=emerald, etc.)
-
-**Manim Video Integration**:
-- `manimVideoFile` — reuse existing video by filename
-- `manimPrompt` — generate new video (30-120s)
-- `videoUrl` — resolved URL added by server
-- Server auto-corrects contentMode to "video" if video fields present
-
-**Content Modes**: `"welcome" | "math" | "sandbox" | "video"`
-
-**Push-to-Talk Enhancement**:
-- `avatarFlush()` — immediately sends accumulated transcription on Space release
-- Fixes latency from debounce waiting
-
-### Files Touched in Merge
-| File | Resolution |
-|------|------------|
-| `src/types/session.ts` | Keep sandboxContent/sandboxAccent/videoUrl (HEAD) |
-| `src/stores/sessionStore.ts` | Keep HEAD's fields + actions |
-| `src/lib/claude/client.ts` | Merge: SSE streaming + our Zod schema with sandbox/manim fields |
-| `src/hooks/useTutorBrain.ts` | Merge: SSE consumption + content mode validation + video/sandbox handling |
-| `src/hooks/useSession.ts` | Keep HEAD's fields + add avatarFlush |
-| `src/app/api/tutor/respond/route.ts` | Merge: SSE streaming + Manim generation in result event |
-| `src/app/student/session/page.tsx` | Keep HEAD + add avatarFlush to push-to-talk |
-| `src/components/session/ContentMode.tsx` | Keep HEAD's sandboxContent/accent/videoUrl props |
-| `src/components/session/SandboxPanel.tsx` | Keep HEAD's content/accent + Twind template |
-| `progress.md` | Combined both sessions' notes |
-
----
-
-## Session 11A: Design System + AI Prompt Overhaul (HEAD)
-
-**Two major changes**: (1) Cohesive Soft Lavender (#A78BFA) + Aqua (#67E8F9) design identity across entire app. (2) Complete AI prompt rewrite with sandbox HTML templates and tighter speech rules.
-
-### Phase 1: Design System Foundation
-- [x] **globals.css** — Full lavender/aqua color palette replacing defaults. `--font-display` variable. SVG grain texture overlay (3% opacity). Safari input fix (`-webkit-appearance: none`).
-- [x] **layout.tsx** — Space Grotesk display font via `next/font/google`. `class="dark"` on `<html>`. Body includes `${spaceGrotesk.variable}`.
-
-### Phase 2: AI Prompt Rewrite
-- [x] **prompts.ts** — MAJOR rewrite:
-  - Fixed HTML skeleton for sandbox (consistent layout every time)
-  - 6 layout templates: centered, split, steps, comparison, chart, interactive
-  - Subject-based accent colors (Physics=blue, Chemistry=emerald, Biology=green, History=amber, Literature=purple, General=cyan)
-  - BANNED PHRASES: "Great question!", "Absolutely!", "Excellent!", "Fantastic!", "Not quite"
-  - USE INSTEAD: "yeah that's right", "nice, so...", "hmm what if..."
-  - Speech: 1-2 sentences MAX, always end with question, sound like cool older sibling
-  - Content routing: first response = visual, follow-ups = speech only unless needed
-  - Hard constraints: 3500 chars max, no CDN, no scrolling, clamp() for responsive sizing
-- [x] **client.ts** — Added `sandboxTemplate` to Zod schema (enum of 6 templates)
-
-### Phase 3: Component Theming (15 files)
-- [x] **SandboxPanel** — Fade-in transition, lavender empty state, updated viewport CSS
-- [x] **ChatSheet** — Lavender user bubbles (`bg-[#A78BFA]`), violet-tinted AI bubbles, 3 bouncing lavender dots for typing indicator, lavender focus ring
-- [x] **BottomControlBar** — Lavender join button (was green), lavender timer text, `-webkit-backdrop-filter` for Safari
-- [x] **FloatingVideoOverlay** — Lavender status dots, lavender thinking pulse/glow (was blue), lavender view mode icons
-- [x] **Landing page** — Dark bg (#0A0A0A), Space Grotesk headings, lavender TreeHacks badge, lavender feature cards with hover, lavender tech badges, lavender CTA section
-- [x] **Login page** — `font-display` on title
-- [x] **Session page** — Lavender/aqua/violet mode badge dots, `-webkit-backdrop-filter` on badge, aqua push-to-talk active state
-- [x] **Parent layout** — Dark sidebar (`bg-[#0E0C18]`), lavender logo, lavender nav hover
-- [x] **Parent dashboard** — `font-display` title, lavender/aqua stat card borders + values, lavender session badges
-
----
-
-## Session 11B: SSE Streaming Pipeline (anton/latency-test)
-
-**Major change**: Rearchitected the tutor response pipeline from single JSON response to SSE streaming. Speech field is extracted early via regex and emitted immediately, so the avatar starts speaking while sandboxHtml/canvasCommands are still generating.
-
-### What Changed
-- [x] **`respondStream()` async generator** — New method on TutorBrain that uses `client.messages.stream()` + regex-based speech extraction. Yields `speech` event as soon as the speech field is complete, then `result` event with remaining fields.
-- [x] **SSE API route** — `/api/tutor/respond` now returns `text/event-stream` with `ReadableStream`. Events: `speech`, `result`, `done`, `error`. Perplexity enrichment still runs before stream starts.
-- [x] **Frontend SSE consumption** — `useTutorBrain` reads SSE events via `fetch()` + `ReadableStream` reader. Avatar speaks on `speech` event (fire-and-forget). Sandbox/canvas/progress update on `result` event.
-- [x] **`buildClaudeRequest()` helper** — Extracted shared message-building logic from `respond()` to avoid duplication with `respondStream()`.
-- [x] **Prompt caching** — `cache_control: { type: "ephemeral" }` on system prompts saves ~200-500ms after first request.
-- [x] **Module-level Anthropic client** — Reuses HTTP connections, avoids TLS handshake per request.
-
-### Architecture Notes
-- **Speech extraction regex**: `/"speech"\s*:\s*"((?:[^"\\]|\\.)*)"\s*[,}]/` — detects complete speech value in the JSON token stream. Works because `speech` is the first field in the Zod schema.
-- **Two SSE events**: `speech` (emitted early) + `result` (everything else, emitted when stream ends). Simpler than per-field events.
-- **AbortController cascade**: Frontend abort cancels the fetch → SSE ReadableStream cancel fires → server AbortController aborts Claude stream.
-- **Backward compatible**: `respond()` still exists as a non-streaming fallback.
-
----
-
-## Session 10b: Floating Video Overlay + Sandbox Viewport Fix
-
-**Major change**: Replaced side-by-side `react-resizable-panels` video grid with a true Zoom-style floating PiP overlay. Reverted CSS design system injection that made sandbox output look generic.
-
-### Floating Video Overlay (replaces VideoGrid)
-- [x] Created `FloatingVideoOverlay.tsx` using `react-rnd` — draggable + resizable floating PiP
-- [x] Three view modes matching Zoom's actual behavior:
-  - **Strip** (— icon): Thin dark bar showing "Talking: Minerva" or status text
-  - **Speaker** (□ icon): One large video tile with name label + hover controls
-  - **Gallery** (⋮⋮⋮ icon): Two stacked video tiles (avatar top, camera bottom)
-- [x] View mode switch icons + minimize button **only visible on hover** (group-hover pattern)
-- [x] Video persistence: `<video>` elements always mounted as `sr-only`, `<canvas>` mirrors via `requestAnimationFrame` + `drawImage()` — stream never lost across mode/minimize changes
-- [x] Resize handles with stripe patterns (matching Zoom): bottom (horizontal stripes), right (vertical stripes), corner (diagonal lines SVG)
-- [x] `lockAspectRatio` for speaker mode, per-mode min/max sizes
-- [x] Document detection + scan button preserved on camera tile in gallery mode
-- [x] Minimizable to small pill (top-right corner)
-- [x] Deleted `VideoGrid.tsx`, removed `react-resizable-panels` package
-
-### Sandbox Viewport Fix
-- [x] Injected minimal CSS: `html,body{margin:0;padding:0;overflow:hidden;width:100%;height:100vh;max-height:100vh;}`
-- [x] Added "Content MUST fit in one screen" to Claude prompt sandbox rules
-- [x] Reverted CSS design system injection (user feedback: made output look "AI-ish generic")
-- [x] Reverted prompt changes that increased char limit and added design patterns
-
----
-
-## Build Status
-- `npx tsc --noEmit` — 0 errors (pending verification after merge)
-- `npm run build` — compiles successfully (pre-existing DB error on /parent SSR unrelated)
-
----
-
-## Notes for Next Session
-
-- **Session 11 merge** is complete — SSE streaming + sandbox optimization + Manim videos
-- **SSE latency benefit**: Speech arrives ~1s, avatar starts talking immediately
-- **Sandbox token savings**: 80-90% reduction (sandboxContent + sandboxAccent vs full HTML)
-- **Manim videos**: Claude can reuse by filename or generate new (30-120s generation time)
-- **Push-to-talk**: `avatarFlush()` sends accumulated text immediately on Space release
-- **Design identity**: Soft Lavender (#A78BFA) primary + Aqua (#67E8F9) accent on deep purple-black (#0C0A14)
-- **Typography**: Space Grotesk (display/headlines) + Geist (body). Use `font-display` class for headings.
-- **Safari**: `-webkit-backdrop-filter` added alongside `backdrop-filter` in key components
-- **FloatingVideoOverlay** uses `react-rnd` + canvas mirroring — videos never unmount
-- **Pre-existing build error**: `/parent` page fails during static generation (local DB "kimsanov" doesn't exist) — unrelated to our code
+**Remaining work:**
+1. **Test inline Desmos** — verify interactive graphing works inside the scrollable whiteboard
+2. **Test inline sandbox** — verify HTML iframes work (push-to-talk Space key forwarding)
+3. **Test inline video** — verify autoPlay and controls work
+4. **Remove legacy code** — `SandboxPanel.tsx`, `VideoPanel.tsx` can be deleted entirely (currently just not imported)
+5. **Migrate executeCanvasCommands** — eventually replace with inline `graph` blocks in showSteps (currently still uses standalone Desmos panel)
+6. **Remove setContentMode tool** — no longer needed once executeCanvasCommands is migrated
+7. **Syntax highlighting** — add Prism.js or similar for the `code` block type
+8. **Polish** — scroll behavior, zoom-toward-cursor, responsive sizing for inline blocks

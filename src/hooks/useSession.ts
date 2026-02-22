@@ -19,6 +19,13 @@ import { useUserCamera } from "./useUserCamera";
 import { createASRClient, ASRClient } from "@/lib/deepgram/client";
 import { captureFrame } from "@/lib/camera/scanner";
 
+// Silence timer constants (based on tutoring research — Rowe 1986, Graesser)
+// Level 1 at 8s: rephrase question more simply
+// Level 2 at 16s: break down further, offer scaffold
+// Level 3 at 24s: ask what's confusing, try different approach
+const SILENCE_INTERVAL_MS = 8000;
+const MAX_SILENCE_LEVEL = 3;
+
 export function useSession() {
 // Use individual selectors for stable references — avoids infinite re-render loops
   const status = useSessionStore((s) => s.status);
@@ -27,6 +34,7 @@ export function useSession() {
   const sandboxContent = useSessionStore((s) => s.sandboxContent);
   const sandboxAccent = useSessionStore((s) => s.sandboxAccent);
   const videoUrl = useSessionStore((s) => s.videoUrl);
+  const contentSteps = useSessionStore((s) => s.contentSteps);
   const setStatus = useSessionStore((s) => s.setStatus);
   const setAvatarStatus = useSessionStore((s) => s.setAvatarStatus);
   const setSessionId = useSessionStore((s) => s.setSessionId);
@@ -49,6 +57,10 @@ export function useSession() {
   // Track whether Deepgram transcript listener is wired
   const wiredRef = useRef(false);
   const sessionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Silence auto-continue timer — fires when student doesn't speak after tutor finishes
+  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const silenceLevelRef = useRef(0);
 
   // Accumulate final transcripts until push-to-talk is released
   const pendingTranscriptRef = useRef("");
@@ -121,8 +133,10 @@ export function useSession() {
         asrRef.current = null;
       }
 
-      // Stop user camera
+      // Stop user camera + silence timer
       userCamera.stopCamera();
+      clearSilenceTimer();
+      silenceLevelRef.current = 0;
 
       // Read latest state directly to avoid stale closures
       const { sessionId, transcript } = useSessionStore.getState();
@@ -179,9 +193,44 @@ export function useSession() {
     };
   }, [status]);
 
+  // ─── Silence timer — auto-continue when student is quiet ──────────────
+  const clearSilenceTimer = useCallback(() => {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+  }, []);
+
+  const startSilenceTimer = useCallback(() => {
+    clearSilenceTimer();
+    if (silenceLevelRef.current >= MAX_SILENCE_LEVEL) return; // Stop after max escalation
+
+    silenceTimerRef.current = setTimeout(() => {
+      silenceLevelRef.current++;
+      const level = silenceLevelRef.current;
+      console.log(`[useSession] Silence timer fired — level ${level}`);
+      brain.handleSilence(level);
+      // After this silence response completes, the isProcessing effect will restart the timer
+    }, SILENCE_INTERVAL_MS);
+  }, [brain, clearSilenceTimer]);
+
+  // Start silence timer when processing finishes (tutor done speaking, waiting for student)
+  useEffect(() => {
+    if (status === "active" && !brain.isProcessing) {
+      startSilenceTimer();
+    } else {
+      clearSilenceTimer();
+    }
+    return clearSilenceTimer;
+  }, [status, brain.isProcessing, startSilenceTimer, clearSilenceTimer]);
+
   // ─── Push-to-talk handlers (called from session page) ─────────────────
   const startListening = useCallback(() => {
     if (asrRef.current) {
+      // Reset silence level — student is engaging
+      silenceLevelRef.current = 0;
+      clearSilenceTimer();
+
       // Interrupt avatar if speaking (barge-in)
       avatar.interrupt();
 
@@ -247,7 +296,11 @@ export function useSession() {
     unmuteAvatarAudio: avatar.unmuteAvatarAudio,
     startSession,
     endSession,
-    handleTextMessage: brain.handleStudentMessage,
+    handleTextMessage: (msg: string, img?: Parameters<typeof brain.handleStudentMessage>[1]) => {
+      silenceLevelRef.current = 0; // Reset silence on text message
+      clearSilenceTimer();
+      brain.handleStudentMessage(msg, img);
+    },
     // Push-to-talk (Deepgram ASR)
     startListening,
     stopListening,
@@ -260,6 +313,7 @@ export function useSession() {
     sandboxContent,
     sandboxAccent,
     videoUrl,
+    contentSteps,
     setContentMode,
     // Video ended — auto-continue lesson
     handleVideoEnded: brain.handleVideoEnded,

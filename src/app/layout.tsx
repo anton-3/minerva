@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Space_Grotesk, DM_Sans, Outfit } from "next/font/google";
+import { Geist, Geist_Mono, Space_Grotesk, DM_Sans, Outfit, Kalam } from "next/font/google";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -29,6 +29,12 @@ const outfit = Outfit({
   weight: ["300", "400", "500", "600", "700", "800"],
 });
 
+const kalam = Kalam({
+  variable: "--font-handwriting",
+  subsets: ["latin"],
+  weight: ["300", "400", "700"],
+});
+
 export const metadata: Metadata = {
   title: "Minerva AI | Lifelike Socratic Education 24/7",
   description:
@@ -43,7 +49,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} ${dmSans.variable} ${outfit.variable} antialiased min-h-screen`}
+        className={`${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} ${dmSans.variable} ${outfit.variable} ${kalam.variable} antialiased min-h-screen`}
       >
         {children}
       </body>

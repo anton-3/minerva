@@ -10,8 +10,7 @@ export type AIModelId =
   | "claude-haiku-4-5-20251001"
   | "gemini-3-pro-preview"
   | "gemini-3-flash-preview"
-  | "gpt-5-nano"
-  | "gpt-5.2-chat-latest";
+  | "gpt-4.1";
 
 export type AIProvider = "anthropic" | "google" | "openai";
 
@@ -21,13 +20,13 @@ export interface AIModelConfig {
   displayName: string;
 }
 
+// Only fast models (<3s TTFT) — reasoning models excluded for real-time tutoring
 export const AI_MODELS: AIModelConfig[] = [
   { id: "claude-sonnet-4-5-20250929", provider: "anthropic", displayName: "Claude Sonnet 4.5" },
   { id: "claude-haiku-4-5-20251001", provider: "anthropic", displayName: "Claude Haiku 4.5" },
   { id: "gemini-3-pro-preview", provider: "google", displayName: "Gemini 3 Pro" },
   { id: "gemini-3-flash-preview", provider: "google", displayName: "Gemini 3 Flash" },
-  { id: "gpt-5-nano", provider: "openai", displayName: "GPT-5 Nano" },
-  { id: "gpt-5.2-chat-latest", provider: "openai", displayName: "GPT-5.2 Chat" },
+  { id: "gpt-4.1", provider: "openai", displayName: "GPT-4.1" },
 ];
 
 export const DEFAULT_MODEL: AIModelId = "claude-sonnet-4-5-20250929";
@@ -39,7 +38,33 @@ export type MathTool = "desmos" | "desmos3d" | "geogebra";
 // ─── Content Modes ───────────────────────────────────────────────────────────
 // Extensible: add new modes here and implement a corresponding panel component
 
-export type ContentMode = "welcome" | "math" | "sandbox" | "video";
+export type ContentMode = "welcome" | "math" | "sandbox" | "video" | "steps";
+
+// ─── Content Steps ──────────────────────────────────────────────────────────
+// Structured step-by-step content for guided tutoring (KaTeX + GSAP + Rough.js)
+
+export type ContentStep =
+  // Content elements (placed on the board)
+  | { type: "clear" }
+  | { type: "step"; label?: string; math?: string; text?: string }
+  | { type: "diagram"; svg: string }
+  | { type: "numberLine"; min: number; max: number; highlights?: number[] }
+  | { type: "divider"; label?: string }
+
+  // Inline content blocks (unified board — replaces separate content modes)
+  | { type: "graph"; tool: MathTool; expressions?: Array<{ latex: string; id?: string; color?: string }>; viewport?: { left: number; right: number; top: number; bottom: number } }
+  | { type: "sandbox"; html: string; accent?: string; height?: number }
+  | { type: "video"; url: string; autoPlay?: boolean }
+  | { type: "image"; src: string; alt?: string; width?: number }
+  | { type: "code"; language: string; code: string }
+
+  // Annotations (overlay on existing content, target by index)
+  | { type: "circle"; target: number; color?: string }
+  | { type: "underline"; target: number; color?: string }
+  | { type: "arrow"; from: number; to: number; label?: string }
+  | { type: "box"; target: number; color?: string }
+  | { type: "crossOut"; target: number }
+  | { type: "highlight"; stepIndex: number; color?: string };
 
 // ─── Canvas Commands ────────────────────────────────────────────────────────
 // Multi-tool canvas system supporting Desmos 2D, Desmos 3D, and GeoGebra
@@ -86,6 +111,10 @@ export interface TutorBrainRequest {
   learningPlan: LearningPlanContext | null;
   studentProfile: StudentProfile;
   canvasState: string;
+  contentSteps?: ContentStep[];
+  sandboxContent?: string | null;
+  sandboxAccent?: string | null;
+  videoUrl?: string | null;
   imageData?: {
     base64: string;
     mediaType: "image/jpeg" | "image/png" | "image/gif" | "image/webp";
@@ -157,6 +186,7 @@ export interface SessionState {
   sandboxContent: string | null;  // HTML content body for sandbox
   sandboxAccent: string | null;   // Subject accent color
   videoUrl: string | null;
+  contentSteps: ContentStep[];    // Step-by-step content (KaTeX + GSAP)
   masteryScores: MasteryScore[];
 }
 
@@ -178,6 +208,7 @@ export type TutorToolName =
   | "executeCanvasCommands"
   | "showSandbox"
   | "showVideo"
+  | "showSteps"
   | "updateProgress"
   | "setContentMode";
 
@@ -206,6 +237,10 @@ export interface SetContentModeInput {
   mode: ContentMode;
 }
 
+export interface ShowStepsInput {
+  steps: ContentStep[];
+}
+
 // Tool result types
 export interface ShowVideoResult {
   videoUrl?: string;
@@ -221,5 +256,6 @@ export type TutorToolInput =
   | { toolName: "executeCanvasCommands"; input: ExecuteCanvasCommandsInput }
   | { toolName: "showSandbox"; input: ShowSandboxInput }
   | { toolName: "showVideo"; input: ShowVideoInput }
+  | { toolName: "showSteps"; input: ShowStepsInput }
   | { toolName: "updateProgress"; input: UpdateProgressInput }
   | { toolName: "setContentMode"; input: SetContentModeInput };

@@ -1,46 +1,41 @@
-// ContentMode — extensible content mode switcher
-// Renders the appropriate content panel based on the active mode.
-// Supports: "welcome" (landing), "math" (Desmos/GeoGebra), "sandbox" (interactive HTML), "video" (Manim animations).
+// ContentMode — content panel switcher
+// Renders the whiteboard (primary) or Desmos/GeoGebra (overlay for interactive graphing).
+// Sandbox and video content are now inline blocks on the whiteboard (unified board).
 
 "use client";
 
-import type { ContentMode as ContentModeType, MathTool } from "@/types/session";
+import type { ContentMode as ContentModeType, MathTool, ContentStep } from "@/types/session";
 import type { ToolManager } from "@/lib/canvas/tools";
 import { MathToolPanel } from "./MathToolPanel";
-import { SandboxPanel } from "./SandboxPanel";
-import { VideoPanel } from "./VideoPanel";
+import { StepsPanel } from "./StepsPanel";
 
 interface ContentModeProps {
   mode: ContentModeType;
   toolManager: ToolManager;
-  sandboxContent: string | null;
-  sandboxAccent: string | null;
-  videoUrl: string | null;
+  contentSteps: ContentStep[];
   onToolChange?: (tool: MathTool) => void;
-  onVideoEnded?: () => void;
 }
 
 export function ContentModeView({
   mode,
   toolManager,
-  sandboxContent,
-  sandboxAccent,
-  videoUrl,
+  contentSteps,
   onToolChange,
-  onVideoEnded,
 }: ContentModeProps) {
   return (
     <div className="w-full h-full relative">
-      {/* Welcome mode — shown before session or before tutor picks a mode */}
+      {/* Welcome state — shown before session starts (no steps yet) */}
       <div
         className={`absolute inset-0 transition-all duration-500 ${
-          mode === "welcome" ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"
+          mode === "welcome" && contentSteps.length === 0
+            ? "opacity-100 scale-100"
+            : "opacity-0 scale-95 pointer-events-none"
         }`}
       >
         <WelcomePanel />
       </div>
 
-      {/* Math mode — Desmos / GeoGebra */}
+      {/* Math mode overlay — Desmos / GeoGebra (interactive graphing via executeCanvasCommands) */}
       <div
         className={`absolute inset-0 transition-all duration-300 ${
           mode === "math" ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"
@@ -49,22 +44,15 @@ export function ContentModeView({
         <MathToolPanel toolManager={toolManager} onToolChange={onToolChange} />
       </div>
 
-      {/* Sandbox mode — interactive HTML/CSS/JS */}
+      {/* Unified whiteboard — always present, all content types render inline */}
       <div
         className={`absolute inset-0 transition-all duration-300 ${
-          mode === "sandbox" ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"
+          mode === "steps" || mode === "sandbox" || mode === "video"
+            ? "opacity-100 scale-100"
+            : "opacity-0 scale-95 pointer-events-none"
         }`}
       >
-        <SandboxPanel content={sandboxContent} accent={sandboxAccent} />
-      </div>
-
-      {/* Video mode — Manim animations and other videos */}
-      <div
-        className={`absolute inset-0 transition-all duration-300 ${
-          mode === "video" ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"
-        }`}
-      >
-        <VideoPanel url={videoUrl} onEnded={onVideoEnded} />
+        <StepsPanel steps={contentSteps} />
       </div>
     </div>
   );
@@ -78,13 +66,13 @@ function WelcomePanel() {
           Welcome to Minerva
         </h2>
         <p className="text-text-secondary text-sm leading-relaxed mb-8">
-          Your AI tutor is ready. Ask about any subject — math, physics,
-          chemistry, history, biology, or anything you&apos;re curious about.
+          Your AI tutor is ready. Ask about anything — from algebra to
+          accounting, physics to philosophy, or whatever you&apos;re curious about.
         </p>
 
         {/* Suggested topics */}
         <div className="flex flex-wrap justify-center gap-2">
-          {["Algebra", "Physics", "Chemistry", "World History", "Biology", "Economics"].map((topic) => (
+          {["Algebra", "Physics", "Economics", "Programming", "World History", "Finance", "Chemistry", "Literature"].map((topic) => (
             <span
               key={topic}
               className="rounded-full px-3 py-1 text-xs bg-neutral-surface border border-border-light text-text-secondary"

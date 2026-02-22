@@ -6,6 +6,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import type { SessionStatus } from "@/types/session";
+import { useSessionStore } from "@/stores/sessionStore";
 import {
   Video,
   VideoOff,
@@ -13,6 +14,8 @@ import {
   PhoneOff,
   MessageSquare,
   Eraser,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 
 interface BottomControlBarProps {
@@ -29,6 +32,10 @@ interface BottomControlBarProps {
   // Camera controls
   cameraActive?: boolean;
   onToggleCamera?: () => void;
+  // Auto-hide controls (Zoom/Meet pattern)
+  controlsVisible?: boolean;
+  onControlsMouseEnter?: () => void;
+  onControlsMouseLeave?: () => void;
 }
 
 function formatTime(seconds: number): string {
@@ -48,6 +55,9 @@ export function BottomControlBar({
   currentMode,
   cameraActive,
   onToggleCamera,
+  controlsVisible = true,
+  onControlsMouseEnter,
+  onControlsMouseLeave,
 }: BottomControlBarProps) {
   const [elapsed, setElapsed] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -71,6 +81,13 @@ export function BottomControlBar({
     };
   }, [status]);
 
+  // Zoom state from store — only show when whiteboard has content
+  const zoom = useSessionStore((s) => s.zoom);
+  const zoomInStore = useSessionStore((s) => s.zoomIn);
+  const zoomOutStore = useSessionStore((s) => s.zoomOut);
+  const resetZoom = useSessionStore((s) => s.resetZoom);
+  const hasContent = useSessionStore((s) => s.contentSteps.length > 0);
+
   const isNearLimit = elapsed >= 480;
   const isActive = status === "active";
   const isIdle = status === "idle" || status === "ended" || status === "error";
@@ -79,7 +96,12 @@ export function BottomControlBar({
   return (
     <>
       {/* Left: Timer / Minerva label — floating bottom-left */}
-      <div className="fixed bottom-4 left-4 z-40">
+      <div
+        className="fixed bottom-4 left-4 z-40 transition-opacity duration-300 ease-out"
+        style={{ opacity: controlsVisible ? 1 : 0, pointerEvents: controlsVisible ? "auto" : "none" }}
+        onMouseEnter={onControlsMouseEnter}
+        onMouseLeave={onControlsMouseLeave}
+      >
         {isActive && (
           <div
             className={`flex items-center gap-2 px-3 py-2 rounded-full bg-white/80 backdrop-blur-md border border-gray-200 shadow-sm text-sm font-mono ${
@@ -108,7 +130,12 @@ export function BottomControlBar({
       </div>
 
       {/* Center: Main controls — floating bottom-center */}
-      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-1.5">
+      <div
+        className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-1.5 transition-opacity duration-300 ease-out"
+        style={{ opacity: controlsVisible ? 1 : 0, pointerEvents: controlsVisible ? "auto" : "none" }}
+        onMouseEnter={onControlsMouseEnter}
+        onMouseLeave={onControlsMouseLeave}
+      >
         {/* Join / Leave button — always prominent */}
         {isIdle ? (
           <button
@@ -168,8 +195,43 @@ export function BottomControlBar({
         )}
       </div>
 
-      {/* Right: Chat toggle — floating bottom-right */}
-      <div className="fixed bottom-4 right-4 z-40 flex items-center gap-3">
+      {/* Right: Zoom controls + Chat toggle — floating bottom-right */}
+      <div
+        className="fixed bottom-4 right-4 z-40 flex items-center gap-2 transition-opacity duration-300 ease-out"
+        style={{ opacity: controlsVisible ? 1 : 0, pointerEvents: controlsVisible ? "auto" : "none" }}
+        onMouseEnter={onControlsMouseEnter}
+        onMouseLeave={onControlsMouseLeave}
+      >
+        {/* Zoom controls — only when whiteboard has content */}
+        {hasContent && (
+          <div className="flex items-center gap-0.5 bg-white/80 backdrop-blur-md rounded-full border border-gray-200 shadow-sm px-1 py-0.5"
+            style={{ WebkitBackdropFilter: "blur(12px)" }}
+          >
+            <button
+              onClick={zoomOutStore}
+              className="w-7 h-7 flex items-center justify-center text-text-secondary hover:text-text-primary hover:bg-neutral-100 rounded-full transition-colors"
+              title="Zoom out"
+            >
+              <ZoomOut size={14} />
+            </button>
+            <button
+              onClick={resetZoom}
+              className="px-1.5 h-7 flex items-center justify-center text-text-secondary hover:text-text-primary hover:bg-neutral-100 rounded-full transition-colors text-xs font-mono min-w-9"
+              title="Reset zoom"
+            >
+              {Math.round(zoom * 100)}%
+            </button>
+            <button
+              onClick={zoomInStore}
+              className="w-7 h-7 flex items-center justify-center text-text-secondary hover:text-text-primary hover:bg-neutral-100 rounded-full transition-colors"
+              title="Zoom in"
+            >
+              <ZoomIn size={14} />
+            </button>
+          </div>
+        )}
+
+        {/* Chat toggle */}
         <button
           onClick={onToggleChat}
           className={`relative p-3 rounded-full backdrop-blur-md border transition-colors ${

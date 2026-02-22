@@ -1,11 +1,13 @@
-# Minerva — AI Avatar Tutor (TreeHacks 2026)
+# Minerva — AI Avatar Tutor
+
+> Originally built at TreeHacks 2026 (Feb 14-16, 2026). Now a post-hackathon product.
 
 ## First Steps for Every Session
 
-1. **Read the constitution**: `.specify/memory/constitution.md` — this defines all architecture principles and rules.
-2. **Read progress**: `progress.md` — this tells you exactly what's been done and what's next.
-3. **Read the plan**: `plan.md` — this has the full project context, links to all spec-kit docs, and the overall vision.
-4. If working on a specific feature, read the relevant spec-kit docs in `specs/001-minerva-mvp/`.
+1. **Read `progress.md`** — tells you exactly what's been done and what's next.
+2. **Read `plan.md`** — full project context, architecture, and current direction.
+3. **Read `.specify/memory/constitution.md`** — architecture principles and rules.
+4. If working on a specific feature, check `.claude/plans/` for active implementation plans.
 
 ## Session Continuity Rules
 
@@ -19,14 +21,8 @@ After completing every meaningful task or group of tasks:
 **MANDATORY**: Before implementing any major phase, feature, or integration:
 1. **Search the web** for current best practices, examples, community tips (GitHub, Devpost, Stack Overflow, official docs).
 2. **Verify library versions** — we are building in **February 2026**. Do NOT use outdated APIs or deprecated patterns.
-3. **Check for breaking changes** — especially for HeyGen SDK, tldraw, Next.js 16, Supabase, and Zustand v5.
+3. **Check for breaking changes** — especially for HeyGen SDK, Next.js 16, Vercel AI SDK, and Zustand v5.
 4. This applies to every AI agent (Claude Code, Cursor, GitHub Copilot, etc.) — not just Claude.
-
-What to research:
-- Official documentation for the specific library version we're using
-- GitHub issues/discussions for common pitfalls
-- Devpost projects using similar tech for inspiration
-- Community examples and tutorials published in 2025-2026
 
 ## Architecture Principles (Black Box Design)
 
@@ -34,33 +30,40 @@ See full details in `.specify/memory/constitution.md`. The key rules:
 - Every external dependency is wrapped in `src/lib/` — no SDK types leak out.
 - Modules communicate only through typed interfaces defined in `src/types/`.
 - Any module should be rewritable from scratch using only its interface.
-- Canvas errors never break the tutoring session. Fail gracefully.
+- Content errors never break the tutoring session. Fail gracefully.
 - One module = one person can build and maintain it.
 
-## Tech Stack
+## Tech Stack (Current — February 2026)
 
-- Next.js 16.1 LTS (App Router, React 19.2, TypeScript)
-- Tailwind CSS v4 with @tailwindcss/postcss
-- shadcn/ui components
-- tldraw 4.3.1 (canvas)
-- @heygen/streaming-avatar 2.1.0 (avatar)
-- @anthropic-ai/sdk 0.74.0 (Claude tutor brain)
-- Perplexity Sonar API (knowledge)
-- Recall.ai REST API (recording)
-- Supabase (auth + Postgres + realtime)
-- Zustand 5.0.11 (state management)
-- Deployed on Vercel
+| Layer | Technology | Notes |
+|-------|-----------|-------|
+| Framework | Next.js 16.1 LTS, React 19.2, TypeScript | App Router, Turbopack |
+| Styling | Tailwind v4, shadcn/ui | Soft Lavender + Aqua design system |
+| AI SDK | Vercel AI SDK (`@ai-sdk/anthropic`, `@ai-sdk/google`, `@ai-sdk/openai`) | Multi-model, tool calling, SSE streaming |
+| Models | Claude Sonnet 4.5, Haiku 4.5, Gemini 3 Pro/Flash, GPT-4.1 Nano, GPT-5.2 | User-selectable via ModelPicker |
+| TTS | ElevenLabs | Server-side, PCM 24kHz, per-sentence streaming |
+| Avatar | @heygen/liveavatar-web-sdk v0.0.10 | WebRTC via LiveKit, lip-sync from audio |
+| ASR | Deepgram | Real-time transcription, push-to-talk |
+| Whiteboard | KaTeX + GSAP + Rough.js | Equations write char-by-char, hand-drawn annotations |
+| Graphing | Desmos 2D/3D, GeoGebra | Interactive, student-explorable |
+| Videos | Manim (server-side) | 3Blue1Brown-style math animations |
+| Sandbox | HTML iframe + Twind CSS | Physics, chemistry, biology, history visualizations |
+| State | Zustand 5.0.11 | Session store with persist middleware |
+| Database | Supabase (Postgres + Auth) | Profiles, sessions, progress, learning plans |
+| Hosting | Vercel | SSE streaming, edge functions |
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
 | `progress.md` | Living tracker of what's done and what's next |
-| `plan.md` | Full project plan with links to all docs |
+| `plan.md` | Full project plan — architecture, data flow, next steps |
 | `.specify/memory/constitution.md` | Architecture principles and rules |
-| `specs/001-minerva-mvp/spec.md` | Feature specification (5 user stories) |
-| `specs/001-minerva-mvp/plan.md` | Implementation plan (tech stack, contracts, structure) |
-| `specs/001-minerva-mvp/tasks.md` | 68 implementation tasks across 8 phases |
-| `specs/001-minerva-mvp/data-model.md` | Database schema (7 tables) |
-| `specs/001-minerva-mvp/contracts/` | 5 black box module interface contracts |
-| `src/lib/claude/prompts.ts` | THE most important file — Socratic tutor prompt |
+| `src/lib/ai/prompts.ts` | THE most important file — 5-phase teaching methodology, tool rules, silence handling |
+| `src/lib/ai/client.ts` | AI SDK wrapper — multi-model, tool calling, SSE streaming, context injection |
+| `src/hooks/useTutorBrain.ts` | Conversation loop orchestrator — SSE consumer, silence handler |
+| `src/hooks/useSession.ts` | Session lifecycle — wires avatar + brain + ASR + canvas |
+| `src/stores/sessionStore.ts` | Zustand store — session state, content steps, conversation history |
+| `src/components/session/StepsPanel.tsx` | Whiteboard — KaTeX rendering, GSAP animations, annotations, scroll/zoom |
+| `src/app/api/tutor/respond/route.ts` | SSE API route — streams speech + audio + tool calls |
+| `src/types/session.ts` | All types — ContentStep, ConversationMessage, TutorBrainRequest, etc. |
